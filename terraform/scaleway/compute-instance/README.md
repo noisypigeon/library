@@ -1,6 +1,39 @@
 # compute-instance
 
-A Scaleway compute Instance (`scaleway_instance_server`) with a randomized name suffix. Minimal interface — `image` and `type` (defaults to `STARDUST1-S`), no storage sizing, networking, or IP configuration yet.
+A Scaleway compute Instance (`scaleway_instance_server`) with a randomized name suffix, provisioned unconditionally for `pigeon-cli` (ADR-0118): rclone/neovim, a `keyring.toml` + `rclone.conf` rendered from one `keyring` list, and optional Cockpit/Alloy wiring — all grouped under `user_config`/`instance_config`.
+
+## Usage
+
+```hcl
+module "compute" {
+  source                = "https://noisypigeon.com/modules/scaleway/compute-instance/v4.0.0"
+  name_prefix           = "job-example"
+  name_suffix           = "worker"
+  additional_volume_ids = [module.volume.id]
+
+  user_config = {
+    ssh_key = local.ssh_key_public_key
+  }
+
+  instance_config = {
+    type    = "COMPUTE3-X8C-16G"
+    cockpit = local.cockpit
+    # image omitted -- defaults to "ubuntu_jammy"
+  }
+
+  keyring = [
+    {
+      kind          = "bucket"
+      alias         = "source"
+      endpoint      = module.bucket.endpoint
+      bucket        = module.bucket.name
+      access_key_id = module.iam.access_key
+      secret_key    = module.iam.secret_key
+      provider      = local.scaleway_s3_provider_name
+    }
+  ]
+}
+```
 
 <!-- BEGIN_TF_DOCS -->
 ## Inputs

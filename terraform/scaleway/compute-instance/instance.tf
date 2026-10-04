@@ -22,27 +22,20 @@ locals {
     package_update: true
     package_upgrade: false
     packages:
-    %{~if var.profile == "docker"~}
-      - apt-transport-https
-      - ca-certificates
-      - curl
-      - gnupg
-      - lsb-release
-    %{~endif~}
-    %{~if var.profile == "pigeon-cli"~}
       - rclone
       - neovim
-    %{~endif~}
 
     write_files:
       - path: /etc/profile.d/pigeon-env.sh
         permissions: '0600'
         defer: true
         content: |
-          %{~for key, value in var.environment_variables~}
-          export ${key}="${value}"
+          %{~for entry in var.keyring~}
+          %{~if entry.secret_key != null~}
+          export PIGEON_SECRET_${upper(replace(entry.alias, "-", "_"))}="${entry.secret_key}"
+          %{~endif~}
           %{~endfor~}
-          %{~if var.cockpit != null~}
+          %{~if var.instance_config.cockpit != null~}
           export PIGEON_LOG_DIR="/var/log/pigeon"
           %{~endif~}
       - path: /etc/environment
@@ -50,35 +43,38 @@ locals {
         defer: true
         append: true
         content: |
-          %{~for key, value in var.environment_variables~}
-          ${key}="${value}"
+          %{~for entry in var.keyring~}
+          %{~if entry.secret_key != null~}
+          PIGEON_SECRET_${upper(replace(entry.alias, "-", "_"))}="${entry.secret_key}"
+          %{~endif~}
           %{~endfor~}
-          %{~if var.cockpit != null~}
+          %{~if var.instance_config.cockpit != null~}
           PIGEON_LOG_DIR="/var/log/pigeon"
           %{~endif~}
-    %{~if var.profile == "pigeon-cli"~}
       - path: /root/.config/rclone/rclone.conf
         permissions: '0600'
         defer: true
         content: |
-          %{~for bucket in var.buckets~}
-          [${bucket.bucket_alias}]
+          %{~for entry in var.keyring~}
+          %{~if entry.kind == "bucket"~}
+          [${entry.alias}]
           type = alias
-          remote = ${bucket.bucket_name}:${bucket.bucket_name}
-          [${bucket.bucket_name}]
+          remote = ${entry.bucket}:${entry.bucket}
+          [${entry.bucket}]
           type = s3
-          provider = ${bucket.bucket_provider}
-          access_key_id = ${bucket.bucket_access_key}
-          secret_access_key = ${bucket.bucket_secret_key}
-          endpoint = ${bucket.bucket_endpoint}
+          provider = ${entry.provider}
+          access_key_id = ${entry.access_key_id}
+          secret_access_key = ${entry.secret_key}
+          endpoint = ${entry.endpoint}
           acl = private
           no_check_bucket = true
+          %{~endif~}
           %{~endfor~}
       - path: /root/.config/pigeon/keyring.toml
         permissions: '0600'
         defer: true
         content: |
-          %{~for entry in var.keyring_entries~}
+          %{~for entry in var.keyring~}
           [[entries]]
           kind = "${entry.kind}"
           alias = "${entry.alias}"
@@ -104,8 +100,7 @@ locals {
           %{~endif~}
 
           %{~endfor~}
-    %{~endif~}
-    %{~if var.cockpit != null~}
+    %{~if var.instance_config.cockpit != null~}
       - path: /etc/alloy/config.alloy
         permissions: '0644'
         defer: true
@@ -132,7 +127,7 @@ locals {
           }
 
           discovery.relabel "pigeon_cli_with_instance" {
-            targets = [{"__address__" = "localhost:${var.cockpit.scrape_port}"}]
+            targets = [{"__address__" = "localhost:${var.instance_config.cockpit.scrape_port}"}]
             rule {
               target_label = "instance"
               replacement  = constants.hostname
@@ -147,9 +142,9 @@ locals {
 
           prometheus.remote_write "cockpit" {
             endpoint {
-              url = "${var.cockpit.metrics_push_url}"
+              url = "${var.instance_config.cockpit.metrics_push_url}"
               headers = {
-                "X-TOKEN" = "${var.cockpit.token_secret}",
+                "X-TOKEN" = "${var.instance_config.cockpit.token_secret}",
               }
             }
           }
@@ -204,9 +199,9 @@ locals {
 
           loki.write "cockpit" {
             endpoint {
-              url = "${var.cockpit.logs_push_url}"
+              url = "${var.instance_config.cockpit.logs_push_url}"
               headers = {
-                "X-TOKEN" = "${var.cockpit.token_secret}",
+                "X-TOKEN" = "${var.instance_config.cockpit.token_secret}",
               }
             }
           }
@@ -225,19 +220,8 @@ locals {
     %{~endif~}
       - curl -fsSL https://mise.run | sh
       - echo 'eval "$(/root/.local/bin/mise activate bash)"' >> /root/.bashrc
-    %{~if var.profile == "docker"~}
-      - mkdir -p /etc/apt/keyrings
-      - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-      - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-      - apt-get update
-      - apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-      - systemctl enable docker
-      - systemctl start docker
-    %{~endif~}
-    %{~if var.profile == "pigeon-cli"~}
       - curl -fsSL https://gist.githubusercontent.com/noisypigeon/1e96e8ef94380f913f6ae02782965149/raw/pigeon.sh | bash
-    %{~endif~}
-    %{~if var.cockpit != null~}
+    %{~if var.instance_config.cockpit != null~}
       - mkdir -p /etc/apt/keyrings
       - wget -q -O /etc/apt/keyrings/grafana.asc https://apt.grafana.com/gpg.key
       - echo "deb [signed-by=/etc/apt/keyrings/grafana.asc] https://apt.grafana.com stable main" | tee /etc/apt/sources.list.d/grafana.list > /dev/null
@@ -254,14 +238,14 @@ resource "terraform_data" "cloud_init" {
 }
 
 resource "scaleway_instance_server" "server" {
-  name  = "${var.namespace}-${random_string.suffix.result}-${var.name}"
-  image = var.image
-  type  = var.type
+  name  = "${var.name_prefix}-${random_string.suffix.result}-${var.name_suffix}"
+  image = var.instance_config.image
+  type  = var.instance_config.type
   ip_ids = compact([
     var.enable_ipv4 ? scaleway_instance_ip.ipv4[0].id : null,
     var.enable_ipv6 ? scaleway_instance_ip.ipv6[0].id : null,
   ])
-  tags                  = [for key in var.ssh_keys : "AUTHORIZED_KEY=${replace(key, " ", "_")}"]
+  tags                  = var.user_config.ssh_key != null ? ["AUTHORIZED_KEY=${replace(var.user_config.ssh_key, " ", "_")}"] : []
   additional_volume_ids = var.additional_volume_ids
 
   user_data = {
