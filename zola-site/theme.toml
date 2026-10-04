@@ -1,0 +1,5 @@
+name = "zola-site"
+description = "Shared Zola theme/engine for noisypigeon workload sites — SEO-ready base layout, post/page/changelog/tags templates, and the default stylesheet."
+license = "GPL-3.0"
+homepage = "https://github.com/noisypigeon/noisypigeon/tree/main/templates/zola-site"
+min_version = "0.23.6"

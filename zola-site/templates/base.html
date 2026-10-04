@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en-US" dir="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>{% block title %}{{ config.title }}{% endblock title %}</title>
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="{% block description %}{{ config.description }}{% endblock description %}">
+
+  <link rel="canonical" href="{% block canonical %}{{ config.base_url }}/{% endblock canonical %}">
+
+  <link rel="icon" href="/assets/images/site/favicon-32x32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/assets/images/site/favicon-16x16.png" sizes="16x16" type="image/png">
+  <link rel="apple-touch-icon" href="/assets/images/site/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.json">
+
+  <meta property="og:site_name" content="{{ config.title }}">
+  <meta property="og:type" content="{% block og_type %}website{% endblock og_type %}">
+  <meta property="og:url" content="{% block og_url %}{{ config.base_url }}/{% endblock og_url %}">
+  <meta property="og:title" content="{% block og_title %}{{ config.title }}{% endblock og_title %}">
+  <meta property="og:description" content="{% block og_description %}{{ config.description }}{% endblock og_description %}">
+  <meta property="og:image" content="{% block og_image %}{{ config.base_url }}{{ config.extra.social_preview }}{% endblock og_image %}">
+  {% block og_image_extra %}
+  <meta property="og:image:width" content="1188">
+  <meta property="og:image:height" content="670">
+  {% endblock og_image_extra %}
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{% block twitter_title %}{{ config.title }}{% endblock twitter_title %}">
+  <meta name="twitter:description" content="{% block twitter_description %}{{ config.description }}{% endblock twitter_description %}">
+  <meta name="twitter:image" content="{% block twitter_image %}{{ config.base_url }}{{ config.extra.social_preview }}{% endblock twitter_image %}">
+
+  <link rel="alternate" type="application/atom+xml" title="{{ config.title }}" href="/posts/posts_feed.xml" />
+
+  <link rel="stylesheet" href="/assets/css/main.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css" crossorigin="anonymous">
+
+  <link rel="preconnect" href="https://fonts.bunny.net" crossorigin>
+  <link rel="stylesheet" href="https://fonts.bunny.net/css?family=ibm-plex-sans:400,400i,500,500i,600,600i,700,700i&display=swap">
+
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="rgb(228, 233, 226)">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="rgb(25, 28, 26)">
+
+  {% block extra_head %}{% endblock extra_head %}
+</head>
+<body class="site-view {% block body_class %}{% endblock body_class %} color-theme-gameboy font-theme-ibm-plex">
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  {% include "header.html" %}
+
+  <main id="main" class="site-main">
+    {% block content %}{% endblock content %}
+  </main>
+
+  <footer class="footer">
+    {{ config.title }} {{ now() | date(format="%Y") }} * {{ get_env(name="SITE_COMMIT_SHA", default="dev") }} * <a href="/changelog">Changelog</a>
+  </footer>
+
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" crossorigin="anonymous"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/contrib/auto-render.min.js" crossorigin="anonymous"
+    onload="renderMathInElement(document.body, {delimiters: [
+      {left: '\\[', right: '\\]', display: true},
+      {left: '\\(', right: '\\)', display: false}
+    ]});"></script>
+</body>
+</html>
