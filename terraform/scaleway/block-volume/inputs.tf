@@ -1,14 +1,14 @@
 #
-# Block volumes follow the same namespaced naming scheme as object-bucket/
+# Block volumes follow the same naming scheme as object-bucket/
 # compute-instance.
-# Format: {namespace}-{random_code}-{name}
+# Format: {name_prefix}-{random_code}-{name_suffix}
 #
-variable "namespace" {
+variable "name_prefix" {
   type        = string
   description = "Volume name prefix"
 }
 
-variable "name" {
+variable "name_suffix" {
   type        = string
   description = "Volume name suffix"
 }

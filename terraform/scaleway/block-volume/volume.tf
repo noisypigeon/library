@@ -7,7 +7,7 @@ resource "random_string" "suffix" {
 }
 
 resource "scaleway_block_volume" "volume" {
-  name       = "${var.namespace}-${random_string.suffix.result}-${var.name}"
+  name       = "${var.name_prefix}-${random_string.suffix.result}-${var.name_suffix}"
   size_in_gb = var.size
   iops       = var.iops
   project_id = var.project_id

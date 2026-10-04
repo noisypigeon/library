@@ -16,7 +16,26 @@ resource "scaleway_instance_ip" "ipv4" {
   type  = "routed_ipv4"
 }
 
+# ADR-0120: compute-instance composes block-volume internally for this one
+# pairing, so callers configure instance_config.block_volume instead of
+# wiring a separate module call themselves.
+module "block_volume" {
+  count  = var.instance_config.block_volume != null && var.instance_config.block_volume.size != null ? 1 : 0
+  source = "../block-volume"
+
+  name_prefix = var.name_prefix
+  name_suffix = var.name_suffix
+  size        = var.instance_config.block_volume.size
+  iops        = var.instance_config.block_volume.iops
+  project_id  = var.instance_config.block_volume.project_id
+}
+
 locals {
+  attached_volume_ids = compact(concat(
+    var.instance_config.block_volume != null ? [try(module.block_volume[0].id, null)] : [],
+    var.instance_config.block_volume != null ? var.instance_config.block_volume.additional_volume_ids : []
+  ))
+
   cloud_init = <<-EOF
     #cloud-config
     package_update: true
@@ -210,7 +229,7 @@ locals {
     runcmd:
       - export HOME=/root
       - . /etc/profile.d/pigeon-env.sh
-    %{~if length(var.additional_volume_ids) > 0~}
+    %{~if length(local.attached_volume_ids) > 0~}
       - mkfs.ext4 -L data /dev/sdb
       - mkdir -p /mnt/data
       - mount /dev/sdb /mnt/data
@@ -246,7 +265,7 @@ resource "scaleway_instance_server" "server" {
     var.enable_ipv6 ? scaleway_instance_ip.ipv6[0].id : null,
   ])
   tags                  = var.user_config.ssh_key != null ? ["AUTHORIZED_KEY=${replace(var.user_config.ssh_key, " ", "_")}"] : []
-  additional_volume_ids = var.additional_volume_ids
+  additional_volume_ids = local.attached_volume_ids
 
   user_data = {
     cloud-init = local.cloud_init

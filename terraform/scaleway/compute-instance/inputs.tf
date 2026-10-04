@@ -31,10 +31,21 @@ variable "instance_config" {
       token_secret     = string
       scrape_port      = optional(number, 9091)
     }))
+    block_volume = optional(object({
+      size                  = optional(number)
+      iops                  = optional(number, 15000)
+      project_id            = optional(string)
+      additional_volume_ids = optional(list(string), [])
+    }))
   })
-  description = "Instance-level configuration: image, commercial type, and Cockpit/Alloy wiring (ADR-0102). null cockpit disables Alloy entirely."
+  description = "Instance-level configuration: image, commercial type, Cockpit/Alloy wiring (ADR-0102), and block volume attachment (ADR-0120). null cockpit disables Alloy entirely. null block_volume attaches nothing; block_volume.size unset skips creating a managed volume but still attaches block_volume.additional_volume_ids."
   default     = {}
   sensitive   = true
+
+  validation {
+    condition     = var.instance_config.block_volume == null || var.instance_config.block_volume.size == null || var.instance_config.block_volume.project_id != null
+    error_message = "instance_config.block_volume.project_id is required when instance_config.block_volume.size is set."
+  }
 }
 
 variable "keyring" {
@@ -89,10 +100,4 @@ variable "enable_ipv6" {
   type        = bool
   description = "Create and attach a routed IPv6 address (true/false)"
   default     = false
-}
-
-variable "additional_volume_ids" {
-  type        = list(string)
-  description = "IDs of pre-created block volumes (e.g. scaleway/block-volume's id output) to attach to the instance"
-  default     = []
 }
