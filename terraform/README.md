@@ -6,8 +6,10 @@ standalone `pigeon-tf` repo, merged into this
 repo by [ADR-0037](../docs/adr/0037-merge-pigeon-tf-terraform-modules.md);
 see [ADR-0054](../docs/adr/0054-pigeon-tf-scaffold.md) (originally
 `pigeon-do` ADR-0002) for the design decisions behind consuming the
-original repo. Moved here from `terraform/modules/` by
-[ADR-0093](../docs/adr/0093-move-scaleway-modules-to-top-level-modules.md).
+original repo. Moved from `terraform/modules/` to top-level `modules/` by
+[ADR-0093](../docs/adr/0093-move-scaleway-modules-to-top-level-modules.md),
+then here, to `templates/terraform/`, by
+[ADR-0110](../docs/adr/0110-move-modules-to-templates-terraform.md).
 
 This directory holds only module source — it has no root provider/backend configuration and is never `terraform`/`terragrunt` run standalone.
 
@@ -23,7 +25,9 @@ This directory holds only module source — it has no root provider/backend conf
 
 ## Versioning
 
-Releases are tagged on `noisypigeon`'s `main` with per-module, path-scoped semantic versions (`modules/<provider>/<module>/vX.Y.Z`). Consuming repos pin to a tag by checking out that tag in their local clone of this repo. Tags created before [ADR-0093](../docs/adr/0093-move-scaleway-modules-to-top-level-modules.md) keep their original `terraform/modules/<provider>/<module>/vX.Y.Z` form (and tags created before the ADR-0037 merge keep an even older, shorter form still) — old tags are never renamed or deleted, see ADR-0037/ADR-0093 for why.
+Releases are tagged on `noisypigeon`'s `main` with per-module, path-scoped semantic versions matching wherever this directory lived at release time. Three tag-prefix eras exist: an original, even shorter pre-ADR-0037 form; `terraform/modules/<provider>/<module>/vX.Y.Z` (ADR-0037 era); `modules/<provider>/<module>/vX.Y.Z` (ADR-0093 era); and now `templates/terraform/<provider>/<module>/vX.Y.Z` (this directory, ADR-0110 era). Consuming repos pin to a tag by checking out that tag in their local clone of this repo. Old tags are never renamed or deleted — each is an immutable snapshot of the whole repo at that commit, so a tag from an earlier era still resolves correctly even after this directory later moved, see ADR-0037/ADR-0093/ADR-0110 for why.
+
+**The public `noisypigeon.com/modules/<provider>/<module>/vX.Y.Z` short-URL namespace (see "Consuming" below, [ADR-0109](../docs/adr/0109-short-module-source-urls-via-blog-redirect.md)) stays `modules/...` forever, regardless of which era a given version's tag actually lives under or where this directory itself moves in the future.** It is a stable public interface, deliberately decoupled from the repo's internal layout.
 
 ## Consuming
 
@@ -61,5 +65,5 @@ clone this repo as a sibling directory instead and reference it by path:
 git clone git@github.com:noisypigeon/noisypigeon.git ../noisypigeon
 ```
 
-then reference modules under `modules/`, e.g.
-`../noisypigeon/modules/scaleway/object-bucket`.
+then reference modules under `templates/terraform/`, e.g.
+`../noisypigeon/templates/terraform/scaleway/object-bucket`.
