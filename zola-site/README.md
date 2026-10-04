@@ -78,4 +78,21 @@ repo root.
 
 ## Versioning
 
-None yet — see ADR-0112's Out of scope section.
+Releases are tagged on `noisypigeon`'s `main` as `templates/zola-site/vX.Y.Z`
+([ADR-0113](../../docs/adr/0113-version-templates-zola-site.md)). Unlike
+`templates/terraform/`, there is no Terraform/go-getter-style HTTP
+module-source discovery mechanism for Zola themes — Zola has no "fetch a
+theme by URL" feature, so there is no `noisypigeon.com/...` short-URL
+equivalent here, and none is planned. A future external consumer pins to a
+tagged version by cloning this repo at that tag (or vendoring/submoduling
+`templates/zola-site` at that ref) and pointing their site's `themes/<name>`
+symlink or copy at it.
+
+`workloads/blog/src`, this theme's current first-party consumer, does **not**
+pin to a tag: its `themes/zola-site` symlink
+([ADR-0112](../../docs/adr/0112-extract-reusable-zola-site-template.md))
+deliberately tracks `main` live, with no build/copy step. Tags exist for a
+hypothetical future *external* consumer that needs to pin a specific version
+independently of this repo's own `main` — not for `workloads/blog/src`, which
+is this repo's own first-party consumer and is meant to always get the latest
+theme code.
