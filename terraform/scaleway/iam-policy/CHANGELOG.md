@@ -102,7 +102,7 @@ This is distinct from ADR-0066, which guards the narrow key's own scope, not the
 ## Decision
 
 - Add an optional `admin_project_id` variable to `terraform/modules/scaleway/iam-policy`. When set, `bucket_access.tf` appends a second `Allow` statement (`Principal = { SCW = "project_id:<id>" }`, `Action = ["s3:*"]`) to the generated bucket policy, so any principal with IAM permissions in that project — the deployer included — always retains access.
-- Wire `admin_project_id = local.scaleway_project_id_noisypigeon` at both live bucket-scoped consumers (`noisypigeon/cli/scratch`, `noisypigeon/vault/email`), bumping their module `ref` to `v1.1.0`.
+- Wire `admin_project_id = local.scaleway_project_id` at both live bucket-scoped consumers (`noisypigeon/cli/scratch`, `noisypigeon/vault/email`), bumping their module `ref` to `v1.1.0`.
 - Update the module README's usage example accordingly.
 - Additive/backward-compatible (`release:minor`).
 

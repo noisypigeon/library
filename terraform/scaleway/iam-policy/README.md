@@ -13,7 +13,7 @@ module "iam" {
 
   bucket_names     = { email = module.bucket.name }
   bucket_actions   = ["s3:ListBucket", "s3:GetObject"]
-  admin_project_id = local.scaleway_project_id_noisypigeon
+  admin_project_id = local.scaleway_project_id
 }
 ```
 
