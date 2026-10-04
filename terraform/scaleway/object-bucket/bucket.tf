@@ -7,7 +7,7 @@ resource "random_string" "suffix" {
 }
 
 resource "scaleway_object_bucket" "bucket" {
-  name          = "${var.namespace}-${random_string.suffix.result}-${var.name}"
+  name          = "${var.name_prefix}-${random_string.suffix.result}-${var.name_suffix}"
   force_destroy = var.force_destroy
 
   versioning {

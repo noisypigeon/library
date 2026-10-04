@@ -1,14 +1,14 @@
 #
 # Buckets follow a consistent naming scheme.
-# Format: {namespace}-{random_code}-{name}
+# Format: {name_prefix}-{random_code}-{name_suffix}
 # I.e. example-com-q82q17-sample
 #
-variable "namespace" {
+variable "name_prefix" {
   type        = string
   description = "Bucket name prefix"
 }
 
-variable "name" {
+variable "name_suffix" {
   type        = string
   description = "Bucket name suffix"
 }
@@ -22,7 +22,7 @@ variable "enable_versioning" {
 variable "storage_class" {
   type        = string
   description = "Storage class for new objects (standard/glacier)"
-  default     = "standard"
+  default     = "glacier"
 
   validation {
     condition     = contains(["standard", "glacier"], var.storage_class)
