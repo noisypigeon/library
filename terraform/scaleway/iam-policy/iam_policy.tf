@@ -1,8 +1,3 @@
-resource "scaleway_iam_application" "application" {
-  name        = "${var.name}-app"
-  description = var.description
-}
-
 resource "scaleway_iam_policy" "policy" {
   count = (
     (var.organization_id != null && length(coalesce(var.organization_permission_sets, [])) > 0) ||
@@ -11,7 +6,7 @@ resource "scaleway_iam_policy" "policy" {
 
   name           = "${var.name}-policy"
   description    = var.description
-  application_id = scaleway_iam_application.application.id
+  application_id = var.application_id
 
   dynamic "rule" {
     for_each = (var.organization_id != null && length(coalesce(var.organization_permission_sets, [])) > 0) ? [1] : []
@@ -33,10 +28,4 @@ resource "scaleway_iam_policy" "policy" {
 moved {
   from = scaleway_iam_policy.policy
   to   = scaleway_iam_policy.policy[0]
-}
-
-resource "scaleway_iam_api_key" "api_key" {
-  application_id = scaleway_iam_application.application.id
-  description    = var.description
-  expires_at     = var.expires_at
 }
