@@ -8,8 +8,8 @@ A Scaleway Block Storage volume (`scaleway_block_volume`) with a randomized name
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_iops"></a> [iops](#input\_iops) | Volume IOPS | `number` | `15000` | no |
-| <a name="input_name"></a> [name](#input\_name) | Volume name suffix | `string` | n/a | yes |
-| <a name="input_namespace"></a> [namespace](#input\_namespace) | Volume name prefix | `string` | n/a | yes |
+| <a name="input_name_prefix"></a> [name\_prefix](#input\_name\_prefix) | Volume name prefix | `string` | n/a | yes |
+| <a name="input_name_suffix"></a> [name\_suffix](#input\_name\_suffix) | Volume name suffix | `string` | n/a | yes |
 | <a name="input_project_id"></a> [project\_id](#input\_project\_id) | Project ID | `string` | n/a | yes |
 | <a name="input_size"></a> [size](#input\_size) | Volume size, in GB | `number` | n/a | yes |
 
