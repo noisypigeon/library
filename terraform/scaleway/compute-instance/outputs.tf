@@ -22,3 +22,15 @@ output "private_ips" {
   description = "Private IPs attached to the instance"
   value       = scaleway_instance_server.server.private_ips
 }
+
+output "access_key_id" {
+  description = "IAM API key access key (null if iam_config not set)"
+  value       = try(module.iam_api_key[0].access_key, null)
+  sensitive   = true
+}
+
+output "secret_key" {
+  description = "IAM API key secret key (null if iam_config not set)"
+  value       = try(module.iam_api_key[0].secret_key, null)
+  sensitive   = true
+}

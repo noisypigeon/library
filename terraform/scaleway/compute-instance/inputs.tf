@@ -90,6 +90,18 @@ variable "keyring" {
   }
 }
 
+variable "iam_config" {
+  type = object({
+    application_id          = string
+    project_ids             = optional(list(string))
+    project_permission_sets = optional(list(string))
+    description             = optional(string)
+    api_key_expires_at      = optional(string)
+  })
+  description = "Composes an IAM policy + API key for this instance's application (ADR-0122). null (default): no policy/API key created. project_ids/project_permission_sets grant project-scoped permissions on the policy."
+  default     = null
+}
+
 variable "enable_ipv4" {
   type        = bool
   description = "Create and attach a routed IPv4 address (true/false)"
