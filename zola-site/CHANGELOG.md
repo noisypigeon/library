@@ -4,6 +4,29 @@ All notable changes to this theme are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.1.1] - 2026-10-05
+
+### Fix homepage h1 styling to match plain site-title link
+
+PR #189 wrapped the homepage site-title in a real `<h1>` for SEO
+purposes. That introduced one extra level of nesting (`.site-title >
+h1 > a` instead of `.site-title > a`), which broke the direct-child
+CSS selector that kept the link unstyled, and let the global/default
+`h1` styling (2x font size, added margin, underlined link) show
+through — visibly larger and underlined compared to every other
+page's header.
+
+This resets the nested `<h1>` to inherit `.site-title`'s own
+typography (font size, line height, letter spacing, no margin) and
+switches the link color/decoration override to a descendant
+selector so it keeps working whether or not an `<h1>` sits between
+`.site-title` and the link. Purely a visual fix — the `<h1>` tag
+itself, and the SEO benefit it provides, is unchanged. Verified
+side-by-side in a browser that the homepage header now renders
+identically to the About page's.
+
+[#191](https://github.com/noisypigeon/noisypigeon/pull/191)
+
 ## [1.1.0] - 2026-10-05
 
 ### Strengthen name-entity SEO signals on homepage and posts
