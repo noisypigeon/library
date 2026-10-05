@@ -3,7 +3,7 @@
     <img alt="{{ config.title }}" class="avatar u-photo" aria-hidden="true" src="{{ config.extra.avatar }}" width="72" height="72" />
   </a>
   <div>
-    <div class="site-title m-0"><a class="p-name u-url" href="/">{{ config.title }}</a></div>
+    <div class="site-title m-0">{% if current_path == "/" %}<h1 class="m-0"><a class="p-name u-url" href="/">{{ config.title }}</a></h1>{% else %}<a class="p-name u-url" href="/">{{ config.title }}</a>{% endif %}</div>
     <nav class="site-nav">
       <ul>
         {% for item in config.extra.nav %}

@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}{{ section.title }} - {{ config.title }}{% endblock title %}
+{% block title %}{{ config.title }} — {{ config.description }}{% endblock title %}
 {% block description %}{% if section.description %}{{ section.description }}{% else %}{{ config.description }}{% endif %}{% endblock description %}
 {% block canonical %}{{ section.permalink }}{% endblock canonical %}
 {% block og_url %}{{ section.permalink }}{% endblock og_url %}
-{% block og_title %}{{ section.title }} - {{ config.title }}{% endblock og_title %}
+{% block og_title %}{{ config.title }} — {{ config.description }}{% endblock og_title %}
 {% block og_description %}{% if section.description %}{{ section.description }}{% else %}{{ config.description }}{% endif %}{% endblock og_description %}
-{% block twitter_title %}{{ section.title }} - {{ config.title }}{% endblock twitter_title %}
+{% block twitter_title %}{{ config.title }} — {{ config.description }}{% endblock twitter_title %}
 {% block twitter_description %}{% if section.description %}{{ section.description }}{% else %}{{ config.description }}{% endif %}{% endblock twitter_description %}
 {% block body_class %}site-page-body site-home-page{% endblock body_class %}
 
@@ -29,6 +29,7 @@
   "name": "{{ config.title }}",
   "url": "{{ config.base_url }}/",
   "image": "{{ config.base_url }}{{ config.extra.avatar }}",
+  "alternateName": ["Willow Finch", "Kara Finch", "Kara Graysen", "Luna Graysen"],
   "sameAs": [{% set_global same_as_emitted = false %}{% for item in config.extra.nav %}{% if item.link is starting_with(pat="http") %}{% if same_as_emitted %}, {% endif %}"{{ item.link }}"{% set_global same_as_emitted = true %}{% endif %}{% endfor %}]
 }
 </script>
