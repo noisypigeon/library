@@ -1,6 +1,6 @@
 # object-bucket
 
-A Scaleway Object Storage bucket (`scaleway_object_bucket`) with a randomized name suffix, versioning, and a standard/glacier storage-class toggle implemented via an immediate lifecycle transition.
+A Scaleway Object Storage bucket (`scaleway_object_bucket`) with a randomized name suffix (or an `exact_name` override for buckets whose name must match something external, e.g. a custom domain), versioning, a standard/glacier storage-class toggle implemented via an immediate lifecycle transition, and optional static-website hosting (`enable_website`) plus public-read ACL (`enable_public_read`).
 
 <!-- BEGIN_TF_DOCS -->
 ## Inputs

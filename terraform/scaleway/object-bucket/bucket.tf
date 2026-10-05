@@ -1,4 +1,11 @@
+moved {
+  from = random_string.suffix
+  to   = random_string.suffix[0]
+}
+
 resource "random_string" "suffix" {
+  count = var.exact_name == null ? 1 : 0
+
   length  = 6
   lower   = true
   upper   = false
@@ -6,8 +13,13 @@ resource "random_string" "suffix" {
   special = false
 }
 
+locals {
+  bucket_name = var.exact_name != null ? var.exact_name : "${var.name_prefix}-${random_string.suffix[0].result}-${var.name_suffix}"
+}
+
 resource "scaleway_object_bucket" "bucket" {
-  name          = "${var.name_prefix}-${random_string.suffix.result}-${var.name_suffix}"
+  name          = local.bucket_name
+  project_id    = var.project_id
   force_destroy = var.force_destroy
 
   versioning {
@@ -24,5 +36,26 @@ resource "scaleway_object_bucket" "bucket" {
         storage_class = "GLACIER"
       }
     }
+  }
+}
+
+resource "scaleway_object_bucket_acl" "bucket" {
+  count = var.enable_public_read ? 1 : 0
+
+  bucket = scaleway_object_bucket.bucket.id
+  acl    = "public-read"
+}
+
+resource "scaleway_object_bucket_website_configuration" "bucket" {
+  count = var.enable_website ? 1 : 0
+
+  bucket = scaleway_object_bucket.bucket.id
+
+  index_document {
+    suffix = var.website_index_document
+  }
+
+  error_document {
+    key = var.website_error_document
   }
 }
