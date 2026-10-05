@@ -103,6 +103,12 @@ variable "iam_config" {
   default     = null
 }
 
+variable "enabled" {
+  type        = bool
+  description = "Kill switch. false destroys every resource this module manages for this instance -- the server, its IP address(es), its block volume (and the volume's data -- this is a real data-loss event, not a pause), and its IAM policy/API key (ADR-0126) -- while the module block itself stays in the caller's configuration. true (default) runs normally. The instance's name (random suffix) stays stable across a disable/re-enable cycle."
+  default     = true
+}
+
 variable "enable_ipv4" {
   type        = bool
   description = "Create and attach a routed IPv4 address (true/false)"

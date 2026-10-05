@@ -3,7 +3,7 @@
 # separate module calls themselves. Pinned to released tags (not a relative
 # path) per ADR-0121.
 module "iam_policy" {
-  count  = var.iam_config != null ? 1 : 0
+  count  = var.enabled && var.iam_config != null ? 1 : 0
   source = "https://noisypigeon.com/modules/scaleway/iam-policy/v4.0.0"
   name   = "${var.name_prefix}-${var.name_suffix}-iam-policy"
 
@@ -13,7 +13,7 @@ module "iam_policy" {
 }
 
 module "iam_api_key" {
-  count  = var.iam_config != null ? 1 : 0
+  count  = var.enabled && var.iam_config != null ? 1 : 0
   source = "https://noisypigeon.com/modules/scaleway/iam-api-key/v0.1.0"
 
   application_id = var.iam_config.application_id

@@ -7,12 +7,12 @@ resource "random_string" "suffix" {
 }
 
 resource "scaleway_instance_ip" "ipv6" {
-  count = var.enable_ipv6 ? 1 : 0
+  count = var.enabled && var.enable_ipv6 ? 1 : 0
   type  = "routed_ipv6"
 }
 
 resource "scaleway_instance_ip" "ipv4" {
-  count = var.enable_ipv4 ? 1 : 0
+  count = var.enabled && var.enable_ipv4 ? 1 : 0
   type  = "routed_ipv4"
 }
 
@@ -23,7 +23,7 @@ resource "scaleway_instance_ip" "ipv4" {
 # module package once compute-instance itself is fetched over HTTP (e.g.
 # the noisypigeon.com short URLs).
 module "block_volume" {
-  count  = var.instance_config.block_volume != null && var.instance_config.block_volume.size != null ? 1 : 0
+  count  = var.enabled && var.instance_config.block_volume != null && var.instance_config.block_volume.size != null ? 1 : 0
   source = "https://noisypigeon.com/modules/scaleway/block-volume/v4.0.0"
 
   name_prefix = var.name_prefix
@@ -304,6 +304,8 @@ resource "terraform_data" "cloud_init" {
 }
 
 resource "scaleway_instance_server" "server" {
+  count = var.enabled ? 1 : 0
+
   name  = "${var.name_prefix}-${random_string.suffix.result}-${var.name_suffix}"
   image = var.instance_config.image
   type  = var.instance_config.type
@@ -321,4 +323,12 @@ resource "scaleway_instance_server" "server" {
   lifecycle {
     replace_triggered_by = [terraform_data.cloud_init.output]
   }
+}
+
+# ADR-0126: giving the server a kill switch moves it from a singleton
+# resource to count = var.enabled ? 1 : 0, changing its address. This
+# protects any existing state through that change for any caller.
+moved {
+  from = scaleway_instance_server.server
+  to   = scaleway_instance_server.server[0]
 }
