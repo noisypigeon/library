@@ -39,6 +39,20 @@ locals {
     var.instance_config.block_volume != null ? var.instance_config.block_volume.additional_volume_ids : []
   ))
 
+  # Rendered once here (not inside the cloud_init heredoc's own %{for/if}
+  # scanning) and base64-encoded below, so arbitrary caller-supplied shell
+  # (quotes, $, backticks, %) never has to survive YAML or systemd
+  # ExecStart= parsing (ADR-0125).
+  post_provision_script = length(var.instance_config.post_provision_commands) == 0 ? null : <<-SCRIPT
+    #!/bin/bash
+    set -euo pipefail
+    export PATH="/root/.local/bin:$PATH"
+    cd /root
+    %{~for cmd in var.instance_config.post_provision_commands~}
+    ${cmd}
+    %{~endfor~}
+  SCRIPT
+
   cloud_init = <<-EOF
     #cloud-config
     package_update: true
@@ -228,6 +242,32 @@ locals {
             }
           }
     %{~endif~}
+    %{~if length(var.instance_config.post_provision_commands) > 0~}
+      - path: /etc/systemd/system/pigeon-post-provision.service
+        permissions: '0644'
+        defer: true
+        content: |
+          [Unit]
+          Description=Pigeon post-provision commands (ADR-0125), run once cloud-init has genuinely finished
+          After=cloud-final.service
+          Wants=cloud-final.service
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          WorkingDirectory=/root
+          EnvironmentFile=-/etc/environment
+          ExecStart=/bin/bash /root/.config/pigeon/post-provision.sh
+          ExecStartPost=/bin/systemctl disable pigeon-post-provision.service
+
+          [Install]
+          WantedBy=multi-user.target
+      - path: /root/.config/pigeon/post-provision.sh
+        permissions: '0600'
+        defer: true
+        encoding: b64
+        content: ${base64encode(local.post_provision_script)}
+    %{~endif~}
 
     runcmd:
       - export HOME=/root
@@ -251,6 +291,10 @@ locals {
       - DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::="--force-confold" alloy
       - systemctl enable alloy
       - systemctl restart alloy
+    %{~endif~}
+    %{~if length(var.instance_config.post_provision_commands) > 0~}
+      - systemctl daemon-reload
+      - systemctl --no-block enable --now pigeon-post-provision.service
     %{~endif~}
   EOF
 }

@@ -37,8 +37,9 @@ variable "instance_config" {
       project_id            = optional(string)
       additional_volume_ids = optional(list(string), [])
     }))
+    post_provision_commands = optional(list(string), [])
   })
-  description = "Instance-level configuration: image, commercial type, Cockpit/Alloy wiring (ADR-0102), and block volume attachment (ADR-0120). null cockpit disables Alloy entirely. null block_volume attaches nothing; block_volume.size unset skips creating a managed volume but still attaches block_volume.additional_volume_ids."
+  description = "Instance-level configuration: image, commercial type, Cockpit/Alloy wiring (ADR-0102), block volume attachment (ADR-0120), and post-provision commands (ADR-0125). null cockpit disables Alloy entirely. null block_volume attaches nothing; block_volume.size unset skips creating a managed volume but still attaches block_volume.additional_volume_ids. post_provision_commands defaults to [] (nothing extra runs); when set, the commands run once, in order, as a systemd oneshot unit ordered after cloud-init's own completion (cloud-final.service) rather than blocking it -- inspect output with `journalctl -u pigeon-post-provision.service`."
   default     = {}
   sensitive   = true
 
