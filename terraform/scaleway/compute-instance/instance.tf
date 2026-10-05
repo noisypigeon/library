@@ -18,10 +18,13 @@ resource "scaleway_instance_ip" "ipv4" {
 
 # ADR-0120: compute-instance composes block-volume internally for this one
 # pairing, so callers configure instance_config.block_volume instead of
-# wiring a separate module call themselves.
+# wiring a separate module call themselves. ADR-0121: pinned to a released
+# tag rather than a relative path, since a relative source escapes the
+# module package once compute-instance itself is fetched over HTTP (e.g.
+# the noisypigeon.com short URLs).
 module "block_volume" {
   count  = var.instance_config.block_volume != null && var.instance_config.block_volume.size != null ? 1 : 0
-  source = "../block-volume"
+  source = "https://noisypigeon.com/modules/scaleway/block-volume/v4.0.0"
 
   name_prefix = var.name_prefix
   name_suffix = var.name_suffix
