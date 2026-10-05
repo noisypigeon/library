@@ -42,14 +42,16 @@ resource "scaleway_object_bucket" "bucket" {
 resource "scaleway_object_bucket_acl" "bucket" {
   count = var.enable_public_read ? 1 : 0
 
-  bucket = scaleway_object_bucket.bucket.id
-  acl    = "public-read"
+  bucket     = scaleway_object_bucket.bucket.id
+  project_id = var.project_id
+  acl        = "public-read"
 }
 
 resource "scaleway_object_bucket_website_configuration" "bucket" {
   count = var.enable_website ? 1 : 0
 
-  bucket = scaleway_object_bucket.bucket.id
+  bucket     = scaleway_object_bucket.bucket.id
+  project_id = var.project_id
 
   index_document {
     suffix = var.website_index_document
