@@ -4,7 +4,7 @@
 # path) per ADR-0121.
 module "iam_policy" {
   count  = var.enabled && var.iam_config != null ? 1 : 0
-  source = "https://noisypigeon.com/modules/scaleway/iam-policy/v4.0.0"
+  source = "https://pigeon.dev/modules/scaleway/iam-policy/v4.0.0"
   name   = "${var.name_prefix}-${var.name_suffix}-iam-policy"
 
   application_id          = var.iam_config.application_id
@@ -14,7 +14,7 @@ module "iam_policy" {
 
 module "iam_api_key" {
   count  = var.enabled && var.iam_config != null ? 1 : 0
-  source = "https://noisypigeon.com/modules/scaleway/iam-api-key/v0.1.0"
+  source = "https://pigeon.dev/modules/scaleway/iam-api-key/v0.1.0"
 
   application_id = var.iam_config.application_id
   description    = coalesce(var.iam_config.description, "${var.name_prefix}-${var.name_suffix} API key")

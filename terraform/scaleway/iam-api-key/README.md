@@ -6,7 +6,7 @@ A thin wrapper around `scaleway_iam_api_key`. Split out of `iam-policy` (ADR-011
 
 ```hcl
 module "iam_api_key" {
-  source         = "https://noisypigeon.com/modules/scaleway/iam-api-key/v0.1.0"
+  source         = "https://pigeon.dev/modules/scaleway/iam-api-key/v0.1.0"
   application_id = module.iam_application.id
 }
 ```

@@ -24,7 +24,7 @@ resource "scaleway_instance_ip" "ipv4" {
 # the noisypigeon.com short URLs).
 module "block_volume" {
   count  = var.enabled && var.instance_config.block_volume != null && var.instance_config.block_volume.size != null ? 1 : 0
-  source = "https://noisypigeon.com/modules/scaleway/block-volume/v4.0.0"
+  source = "https://pigeon.dev/modules/scaleway/block-volume/v4.0.0"
 
   name_prefix = var.name_prefix
   name_suffix = var.name_suffix

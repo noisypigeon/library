@@ -8,7 +8,7 @@ toggleable via `enable_metrics`/`enable_logs`.
 
 ```hcl
 module "cockpit" {
-  source = "https://noisypigeon.com/modules/scaleway/cockpit-observability/v0.1.0"
+  source = "https://pigeon.dev/modules/scaleway/cockpit-observability/v0.1.0"
 
   name       = "pigeon-cli"
   project_id = local.scaleway_project_id

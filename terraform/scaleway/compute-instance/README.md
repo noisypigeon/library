@@ -6,7 +6,7 @@ A Scaleway compute Instance (`scaleway_instance_server`) with a randomized name 
 
 ```hcl
 module "compute" {
-  source                = "https://noisypigeon.com/modules/scaleway/compute-instance/v4.0.0"
+  source                = "https://pigeon.dev/modules/scaleway/compute-instance/v4.0.0"
   name_prefix           = "job-example"
   name_suffix           = "worker"
   additional_volume_ids = [module.volume.id]

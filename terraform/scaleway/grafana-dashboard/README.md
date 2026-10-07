@@ -12,7 +12,7 @@ leaf, not this module).
 
 ```hcl
 module "grafana_dashboard" {
-  source = "https://noisypigeon.com/modules/scaleway/grafana-dashboard/v0.1.0"
+  source = "https://pigeon.dev/modules/scaleway/grafana-dashboard/v0.1.0"
 
   folder_title = "pigeon-cli"
   dashboards = {

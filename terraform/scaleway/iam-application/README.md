@@ -6,7 +6,7 @@ A thin wrapper around `scaleway_iam_application`. Split out of `iam-policy` (ADR
 
 ```hcl
 module "iam_application" {
-  source = "https://noisypigeon.com/modules/scaleway/iam-application/v0.1.0"
+  source = "https://pigeon.dev/modules/scaleway/iam-application/v0.1.0"
   name   = "pigeon-cli"
 }
 ```

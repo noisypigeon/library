@@ -31,7 +31,7 @@ This directory holds only module source — it has no root provider/backend conf
 
 Releases are tagged on `noisypigeon`'s `main` with per-module, path-scoped semantic versions matching wherever this directory lived at release time. Three tag-prefix eras exist: an original, even shorter pre-ADR-0037 form; `terraform/modules/<provider>/<module>/vX.Y.Z` (ADR-0037 era); `modules/<provider>/<module>/vX.Y.Z` (ADR-0093 era); and now `templates/terraform/<provider>/<module>/vX.Y.Z` (this directory, ADR-0110 era). Consuming repos pin to a tag by checking out that tag in their local clone of this repo. Old tags are never renamed or deleted — each is an immutable snapshot of the whole repo at that commit, so a tag from an earlier era still resolves correctly even after this directory later moved, see ADR-0037/ADR-0093/ADR-0110 for why.
 
-**The public `noisypigeon.com/modules/<provider>/<module>/vX.Y.Z` short-URL namespace (see "Consuming" below, [ADR-0109](../docs/adr/0109-short-module-source-urls-via-blog-redirect.md)) stays `modules/...` forever, regardless of which era a given version's tag actually lives under or where this directory itself moves in the future.** It is a stable public interface, deliberately decoupled from the repo's internal layout.
+**The public `pigeon.dev/modules/<provider>/<module>/vX.Y.Z` short-URL namespace (see "Consuming" below, [ADR-0109](../docs/adr/0109-short-module-source-urls-via-blog-redirect.md)) stays `modules/...` forever, regardless of which era a given version's tag actually lives under or where this directory itself moves in the future.** It is a stable public interface, deliberately decoupled from the repo's internal layout.
 
 ## Consuming
 
@@ -41,7 +41,7 @@ The recommended way to consume a tagged module — from this repo's own
 
 ```hcl
 module "state_bucket" {
-  source = "https://noisypigeon.com/modules/scaleway/object-bucket/v1.0.0"
+  source = "https://pigeon.dev/modules/scaleway/object-bucket/v1.0.0"
   ...
 }
 ```
