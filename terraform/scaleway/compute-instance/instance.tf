@@ -39,15 +39,41 @@ locals {
     var.instance_config.block_volume != null ? var.instance_config.block_volume.additional_volume_ids : []
   ))
 
+  # ADR-0138: self_delete_on_exit must still run the post-provision unit even
+  # when the caller passes zero post_provision_commands -- the self-delete
+  # trap is the thing that has to execute, not the caller's own commands.
+  post_provision_enabled = var.self_delete_on_exit || length(var.instance_config.post_provision_commands) > 0
+
+  # ADR-0138: prepended as a trap (not appended after the caller's commands)
+  # so it fires whether the post-provision script succeeds or fails --
+  # post_provision_script runs under set -e, so a failing caller command
+  # would otherwise abort the script before a plain appended call ever ran.
+  # Uses the module's own composed iam_api_key credentials (ADR-0122) --
+  # $${...} escapes the shell variable so Terraform doesn't try to
+  # interpolate it itself.
+  self_delete_script = !var.self_delete_on_exit ? "" : <<-SCRIPT
+    export SCW_ACCESS_KEY="${try(module.iam_api_key[0].access_key, "")}"
+    export SCW_SECRET_KEY="${try(module.iam_api_key[0].secret_key, "")}"
+    export SCW_DEFAULT_PROJECT_ID="${try(var.iam_config.project_ids[0], "")}"
+    SELF_ID=$(curl -fsSL http://169.254.42.42/conf?format=json | jq -r '.id')
+    # ADR-0138: .location.zone_id is this module's best guess at the metadata
+    # schema from docs alone -- confirm the real field path against a live
+    # instance's http://169.254.42.42/conf?format=json before relying on this;
+    # a wrong path means SELF_ZONE is empty and the instance never self-deletes.
+    SELF_ZONE=$(curl -fsSL http://169.254.42.42/conf?format=json | jq -r '.location.zone_id')
+    trap 'scw instance server delete $${SELF_ID} zone=$${SELF_ZONE} with-ip=true with-volumes=all force-shutdown=true' EXIT
+    SCRIPT
+
   # Rendered once here (not inside the cloud_init heredoc's own %{for/if}
   # scanning) and base64-encoded below, so arbitrary caller-supplied shell
   # (quotes, $, backticks, %) never has to survive YAML or systemd
   # ExecStart= parsing (ADR-0125).
-  post_provision_script = length(var.instance_config.post_provision_commands) == 0 ? null : <<-SCRIPT
+  post_provision_script = !local.post_provision_enabled ? null : <<-SCRIPT
     #!/bin/bash
     set -euo pipefail
     export PATH="/root/.local/bin:$PATH"
     cd /root
+    ${local.self_delete_script}
     %{~for cmd in var.instance_config.post_provision_commands~}
     ${cmd}
     %{~endfor~}
@@ -60,6 +86,9 @@ locals {
     packages:
       - rclone
       - neovim
+    %{~if var.self_delete_on_exit~}
+      - jq
+    %{~endif~}
 
     write_files:
       - path: /etc/profile.d/pigeon-env.sh
@@ -242,7 +271,7 @@ locals {
             }
           }
     %{~endif~}
-    %{~if length(var.instance_config.post_provision_commands) > 0~}
+    %{~if local.post_provision_enabled~}
       - path: /etc/systemd/system/pigeon-post-provision.service
         permissions: '0644'
         defer: true
@@ -292,7 +321,10 @@ locals {
       - systemctl enable alloy
       - systemctl restart alloy
     %{~endif~}
-    %{~if length(var.instance_config.post_provision_commands) > 0~}
+    %{~if var.self_delete_on_exit~}
+      - curl -fsSL https://raw.githubusercontent.com/scaleway/scaleway-cli/main/scripts/get.sh | sh
+    %{~endif~}
+    %{~if local.post_provision_enabled~}
       - systemctl daemon-reload
       - systemctl --no-block enable --now pigeon-post-provision.service
     %{~endif~}

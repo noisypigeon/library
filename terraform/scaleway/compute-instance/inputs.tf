@@ -109,6 +109,17 @@ variable "enabled" {
   default     = true
 }
 
+variable "self_delete_on_exit" {
+  type        = bool
+  description = "When true, the instance deletes itself (server, IP(s), block volume) once post_provision_commands finishes, success or failure, using its own composed IAM API key (ADR-0138). Requires iam_config to be set -- the module folds the permission needed to delete itself into the composed IAM policy automatically, on top of whatever project_permission_sets the caller already requested."
+  default     = false
+
+  validation {
+    condition     = !var.self_delete_on_exit || var.iam_config != null
+    error_message = "self_delete_on_exit requires iam_config to be set -- the instance needs its own IAM credential to delete itself."
+  }
+}
+
 variable "enable_ipv4" {
   type        = bool
   description = "Create and attach a routed IPv4 address (true/false)"

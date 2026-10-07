@@ -7,9 +7,15 @@ module "iam_policy" {
   source = "https://pigeon.dev/modules/scaleway/iam-policy/v4.0.0"
   name   = "${var.name_prefix}-${var.name_suffix}-iam-policy"
 
-  application_id          = var.iam_config.application_id
-  project_ids             = var.iam_config.project_ids
-  project_permission_sets = var.iam_config.project_permission_sets
+  application_id = var.iam_config.application_id
+  project_ids    = var.iam_config.project_ids
+  # ADR-0138: self_delete_on_exit needs InstancesFullAccess to delete its own
+  # server/IP/volume -- folded in automatically so callers don't need to know
+  # the permission set name just to opt into self-deletion.
+  project_permission_sets = distinct(concat(
+    coalesce(var.iam_config.project_permission_sets, []),
+    var.self_delete_on_exit ? ["InstancesFullAccess"] : []
+  ))
 }
 
 module "iam_api_key" {
