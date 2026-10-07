@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Run from a consuming site's src/ directory (e.g. workloads/blog/src), before
-# `zola build`/`zola serve`. Reads [extra].theme_version from that site's
-# config.toml and points themes/<name> at either a live symlink to
-# templates/<name> ("main", the default) or a materialized checkout of a
-# specific templates/<name>/v<version> tag. See templates/zola-site/README.md.
+# Run from a consuming site's src/ directory (e.g. workloads/noisypigeon.com/src),
+# before `zola build`/`zola serve`. Reads [extra].theme_version from that
+# site's config.toml and materializes themes/<name> directly as either a live
+# symlink to templates/<name> ("main", the default) or a materialized
+# checkout of a specific templates/<name>/v<version> tag. Nothing under
+# themes/<name> is ever committed -- this script is the only thing that
+# populates it. See templates/zola-site/README.md.
 set -euo pipefail
 
 THEME_NAME="$(basename "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")"
@@ -14,7 +16,7 @@ VERSION=$(awk '/^\[extra\]/{f=1; next} f && /^theme_version[[:space:]]*=/{print;
   | sed -E 's/^theme_version[[:space:]]*=[[:space:]]*"([^"]*)".*/\1/')
 VERSION="${VERSION:-main}"
 
-RESOLVED_DIR="$SITE_DIR/.theme-resolved/$THEME_NAME"
+RESOLVED_DIR="$SITE_DIR/themes/$THEME_NAME"
 rm -rf "$RESOLVED_DIR"
 mkdir -p "$(dirname "$RESOLVED_DIR")"
 

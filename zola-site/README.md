@@ -1,8 +1,8 @@
 # Zola site theme
 
 A reusable [Zola](https://www.getzola.org/) theme — the shared engine behind
-`workloads/blog/src` and any future `workloads/<name>/src` site in this repo.
-Extracted from the blog by
+`workloads/noisypigeon.com/src`, `workloads/pigeon.dev/src`, and any future
+`workloads/<name>/src` site in this repo. Extracted from the blog by
 [ADR-0112](../../docs/adr/0112-extract-reusable-zola-site-template.md), once
 almost everything in the blog's own `templates/` and `static/assets/css/`
 turned out to already be generic/config-driven, with no hardcoded
@@ -37,31 +37,23 @@ site.
 - `static/assets/css/main.css` — the default stylesheet (the
   `color-theme-gameboy font-theme-ibm-plex` look is a default aesthetic
   choice, not a personal-identity artifact).
-- [`resolve-theme.sh`](resolve-theme.sh) (ADR-0114) — resolves a consuming
-  site's `[extra].theme_version` into `.theme-resolved/<name>`, run as a
-  pre-build step. See Consuming and Versioning below.
+- [`resolve-theme.sh`](resolve-theme.sh) (ADR-0114, ADR-0139) — resolves a
+  consuming site's `[extra].theme_version` directly into `themes/<name>`,
+  run as a pre-build step. See Consuming and Versioning below.
 
 ## Consuming
 
-A consuming site needs a symlink at `themes/<name>` pointing back at this
-directory (Zola requires `theme = "<name>"` in `config.toml` to resolve to a
-real `<site_root>/themes/<name>/` directory — it has no mechanism for an
-arbitrary/configurable theme path), plus that same `theme = "<name>"` line
-in its own `config.toml`.
-
-Rather than pointing that symlink directly at this directory, point it at a
-gitignored indirection layer, `.theme-resolved/<name>`, and run
-[`resolve-theme.sh`](resolve-theme.sh) (ADR-0114) before every build/serve to
-populate it — this is what lets a site pin a version (below) without ever
-leaving a dirty tracked path in `git status`. `workloads/blog/src` does
-this:
-
-```
-workloads/blog/src/themes/zola-site -> ../.theme-resolved/zola-site
-```
+Zola requires `theme = "<name>"` in `config.toml` to resolve to a real
+`<site_root>/themes/<name>/` directory — it has no mechanism for an
+arbitrary/configurable theme path. Rather than committing anything at that
+path, a consuming site runs [`resolve-theme.sh`](resolve-theme.sh)
+(ADR-0114, ADR-0139) before every build/serve, which reads that site's own
+`[extra].theme_version` and materializes `themes/<name>` directly — nothing
+under `themes/<name>` is ever tracked by git (`workloads/*/src/themes/<name>`
+is gitignored). `workloads/noisypigeon.com/src` does this:
 
 ```toml
-# workloads/blog/src/config.toml
+# workloads/noisypigeon.com/src/config.toml
 theme = "zola-site"
 
 [extra]
@@ -74,12 +66,12 @@ theme_version = "main"
 ```
 
 `resolve-theme.sh` reads `[extra].theme_version` and either symlinks
-`.theme-resolved/<name>` straight at this directory (`"main"`, the default —
-always the latest code, zero extra cost) or materializes a specific tagged
-version into it via `git archive` (any other value — see Versioning below).
-A future `workloads/<other>/src` site repeats the same pattern, adjusting
-only the `resolve-theme.sh` relative-path prefix for its own nesting depth
-under the repo root.
+`themes/<name>` straight at this directory (`"main"`, the default — always
+the latest code, zero extra cost) or materializes a specific tagged version
+into it via `git archive` (any other value — see Versioning below). A
+future `workloads/<other>/src` site repeats the same pattern, adjusting only
+the `resolve-theme.sh` relative-path prefix for its own nesting depth under
+the repo root.
 
 ## What a consuming site must still supply itself
 
@@ -93,7 +85,7 @@ under the repo root.
   the social-preview image, and any per-post images.
 - Any workload-specific template override, placed directly in the site's
   own `templates/` where it takes precedence over this theme's version of
-  the same filename — e.g. `workloads/blog/src/templates/module-redirect.html`
+  the same filename — e.g. `workloads/pigeon.dev/src/templates/module-redirect.html`
   for [ADR-0109](../../docs/adr/0109-short-module-source-urls-via-blog-redirect.md)'s
   Terraform-module redirect pages, or `theme-redirect.html` for this theme's
   own version-redirect pages (ADR-0114) — both have no business being part of
@@ -105,10 +97,10 @@ Releases are tagged on `noisypigeon`'s `main` as `templates/zola-site/vX.Y.Z`
 ([ADR-0113](../../docs/adr/0113-version-templates-zola-site.md)). A
 consuming site pins to one by setting `[extra].theme_version = "v1.0.0"` (the
 `v` prefix is optional) instead of the default `"main"` — `resolve-theme.sh`
-(ADR-0114) then materializes that exact tagged tree into
-`.theme-resolved/<name>` via `git archive`, instead of symlinking live. This
-requires the tag to exist in the consuming clone's local git history (a full
-clone, same assumption `templates/terraform/README.md`'s "Consuming" section
+(ADR-0114, ADR-0139) then materializes that exact tagged tree directly into
+`themes/<name>` via `git archive`, instead of symlinking live. This requires
+the tag to exist in the consuming clone's local git history (a full clone,
+same assumption `templates/terraform/README.md`'s "Consuming" section
 already makes) — there is no network fetch involved.
 
 Each tag also gets a short, human-facing redirect page at
@@ -123,8 +115,9 @@ the way `terraform init` resolves a module source URL. It exists purely so a
 version mentioned in a changelog or commit message has somewhere short and
 memorable to point a human at.
 
-`workloads/blog/src`, this theme's current first-party consumer, does not
-pin to a tag today — its `theme_version` is `"main"`, deliberately tracking
-live `main` with no extra step, exactly as ADR-0112 designed it. The pin
-mechanism exists so it (or any future `workloads/<name>/src` consumer) *can*
-run an independent version when needed, not because it needs one now.
+Neither of this theme's current first-party consumers,
+`workloads/noisypigeon.com/src` and `workloads/pigeon.dev/src`, pins to a tag
+today — both have `theme_version = "main"`, deliberately tracking live
+`main` with no extra step, exactly as ADR-0112 designed it. The pin
+mechanism exists so either (or any future `workloads/<name>/src` consumer)
+*can* run an independent version when needed, not because it needs one now.
