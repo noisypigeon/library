@@ -8,8 +8,30 @@ variable "cluster_config" {
       token_secret     = string
       scrape_port      = optional(number, 9091)
     }))
+    shared_keyring = optional(map(object({
+      kind = string
+
+      # kind = "email"
+      email                = optional(string)
+      provider             = optional(string)
+      host                 = optional(string)
+      port                 = optional(number)
+      max_imap_connections = optional(number)
+
+      # kind = "bucket" -- also generates an rclone.conf remote; access_key_id/secret_key
+      # default to the consuming job's own API key when omitted (see `jobs`)
+      endpoint             = optional(string)
+      bucket               = optional(string)
+      access_key_id        = optional(string)
+      secret_key           = optional(string)
+      encryption_key_alias = optional(string)
+
+      # kind = "encryption-key"
+      created_at = optional(string)
+    })), {})
+    shared_permission_sets = optional(list(string), [])
   })
-  description = "Settings shared by every job instance in this cluster."
+  description = "Settings shared by every job instance in this cluster, including a default keyring and permission grant every job inherits unless overridden."
 }
 
 variable "jobs" {
@@ -17,9 +39,8 @@ variable "jobs" {
     job_commands      = list(string)
     instance_type     = optional(string, "STARDUST1-S")
     block_volume_size = optional(number)
-    keyring = optional(list(object({
-      kind  = string
-      alias = string
+    keyring = optional(map(object({
+      kind = string
 
       # kind = "email"
       email                = optional(string)
@@ -37,8 +58,8 @@ variable "jobs" {
 
       # kind = "encryption-key"
       created_at = optional(string)
-    })), [])
+    })), {})
     extra_permission_sets = optional(list(string), [])
   }))
-  description = "Jobs to run right now, keyed by job name. Each entry becomes one self-deleting compute-instance (ADR-0138), with its own IAM application/policy/key scoped to exactly extra_permission_sets plus whatever self-deletion needs, and its own keyring -- never shared with another job in this same cluster. Remove an entry and re-apply once its instance has self-terminated, to reconcile Terraform state with reality."
+  description = "Jobs to run right now, keyed by job name. Each entry becomes one self-deleting compute-instance (ADR-0138), with its own IAM application/policy/key scoped to exactly extra_permission_sets plus cluster_config.shared_permission_sets, and its own keyring (merged with cluster_config.shared_keyring, job-specific entries winning on alias collision) -- never shared with another job in this same cluster. Every kind = \"bucket\" keyring entry that omits access_key_id/secret_key defaults to this job's own API key (ADR-0144); job_commands strings may reference an entry by alias, e.g. \"--source '$${keyring.fastmail.alias}:'\" (use $${keyring[\"my-alias\"].alias} bracket syntax for a hyphenated alias). Remove an entry and re-apply once its instance has self-terminated, to reconcile Terraform state with reality."
 }
