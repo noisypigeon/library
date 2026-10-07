@@ -60,7 +60,7 @@ module "state_bucket" {
 ```
 
 Both forms are equivalent; the short URL is a redirect page generated for
-every module version tag (see `workloads/blog/generate-module-redirects.sh`
+every module version tag (see `workloads/pigeon.dev/generate-module-redirects.sh`
 and [ADR-0109](../docs/adr/0109-short-module-source-urls-via-blog-redirect.md)).
 For local iteration against an unreleased module change (no network fetch),
 clone this repo as a sibling directory instead and reference it by path:
