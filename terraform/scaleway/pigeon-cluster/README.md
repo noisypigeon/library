@@ -54,9 +54,12 @@ module "pigeon_jobs" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
+| <a name="input_cluster_config"></a> [cluster\_config](#input\_cluster\_config) | Settings shared by every job instance in this cluster. | <pre>object({<br/>    name_prefix = string<br/>    project_id  = string<br/>    cockpit = optional(object({<br/>      metrics_push_url = string<br/>      logs_push_url    = string<br/>      token_secret     = string<br/>      scrape_port      = optional(number, 9091)<br/>    }))<br/>  })</pre> | n/a | yes |
+| <a name="input_jobs"></a> [jobs](#input\_jobs) | Jobs to run right now, keyed by job name. Each entry becomes one self-deleting compute-instance (ADR-0138), with its own IAM application/policy/key scoped to exactly extra\_permission\_sets plus whatever self-deletion needs, and its own keyring -- never shared with another job in this same cluster. Remove an entry and re-apply once its instance has self-terminated, to reconcile Terraform state with reality. | <pre>map(object({<br/>    job_commands      = list(string)<br/>    instance_type     = optional(string, "STARDUST1-S")<br/>    block_volume_size = optional(number)<br/>    keyring = optional(list(object({<br/>      kind  = string<br/>      alias = string<br/><br/>      # kind = "email"<br/>      email                = optional(string)<br/>      provider             = optional(string)<br/>      host                 = optional(string)<br/>      port                 = optional(number)<br/>      max_imap_connections = optional(number)<br/><br/>      # kind = "bucket" -- also generates an rclone.conf remote<br/>      endpoint             = optional(string)<br/>      bucket               = optional(string)<br/>      access_key_id        = optional(string)<br/>      secret_key           = optional(string)<br/>      encryption_key_alias = optional(string)<br/><br/>      # kind = "encryption-key"<br/>      created_at = optional(string)<br/>    })), [])<br/>    extra_permission_sets = optional(list(string), [])<br/>  }))</pre> | n/a | yes |
 
 ## Outputs
 
 | Name | Description |
 |------|-------------|
+| <a name="output_job_ids"></a> [job\_ids](#output\_job\_ids) | Instance ID per job, keyed by job name (null for any job whose instance has already self-deleted) |
 <!-- END_TF_DOCS -->
