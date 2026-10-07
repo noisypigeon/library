@@ -4,6 +4,16 @@ All notable changes to this theme are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.2.0] - 2026-10-07
+
+### Generalize changelog.html to reuse the section it's rendering
+
+\`changelog.html\` listed its posts by re-fetching \`get_section(path="changelog/_index.md")\` instead of using the \`section\` variable Zola already passes into a section template. That hardcoded path meant the template could only ever be used for a section literally named \`changelog\` — any other section (e.g. a future release-notes or post-stream section under a different name) couldn't reuse it without duplicating the whole template.
+
+This replaces the hardcoded lookup with the ambient \`section.pages\`, which is equivalent for the existing \`changelog\` section and makes the template reusable by any section that sets \`template = "changelog.html"\` with \`page_template = "post.html"\`, regardless of its path. No behavior change for existing consumers.
+
+[#232](https://github.com/noisypigeon/noisypigeon/pull/232)
+
 ## [1.1.1] - 2026-10-05
 
 ### Fix homepage h1 styling to match plain site-title link
