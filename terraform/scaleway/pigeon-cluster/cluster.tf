@@ -22,7 +22,11 @@ locals {
 module "job_policy" {
   for_each = { for k, v in local.job_permission_sets : k => v if length(v) > 0 }
   source   = "https://pigeon.dev/modules/scaleway/iam-policy/v4.0.0"
-  name     = "${var.cluster_config.name_prefix}-${each.key}-iam-policy"
+  # ADR-0144 fix: compute-instance's own internal self-delete policy (iam.tf)
+  # names itself "${name_prefix}-${name_suffix}-iam-policy" -- an identical
+  # name here collided with it (Scaleway rejects duplicate policy names with
+  # a 409), so this one gets a distinct "-work-" segment.
+  name = "${var.cluster_config.name_prefix}-${each.key}-work-iam-policy"
 
   application_id          = module.job_application[each.key].id
   project_ids             = [var.cluster_config.project_id]
