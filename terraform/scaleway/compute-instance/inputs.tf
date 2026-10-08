@@ -134,6 +134,17 @@ variable "enable_ipv6" {
 
 variable "private_network_id" {
   type        = string
-  description = "ID of an existing Scaleway Private Network to attach this instance to via a dedicated private NIC (scaleway_instance_private_nic), alongside its normal public IP(s). null (default): no private NIC, unchanged behavior. Bring-your-own ID -- this module does not create the Private Network itself (see pigeon-cluster, which creates one shared PN per cluster and passes its ID here to every job instance)."
+  description = "ID of an existing Scaleway Private Network to attach this instance to via a dedicated private NIC (scaleway_instance_private_nic), alongside its normal public IP(s). null (default): no private NIC, unchanged behavior. Bring-your-own ID -- this module does not create the Private Network itself (see pigeon-cluster, which creates one shared PN per cluster and passes its ID here to every job instance). Whether the NIC is actually created is controlled by enable_private_network, not by this value's nullness -- see that variable's description."
   default     = null
+}
+
+variable "enable_private_network" {
+  type        = bool
+  description = "Whether to attach a scaleway_instance_private_nic using private_network_id. Kept separate from private_network_id (rather than gating on private_network_id != null) because that ID's value is frequently only known after apply -- e.g. a Private Network created in the same apply, as pigeon-cluster does -- and count/for_each can never depend on such a value without OpenTofu failing to plan with \"Invalid count argument\". default false."
+  default     = false
+
+  validation {
+    condition     = !var.enable_private_network || var.private_network_id != null
+    error_message = "private_network_id must be set when enable_private_network is true."
+  }
 }

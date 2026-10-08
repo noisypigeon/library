@@ -18,9 +18,12 @@ resource "scaleway_instance_ip" "ipv4" {
 
 # ADR-0145: bring-your-own Private Network attachment -- a separate resource
 # (not an inline private_network block on scaleway_instance_server) so
-# attaching/detaching never forces server replacement.
+# attaching/detaching never forces server replacement. count gates on
+# enable_private_network, not on private_network_id != null -- the ID is
+# frequently apply-time-unknown (e.g. a PN created in the same apply, as
+# pigeon-cluster does), and count/for_each can never depend on such a value.
 resource "scaleway_instance_private_nic" "private_nic" {
-  count              = var.enabled && var.private_network_id != null ? 1 : 0
+  count              = var.enabled && var.enable_private_network ? 1 : 0
   server_id          = scaleway_instance_server.server[0].id
   private_network_id = var.private_network_id
 }
