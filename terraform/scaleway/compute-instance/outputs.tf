@@ -19,13 +19,14 @@ output "ipv4_address" {
 }
 
 output "private_ips" {
-  # ADR-0145: scaleway_instance_server's own private_ips block (confirmed via
-  # the installed provider's schema) reflects whatever private NICs are
-  # actually attached to the server, regardless of attachment mechanism --
-  # so this already populates once scaleway_instance_private_nic attaches a
-  # Private Network, with no change needed here.
-  description = "Private IPs attached to the instance (null if enabled = false)"
-  value       = try(scaleway_instance_server.server[0].private_ips, null)
+  # ADR-0145 amendment: scaleway_instance_server's own private_ips attribute
+  # does NOT reflect a NIC attached via the separate scaleway_instance_private_nic
+  # resource -- confirmed by a real apply returning an empty list for it. It
+  # only ever reflected the deprecated inline private_network block, which
+  # this module has never used. The private NIC resource has its own,
+  # separate private_ips block -- read from that first.
+  description = "Private IPs attached to the instance (null if enabled = false or no private network attached)"
+  value       = try(scaleway_instance_private_nic.private_nic[0].private_ips, scaleway_instance_server.server[0].private_ips, null)
 }
 
 output "access_key_id" {

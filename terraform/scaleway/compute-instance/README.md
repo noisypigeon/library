@@ -39,7 +39,7 @@ module "compute" {
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
+| ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_enable_ipv4"></a> [enable\_ipv4](#input\_enable\_ipv4) | Create and attach a routed IPv4 address (true/false) | `bool` | `true` | no |
 | <a name="input_enable_ipv6"></a> [enable\_ipv6](#input\_enable\_ipv6) | Create and attach a routed IPv6 address (true/false) | `bool` | `false` | no |
 | <a name="input_enable_private_network"></a> [enable\_private\_network](#input\_enable\_private\_network) | Whether to attach a scaleway\_instance\_private\_nic using private\_network\_id. Kept separate from private\_network\_id (rather than gating on private\_network\_id != null) because that ID's value is frequently only known after apply -- e.g. a Private Network created in the same apply, as pigeon-cluster does -- and count/for\_each can never depend on such a value without OpenTofu failing to plan with "Invalid count argument". default false. | `bool` | `false` | no |
@@ -56,12 +56,12 @@ module "compute" {
 ## Outputs
 
 | Name | Description |
-|------|-------------|
+| ---- | ----------- |
 | <a name="output_access_key_id"></a> [access\_key\_id](#output\_access\_key\_id) | IAM API key access key (null if iam\_config not set) |
 | <a name="output_id"></a> [id](#output\_id) | Instance ID (null if enabled = false) |
 | <a name="output_ipv4_address"></a> [ipv4\_address](#output\_ipv4\_address) | The instance's routed IPv4 address (null if enable\_ipv4 or enabled = false) |
 | <a name="output_name"></a> [name](#output\_name) | Computed instance name (null if enabled = false) |
-| <a name="output_private_ips"></a> [private\_ips](#output\_private\_ips) | Private IPs attached to the instance (null if enabled = false) |
+| <a name="output_private_ips"></a> [private\_ips](#output\_private\_ips) | Private IPs attached to the instance (null if enabled = false or no private network attached) |
 | <a name="output_public_ips"></a> [public\_ips](#output\_public\_ips) | Public IPs attached to the instance (null if enabled = false) |
 | <a name="output_secret_key"></a> [secret\_key](#output\_secret\_key) | IAM API key secret key (null if iam\_config not set) |
 <!-- END_TF_DOCS -->
