@@ -16,6 +16,15 @@ resource "scaleway_instance_ip" "ipv4" {
   type  = "routed_ipv4"
 }
 
+# ADR-0145: bring-your-own Private Network attachment -- a separate resource
+# (not an inline private_network block on scaleway_instance_server) so
+# attaching/detaching never forces server replacement.
+resource "scaleway_instance_private_nic" "private_nic" {
+  count              = var.enabled && var.private_network_id != null ? 1 : 0
+  server_id          = scaleway_instance_server.server[0].id
+  private_network_id = var.private_network_id
+}
+
 # ADR-0120: compute-instance composes block-volume internally for this one
 # pairing, so callers configure instance_config.block_volume instead of
 # wiring a separate module call themselves. ADR-0121: pinned to a released

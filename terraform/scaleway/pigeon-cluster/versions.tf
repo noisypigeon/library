@@ -1,6 +1,14 @@
-# This module composes other modules only -- no scaleway_* resources of its
-# own, so there's nothing to declare under required_providers. versions.tf
-# still needs to exist here so template-release.yml's module-discovery
-# (which matches on templates/terraform/scaleway/*/*/versions.tf) picks this
-# module up for tagging.
-terraform {}
+# ADR-0145: this module now creates its own scaleway_vpc_private_network/
+# scaleway_vpc_public_gateway* resources directly (previously composition-
+# only), so it needs a real required_providers block. move_to_ipam/
+# ipam_config (the Public Gateway v2/IPAM-mode arguments) need provider
+# >= 2.52 -- every .terraform.lock.hcl in this repo is already locked to
+# 2.86.0, comfortably above that floor, so ~> 2.0 is left as-is.
+terraform {
+  required_providers {
+    scaleway = {
+      source  = "scaleway/scaleway"
+      version = "~> 2.0"
+    }
+  }
+}

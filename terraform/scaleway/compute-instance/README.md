@@ -39,7 +39,7 @@ module "compute" {
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
+| ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_enable_ipv4"></a> [enable\_ipv4](#input\_enable\_ipv4) | Create and attach a routed IPv4 address (true/false) | `bool` | `true` | no |
 | <a name="input_enable_ipv6"></a> [enable\_ipv6](#input\_enable\_ipv6) | Create and attach a routed IPv6 address (true/false) | `bool` | `false` | no |
 | <a name="input_enabled"></a> [enabled](#input\_enabled) | Kill switch. false destroys every resource this module manages for this instance -- the server, its IP address(es), its block volume (and the volume's data -- this is a real data-loss event, not a pause), and its IAM policy/API key (ADR-0126) -- while the module block itself stays in the caller's configuration. true (default) runs normally. The instance's name (random suffix) stays stable across a disable/re-enable cycle. | `bool` | `true` | no |
@@ -48,13 +48,14 @@ module "compute" {
 | <a name="input_keyring"></a> [keyring](#input\_keyring) | pigeon-cli keyring.toml entries. kind = "bucket" entries also generate an rclone.conf remote; any entry with secret\_key set also exports PIGEON\_SECRET\_<ALIAS> on the instance. secret\_key is never written into keyring.toml itself. | <pre>list(object({<br/>    kind  = string<br/>    alias = string<br/><br/>    # kind = "email"<br/>    email                = optional(string)<br/>    provider             = optional(string)<br/>    host                 = optional(string)<br/>    port                 = optional(number)<br/>    max_imap_connections = optional(number)<br/><br/>    # kind = "bucket" -- also generates an rclone.conf remote<br/>    endpoint             = optional(string)<br/>    bucket               = optional(string)<br/>    access_key_id        = optional(string)<br/>    secret_key           = optional(string)<br/>    encryption_key_alias = optional(string)<br/><br/>    # kind = "encryption-key"<br/>    created_at = optional(string)<br/>  }))</pre> | `[]` | no |
 | <a name="input_name_prefix"></a> [name\_prefix](#input\_name\_prefix) | Instance name prefix | `string` | n/a | yes |
 | <a name="input_name_suffix"></a> [name\_suffix](#input\_name\_suffix) | Instance name suffix | `string` | n/a | yes |
+| <a name="input_private_network_id"></a> [private\_network\_id](#input\_private\_network\_id) | ID of an existing Scaleway Private Network to attach this instance to via a dedicated private NIC (scaleway\_instance\_private\_nic), alongside its normal public IP(s). null (default): no private NIC, unchanged behavior. Bring-your-own ID -- this module does not create the Private Network itself (see pigeon-cluster, which creates one shared PN per cluster and passes its ID here to every job instance). | `string` | `null` | no |
 | <a name="input_self_delete_on_exit"></a> [self\_delete\_on\_exit](#input\_self\_delete\_on\_exit) | When true, the instance deletes itself (server, IP(s), block volume) once post\_provision\_commands finishes, success or failure, using its own composed IAM API key (ADR-0138). Requires iam\_config to be set -- the module folds the permission needed to delete itself into the composed IAM policy automatically, on top of whatever project\_permission\_sets the caller already requested. | `bool` | `false` | no |
 | <a name="input_user_config"></a> [user\_config](#input\_user\_config) | Per-instance user/access configuration | <pre>object({<br/>    ssh_key = optional(string)<br/>  })</pre> | `{}` | no |
 
 ## Outputs
 
 | Name | Description |
-|------|-------------|
+| ---- | ----------- |
 | <a name="output_access_key_id"></a> [access\_key\_id](#output\_access\_key\_id) | IAM API key access key (null if iam\_config not set) |
 | <a name="output_id"></a> [id](#output\_id) | Instance ID (null if enabled = false) |
 | <a name="output_ipv4_address"></a> [ipv4\_address](#output\_ipv4\_address) | The instance's routed IPv4 address (null if enable\_ipv4 or enabled = false) |

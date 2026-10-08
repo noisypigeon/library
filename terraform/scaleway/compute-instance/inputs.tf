@@ -131,3 +131,9 @@ variable "enable_ipv6" {
   description = "Create and attach a routed IPv6 address (true/false)"
   default     = false
 }
+
+variable "private_network_id" {
+  type        = string
+  description = "ID of an existing Scaleway Private Network to attach this instance to via a dedicated private NIC (scaleway_instance_private_nic), alongside its normal public IP(s). null (default): no private NIC, unchanged behavior. Bring-your-own ID -- this module does not create the Private Network itself (see pigeon-cluster, which creates one shared PN per cluster and passes its ID here to every job instance)."
+  default     = null
+}

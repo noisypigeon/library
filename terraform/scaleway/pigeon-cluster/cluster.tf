@@ -1,8 +1,59 @@
+# ADR-0145: one shared Private Network for the whole cluster -- every job
+# instance attaches to this same PN (never one per job), so bucket traffic
+# routed to Scaleway's private Object Storage endpoint (s3-vpc.<region>.scw.eu)
+# avoids public-internet egress billing. Enabling Object Storage private
+# access itself (authorizing this PN to reach buckets privately) is a manual,
+# one-time step against the Scaleway VPC API -- not automated here, see
+# ADR-0145.
+resource "scaleway_vpc_private_network" "jobs" {
+  name       = "${var.cluster_config.name_prefix}-jobs"
+  project_id = var.cluster_config.project_id
+}
+
+# ADR-0145: job instances default to no public IP (jobs[*].enable_ipv4 =
+# false) so this shared Public Gateway is their only path to the public
+# internet -- cloud-init's apt-get/mise-install/curl/scw-CLI-install steps
+# all need it. enable_masquerade/push_default_route must be set explicitly;
+# neither defaults on.
+resource "scaleway_vpc_public_gateway_ip" "jobs" {
+  project_id = var.cluster_config.project_id
+}
+
+resource "scaleway_vpc_public_gateway" "jobs" {
+  # ADR-0145: move_to_ipam deliberately omitted -- confirmed deprecated
+  # against the installed provider (v2.86.0): "All gateways now use IPAM.
+  # This field is no longer needed."
+  name       = "${var.cluster_config.name_prefix}-jobs-gw"
+  type       = "VPC-GW-S"
+  ip_id      = scaleway_vpc_public_gateway_ip.jobs.id
+  project_id = var.cluster_config.project_id
+}
+
+resource "scaleway_vpc_gateway_network" "jobs" {
+  gateway_id         = scaleway_vpc_public_gateway.jobs.id
+  private_network_id = scaleway_vpc_private_network.jobs.id
+  enable_masquerade  = true
+
+  ipam_config {
+    push_default_route = true
+  }
+}
+
+# ADR-0145: jobs is caller-facing as a list (each entry names its own
+# job_name), but for_each still needs a map for stable per-job resource
+# addressing -- converted once here, keyed by job_name, and used everywhere
+# var.jobs would otherwise be used directly. jobs's own validation block
+# (inputs.tf) guarantees job_name is unique, so this conversion never
+# silently drops an entry.
+locals {
+  jobs_by_name = { for j in var.jobs : j.job_name => j }
+}
+
 # ADR-0138: one IAM application + one self-deleting compute-instance per job,
 # so each job's blast radius is its own grants/keyring, never shared with a
 # sibling job in the same cluster. Pinned to released tags per ADR-0121.
 module "job_application" {
-  for_each = var.jobs
+  for_each = local.jobs_by_name
   source   = "https://pigeon.dev/modules/scaleway/iam-application/v0.1.0"
   name     = "${var.cluster_config.name_prefix}-${each.key}"
 }
@@ -15,7 +66,7 @@ module "job_application" {
 # with no extra_permission_sets and no shared_permission_sets.
 locals {
   job_permission_sets = {
-    for k, v in var.jobs : k => distinct(concat(var.cluster_config.shared_permission_sets, v.extra_permission_sets))
+    for k, v in local.jobs_by_name : k => distinct(concat(var.cluster_config.shared_permission_sets, v.extra_permission_sets))
   }
 }
 
@@ -34,7 +85,7 @@ module "job_policy" {
 }
 
 module "job_api_key" {
-  for_each = var.jobs
+  for_each = local.jobs_by_name
   source   = "https://pigeon.dev/modules/scaleway/iam-api-key/v0.2.0"
 
   application_id     = module.job_application[each.key].id
@@ -48,7 +99,7 @@ module "job_api_key" {
 # entry doesn't specify its own.
 locals {
   effective_keyring = {
-    for job_key, job in var.jobs : job_key => {
+    for job_key, job in local.jobs_by_name : job_key => {
       for alias, entry in merge(var.cluster_config.shared_keyring, job.keyring) : alias => merge(entry, {
         alias         = alias
         access_key_id = entry.kind != "bucket" ? entry.access_key_id : coalesce(entry.access_key_id, module.job_api_key[job_key].access_key)
@@ -59,13 +110,19 @@ locals {
 }
 
 module "job" {
-  for_each    = var.jobs
+  for_each    = local.jobs_by_name
   source      = "https://pigeon.dev/modules/scaleway/compute-instance/v5.4.0"
   name_prefix = var.cluster_config.name_prefix
   name_suffix = each.key
 
   self_delete_on_exit = true
   keyring             = values(local.effective_keyring[each.key])
+
+  # ADR-0145: every job attaches to the cluster's one shared Private Network;
+  # enable_ipv4 defaults false (NAT'd through the cluster's Public Gateway
+  # instead), overridable per job for debugging.
+  private_network_id = scaleway_vpc_private_network.jobs.id
+  enable_ipv4        = each.value.enable_ipv4
 
   instance_config = {
     type    = each.value.instance_type

@@ -19,6 +19,11 @@ output "ipv4_address" {
 }
 
 output "private_ips" {
+  # ADR-0145: scaleway_instance_server's own private_ips block (confirmed via
+  # the installed provider's schema) reflects whatever private NICs are
+  # actually attached to the server, regardless of attachment mechanism --
+  # so this already populates once scaleway_instance_private_nic attaches a
+  # Private Network, with no change needed here.
   description = "Private IPs attached to the instance (null if enabled = false)"
   value       = try(scaleway_instance_server.server[0].private_ips, null)
 }
