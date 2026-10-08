@@ -111,7 +111,7 @@ locals {
 
 module "job" {
   for_each    = local.jobs_by_name
-  source      = "https://pigeon.dev/modules/scaleway/compute-instance/v5.5.0"
+  source      = "https://pigeon.dev/modules/scaleway/compute-instance/v5.6.0"
   name_prefix = var.cluster_config.name_prefix
   name_suffix = each.key
 
@@ -120,9 +120,14 @@ module "job" {
 
   # ADR-0145: every job attaches to the cluster's one shared Private Network;
   # enable_ipv4 defaults false (NAT'd through the cluster's Public Gateway
-  # instead), overridable per job for debugging.
-  private_network_id = scaleway_vpc_private_network.jobs.id
-  enable_ipv4        = each.value.enable_ipv4
+  # instead), overridable per job for debugging. enable_private_network is
+  # set unconditionally true (not gated on private_network_id != null) --
+  # that ID is only known after apply on a fresh cluster (the PN above is
+  # created in this same apply), and compute-instance's count can never
+  # depend on such a value.
+  private_network_id     = scaleway_vpc_private_network.jobs.id
+  enable_private_network = true
+  enable_ipv4            = each.value.enable_ipv4
 
   instance_config = {
     type    = each.value.instance_type
