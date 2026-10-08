@@ -111,7 +111,7 @@ locals {
 
 module "job" {
   for_each    = local.jobs_by_name
-  source      = "https://pigeon.dev/modules/scaleway/compute-instance/v5.4.0"
+  source      = "https://pigeon.dev/modules/scaleway/compute-instance/v5.5.0"
   name_prefix = var.cluster_config.name_prefix
   name_suffix = each.key
 
