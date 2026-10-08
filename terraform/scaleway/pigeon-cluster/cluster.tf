@@ -10,11 +10,12 @@ resource "scaleway_vpc_private_network" "jobs" {
   project_id = var.cluster_config.project_id
 }
 
-# ADR-0145: job instances default to no public IP (jobs[*].enable_ipv4 =
-# false) so this shared Public Gateway is their only path to the public
-# internet -- cloud-init's apt-get/mise-install/curl/scw-CLI-install steps
-# all need it. enable_masquerade/push_default_route must be set explicitly;
-# neither defaults on.
+# ADR-0145/ADR-0146: no job instance ever gets a public IP, so this shared
+# Public Gateway is their only path to the public internet -- cloud-init's
+# apt-get/mise-install/curl/scw-CLI-install steps all need it.
+# enable_masquerade/push_default_route must be set explicitly; neither
+# defaults on. This same gateway IP also fronts the optional bastion's PAT
+# rule below when cluster_config.enable_bastion is true.
 resource "scaleway_vpc_public_gateway_ip" "jobs" {
   project_id = var.cluster_config.project_id
 }
@@ -111,29 +112,30 @@ locals {
 
 module "job" {
   for_each    = local.jobs_by_name
-  source      = "https://pigeon.dev/modules/scaleway/compute-instance/v5.6.0"
+  source      = "https://pigeon.dev/modules/scaleway/compute-instance/v5.6.1"
   name_prefix = var.cluster_config.name_prefix
   name_suffix = each.key
 
   self_delete_on_exit = true
   keyring             = values(local.effective_keyring[each.key])
 
-  # ADR-0145: every job attaches to the cluster's one shared Private Network;
-  # enable_ipv4 defaults false (NAT'd through the cluster's Public Gateway
-  # instead), overridable per job for debugging. enable_private_network is
-  # set unconditionally true (not gated on private_network_id != null) --
-  # that ID is only known after apply on a fresh cluster (the PN above is
-  # created in this same apply), and compute-instance's count can never
-  # depend on such a value.
+  # ADR-0145/ADR-0146: every job attaches to the cluster's one shared Private
+  # Network and never gets a public IP of its own (NAT'd through the
+  # cluster's Public Gateway instead) -- use cluster_config.enable_bastion
+  # for debug SSH access. enable_private_network is set unconditionally true
+  # (not gated on private_network_id != null) -- that ID is only known after
+  # apply on a fresh cluster (the PN above is created in this same apply),
+  # and compute-instance's count can never depend on such a value.
   private_network_id     = scaleway_vpc_private_network.jobs.id
   enable_private_network = true
-  enable_ipv4            = each.value.enable_ipv4
+  enable_ipv4            = false
 
   instance_config = {
     type    = each.value.instance_type
     cockpit = var.cluster_config.cockpit
     block_volume = each.value.block_volume_size == null ? null : {
       size       = each.value.block_volume_size
+      iops       = each.value.block_volume_iops
       project_id = var.cluster_config.project_id
     }
     # ADR-0144: job_commands are rendered through templatestring so a caller
@@ -152,4 +154,40 @@ module "job" {
     # on module.job_policy above, which is also what the keyring defaults to.
     project_permission_sets = []
   }
+}
+
+# ADR-0146: folded in from what was a one-off, fully commented-out leaf file
+# (workloads/willowgraysen.com/terraform/pigeon-cli/cluster/bastion.tf) that
+# confirmed the fix below. The cluster's shared Public Gateway advertises a
+# default route (ipam_config.push_default_route, above) that takes priority
+# over any attached instance's own public interface --
+# https://www.scaleway.com/en/docs/public-gateways/troubleshooting/cant-connect-to-instance-with-pn-gateway/
+# -- so a direct public IP on this bastion would not actually be reachable by
+# SSH; it gets none (enable_ipv4 omitted, compute-instance's default of true
+# deliberately overridden to false). The only working path is PAT through
+# the gateway's own public IP, below.
+module "bastion" {
+  count       = var.cluster_config.enable_bastion ? 1 : 0
+  source      = "https://pigeon.dev/modules/scaleway/compute-instance/v5.6.1"
+  name_prefix = var.cluster_config.name_prefix
+  name_suffix = "bastion"
+
+  enable_ipv4            = false
+  private_network_id     = scaleway_vpc_private_network.jobs.id
+  enable_private_network = true
+}
+
+# Scaleway's own documented workaround for the routing conflict above: SSH to
+# the gateway's public IP on an alternate port, PAT'd through to the
+# bastion's private IP:22.
+resource "scaleway_vpc_public_gateway_pat_rule" "bastion_ssh" {
+  count = var.cluster_config.enable_bastion ? 1 : 0
+
+  gateway_id = scaleway_vpc_public_gateway.jobs.id
+  # private_ips is dual-stack (IPv4 + IPv6) -- the gateway only tracks IPv4
+  # addresses for PAT, so blindly indexing [0] can grab the IPv6 one instead.
+  private_ip   = [for ip in module.bastion[0].private_ips : ip.address if !strcontains(ip.address, ":")][0]
+  private_port = 22
+  public_port  = 2222
+  protocol     = "tcp"
 }
