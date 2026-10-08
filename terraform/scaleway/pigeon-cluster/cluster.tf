@@ -25,7 +25,7 @@ resource "scaleway_vpc_public_gateway" "jobs" {
   # against the installed provider (v2.86.0): "All gateways now use IPAM.
   # This field is no longer needed."
   name       = "${var.cluster_config.name_prefix}-jobs-gw"
-  type       = "VPC-GW-S"
+  type       = var.cluster_config.public_gateway_type
   ip_id      = scaleway_vpc_public_gateway_ip.jobs.id
   project_id = var.cluster_config.project_id
 }

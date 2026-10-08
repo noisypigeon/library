@@ -36,8 +36,20 @@ variable "cluster_config" {
     # not via its own public IP -- a direct public IP on an instance attached
     # to this PN doesn't actually work, see cluster.tf's module.bastion comment.
     enable_bastion = optional(bool, false)
+    # Scaleway offer type for the cluster's shared Public Gateway (default
+    # matches today's hardcoded behavior). Changing this upgrades the
+    # existing gateway in place via Scaleway's UpgradeGateway API -- same
+    # gateway ID/IP, no job or bastion instance needs to restart or
+    # reconnect to benefit. Upgrade-only: Scaleway doesn't support
+    # downgrading a gateway back to a smaller tier afterward.
+    public_gateway_type = optional(string, "VPC-GW-S")
   })
   description = "Settings shared by every job instance in this cluster, including a default keyring and permission grant every job inherits unless overridden."
+
+  validation {
+    condition     = contains(["VPC-GW-S", "VPC-GW-M", "VPC-GW-L", "VPC-GW-XL"], var.cluster_config.public_gateway_type)
+    error_message = "cluster_config.public_gateway_type must be one of VPC-GW-S, VPC-GW-M, VPC-GW-L, VPC-GW-XL."
+  }
 }
 
 variable "jobs" {
