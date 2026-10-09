@@ -1,0 +1,21 @@
+# Changelog
+
+All notable changes to this module are documented in this file.
+
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+## [0.1.0] - 2026-10-09
+
+### Add backblaze/bucket and backblaze/api-key modules
+
+Adds two new Terraform modules under a new `templates/terraform/backblaze/` provider root.
+
+`backblaze/bucket` wraps `b2_bucket`: it names the bucket from `name_prefix`/`name_suffix` plus a random 6-character suffix (B2 bucket names are globally unique across every B2 account, like S3, so the random suffix matters here even more than for the Scaleway bucket modules), always creates the bucket as `allPrivate` (no public-bucket option), and stores an optional `description` in the bucket's `bucket_info` metadata. It outputs `bucket_id` and `bucket_name`.
+
+`backblaze/api-key` wraps `b2_application_key`: it takes a required `key_name` and a required `capabilities` set (not validated locally, since Backblaze's capability catalog is provider-defined and changes independently of this repo), an optional `bucket_ids` set to scope the key to one or more buckets, and defaults `valid_duration_in_seconds` to 30 days (pass `null` for a key that never expires). It composes naturally with `backblaze/bucket`'s `bucket_id` output for per-bucket key scoping, and outputs `application_key_id`/`application_key` (sensitive).
+
+See ADR-0147 for the full design rationale. No `workloads/*` consumer is wired up in this PR — that's left for a future change once a real B2 bucket/key is needed.
+
+This also generalizes `template-release.yml`'s module-discovery `find`, which was hardcoded to `templates/terraform/scaleway` and would otherwise have silently skipped tagging/releasing these new modules, and appends both to `module-docs.yml`'s `working-dir` list so their README input/output tables get generated.
+
+[#253](https://github.com/noisypigeon/noisypigeon/pull/253)
