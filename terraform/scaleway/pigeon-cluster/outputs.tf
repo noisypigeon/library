@@ -5,5 +5,5 @@ output "job_ids" {
 
 output "bastion_connect_command" {
   description = "SSH command to reach the cluster's bastion through the shared Public Gateway's PAT rule (null when cluster_config.enable_bastion is false)"
-  value       = var.cluster_config.enable_bastion ? "ssh -p 2222 root@${scaleway_vpc_public_gateway_ip.jobs.address}" : null
+  value       = var.cluster_config.enable_bastion ? "ssh -p 2222 root@${try(scaleway_vpc_public_gateway_ip.jobs[0].address, null)}" : null
 }

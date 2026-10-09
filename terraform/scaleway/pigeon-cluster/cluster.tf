@@ -1,22 +1,31 @@
 # ADR-0145: one shared Private Network for the whole cluster -- every job
-# instance attaches to this same PN (never one per job), so bucket traffic
-# routed to Scaleway's private Object Storage endpoint (s3-vpc.<region>.scw.eu)
-# avoids public-internet egress billing. Enabling Object Storage private
-# access itself (authorizing this PN to reach buckets privately) is a manual,
-# one-time step against the Scaleway VPC API -- not automated here, see
-# ADR-0145.
+# instance that wants one attaches to this same PN (never one per job), so
+# bucket traffic routed to Scaleway's private Object Storage endpoint
+# (s3-vpc.<region>.scw.eu) avoids public-internet egress billing. Enabling
+# Object Storage private access itself (authorizing this PN to reach
+# buckets privately) is a manual, one-time step against the Scaleway VPC
+# API -- not automated here, see ADR-0145.
+# ADR-0149: count-gated (previously unconditional) -- cluster_config.
+# enable_private_network can be flipped off independently of
+# enable_public_gateway once no remaining job needs it; see the moved
+# block below protecting existing callers' state through this change.
 resource "scaleway_vpc_private_network" "jobs" {
+  count      = var.cluster_config.enable_private_network ? 1 : 0
   name       = "${var.cluster_config.name_prefix}-jobs"
   project_id = var.cluster_config.project_id
 }
 
-# ADR-0145/ADR-0146: no job instance ever gets a public IP, so this shared
-# Public Gateway is their only path to the public internet -- cloud-init's
-# apt-get/mise-install/curl/scw-CLI-install steps all need it.
+# ADR-0145/ADR-0146: by default no job instance gets a public IP, so this
+# shared Public Gateway is their only path to the public internet --
+# cloud-init's apt-get/mise-install/curl/scw-CLI-install steps all need it.
 # enable_masquerade/push_default_route must be set explicitly; neither
 # defaults on. This same gateway IP also fronts the optional bastion's PAT
 # rule below when cluster_config.enable_bastion is true.
+# ADR-0149: count-gated (previously unconditional) -- independent of
+# enable_private_network, so the gateway (and its stable IP) can keep
+# running even once the PN is torn down, or vice versa.
 resource "scaleway_vpc_public_gateway_ip" "jobs" {
+  count      = var.cluster_config.enable_public_gateway ? 1 : 0
   project_id = var.cluster_config.project_id
 }
 
@@ -24,20 +33,49 @@ resource "scaleway_vpc_public_gateway" "jobs" {
   # ADR-0145: move_to_ipam deliberately omitted -- confirmed deprecated
   # against the installed provider (v2.86.0): "All gateways now use IPAM.
   # This field is no longer needed."
+  count      = var.cluster_config.enable_public_gateway ? 1 : 0
   name       = "${var.cluster_config.name_prefix}-jobs-gw"
   type       = var.cluster_config.public_gateway_type
-  ip_id      = scaleway_vpc_public_gateway_ip.jobs.id
+  ip_id      = scaleway_vpc_public_gateway_ip.jobs[0].id
   project_id = var.cluster_config.project_id
 }
 
+# ADR-0149: requires both the PN and the gateway to exist -- gated on the
+# conjunction of both toggles, rather than inheriting either resource's own
+# count, since this is the one resource that genuinely needs both IDs.
 resource "scaleway_vpc_gateway_network" "jobs" {
-  gateway_id         = scaleway_vpc_public_gateway.jobs.id
-  private_network_id = scaleway_vpc_private_network.jobs.id
+  count              = var.cluster_config.enable_private_network && var.cluster_config.enable_public_gateway ? 1 : 0
+  gateway_id         = scaleway_vpc_public_gateway.jobs[0].id
+  private_network_id = scaleway_vpc_private_network.jobs[0].id
   enable_masquerade  = true
 
   ipam_config {
     push_default_route = true
   }
+}
+
+# ADR-0149: these four resources moved from unconditional singletons to
+# count = ... ? 1 : 0 above -- same precedent as ADR-0126's compute-instance
+# kill switch. Protects any existing caller's state through the address
+# change.
+moved {
+  from = scaleway_vpc_private_network.jobs
+  to   = scaleway_vpc_private_network.jobs[0]
+}
+
+moved {
+  from = scaleway_vpc_public_gateway_ip.jobs
+  to   = scaleway_vpc_public_gateway_ip.jobs[0]
+}
+
+moved {
+  from = scaleway_vpc_public_gateway.jobs
+  to   = scaleway_vpc_public_gateway.jobs[0]
+}
+
+moved {
+  from = scaleway_vpc_gateway_network.jobs
+  to   = scaleway_vpc_gateway_network.jobs[0]
 }
 
 # ADR-0145: jobs is caller-facing as a list (each entry names its own
@@ -119,16 +157,21 @@ module "job" {
   self_delete_on_exit = true
   keyring             = values(local.effective_keyring[each.key])
 
-  # ADR-0145/ADR-0146: every job attaches to the cluster's one shared Private
-  # Network and never gets a public IP of its own (NAT'd through the
-  # cluster's Public Gateway instead) -- use cluster_config.enable_bastion
-  # for debug SSH access. enable_private_network is set unconditionally true
-  # (not gated on private_network_id != null) -- that ID is only known after
-  # apply on a fresh cluster (the PN above is created in this same apply),
-  # and compute-instance's count can never depend on such a value.
-  private_network_id     = scaleway_vpc_private_network.jobs.id
-  enable_private_network = true
-  enable_ipv4            = false
+  # ADR-0145/ADR-0146: by default every job attaches to the cluster's one
+  # shared Private Network and gets no public IP of its own (NAT'd through
+  # the cluster's Public Gateway instead) -- use cluster_config.enable_bastion
+  # for debug SSH access. ADR-0149: a job may opt out entirely
+  # (enable_private_network = false, a plain public-IP compute-instance with
+  # no dependency on the cluster's shared networking) or keep its PN
+  # attachment while also requesting its own public IP (enable_ipv4 = true).
+  # try(...) guards the PN lookup since that resource is now conditional
+  # (cluster_config.enable_private_network) -- if a job still requests
+  # enable_private_network = true against a cluster with it disabled, the
+  # resulting null private_network_id trips compute-instance's own
+  # validation rather than this module duplicating the check.
+  private_network_id     = each.value.enable_private_network ? try(scaleway_vpc_private_network.jobs[0].id, null) : null
+  enable_private_network = each.value.enable_private_network
+  enable_ipv4            = each.value.enable_private_network ? each.value.enable_ipv4 : true
 
   instance_config = {
     type    = each.value.instance_type
@@ -173,7 +216,7 @@ module "bastion" {
   name_suffix = "bastion"
 
   enable_ipv4            = false
-  private_network_id     = scaleway_vpc_private_network.jobs.id
+  private_network_id     = try(scaleway_vpc_private_network.jobs[0].id, null)
   enable_private_network = true
 }
 
@@ -183,7 +226,7 @@ module "bastion" {
 resource "scaleway_vpc_public_gateway_pat_rule" "bastion_ssh" {
   count = var.cluster_config.enable_bastion ? 1 : 0
 
-  gateway_id = scaleway_vpc_public_gateway.jobs.id
+  gateway_id = try(scaleway_vpc_public_gateway.jobs[0].id, null)
   # private_ips is dual-stack (IPv4 + IPv6) -- the gateway only tracks IPv4
   # addresses for PAT, so blindly indexing [0] can grab the IPv6 one instead.
   private_ip   = [for ip in module.bastion[0].private_ips : ip.address if !strcontains(ip.address, ":")][0]
