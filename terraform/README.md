@@ -26,6 +26,8 @@ This directory holds only module source — it has no root provider/backend conf
 | `scaleway/block-volume` | A Scaleway Block Storage volume (`scaleway_block_volume`) with a randomized name suffix; minimal interface — `size` (renamed from `size_in_gb`), `iops` (defaults to `15000`). |
 | `scaleway/cockpit-observability` | A Scaleway Cockpit (`scaleway_cockpit_source`/`scaleway_cockpit_token`) wrapper that creates a metrics and/or logs source plus a shared push token, each individually toggleable via `enable_metrics`/`enable_logs`. |
 | `scaleway/grafana-dashboard` | A `grafana_folder`/`grafana_dashboard` wrapper that creates a Grafana folder and provisions a set of dashboards into it from JSON dashboard models. |
+| `backblaze/bucket` | A private Backblaze B2 bucket (`b2_bucket`) with a randomized name suffix; always `bucket_type = "allPrivate"`. |
+| `backblaze/api-key` | A thin wrapper around `b2_application_key`, defaulting `valid_duration_in_seconds` to 30 days. |
 
 ## Versioning
 
