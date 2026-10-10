@@ -150,7 +150,7 @@ locals {
 
 module "job" {
   for_each    = local.jobs_by_name
-  source      = "https://pigeon.dev/modules/scaleway/compute-instance/v5.6.1"
+  source      = "https://pigeon.dev/modules/scaleway/compute-instance/v5.7.0"
   name_prefix = var.cluster_config.name_prefix
   name_suffix = each.key
 
@@ -187,6 +187,7 @@ module "job" {
     post_provision_commands = [
       for cmd in each.value.job_commands : templatestring(cmd, { keyring = local.effective_keyring[each.key] })
     ]
+    enable_heic_transcoding = each.value.enable_heic_transcoding
   }
 
   iam_config = {
@@ -211,7 +212,7 @@ module "job" {
 # the gateway's own public IP, below.
 module "bastion" {
   count       = var.cluster_config.enable_bastion ? 1 : 0
-  source      = "https://pigeon.dev/modules/scaleway/compute-instance/v5.6.1"
+  source      = "https://pigeon.dev/modules/scaleway/compute-instance/v5.7.0"
   name_prefix = var.cluster_config.name_prefix
   name_suffix = "bastion"
 
