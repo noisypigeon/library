@@ -324,6 +324,15 @@ locals {
       - curl -fsSL https://mise.run | sh
       - echo 'eval "$(/root/.local/bin/mise activate bash)"' >> /root/.bashrc
       - curl -fsSL https://gist.githubusercontent.com/noisypigeon/1e96e8ef94380f913f6ae02782965149/raw/pigeon.sh | bash
+    %{~if var.instance_config.enable_heic_transcoding~}
+      # ADR-0150: Ubuntu's own archive ffmpeg isn't built with --enable-libheif,
+      # so pigeon-cli transform --input-file-type=heic needs this third-party
+      # PPA instead.
+      - apt-get install -y software-properties-common
+      - add-apt-repository -y ppa:savoury1/ffmpeg4
+      - apt-get update
+      - DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg
+    %{~endif~}
     %{~if var.instance_config.cockpit != null~}
       - mkdir -p /etc/apt/keyrings
       - wget -q -O /etc/apt/keyrings/grafana.asc https://apt.grafana.com/gpg.key
