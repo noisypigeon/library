@@ -4,6 +4,18 @@ All notable changes to this module are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.0] - 2026-10-10
+
+### Re-pin pigeon-cluster to compute-instance v5.7.0, add per-job HEIC transcoding opt-in
+
+Re-pins both `compute-instance` calls inside `pigeon-cluster` (`module.job` and `module.bastion`) to `v5.7.0`, which added `instance_config.enable_heic_transcoding` (ADR-0150).
+
+`jobs` gains a new optional `enable_heic_transcoding` field (default `false`, unchanged behavior), passed straight through to that job's own `compute-instance` call's `instance_config`. Set it `true` on any job whose `job_commands` run `pigeon-cli transform --input-file-type=heic`, to get a libheif-enabled ffmpeg build on that job's instance. `module.bastion` doesn't get this field — it never runs transforms.
+
+See ADR-0150 for the full design.
+
+[#258](https://github.com/noisypigeon/noisypigeon/pull/258)
+
 ## [1.2.0] - 2026-10-09
 
 ### Add per-job network opt-out and independent Private Network/Public Gateway toggles to pigeon-cluster
