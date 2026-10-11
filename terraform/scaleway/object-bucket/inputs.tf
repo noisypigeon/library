@@ -76,6 +76,17 @@ variable "website_error_document" {
   default     = "404.html"
 }
 
+variable "expiration_days" {
+  type        = number
+  description = "Delete objects this many days after creation, via a scaleway_object_bucket lifecycle_rule expiration. null (the default) adds no expiration rule at all. Day-granular only -- the S3 lifecycle API this wraps has no finer unit, so a 72-hour retention is expressed as 3. Note this is independent of storage_class's own 90-day glacier transition: an expiration shorter than 90 days means objects are deleted before that transition could ever fire, so pair a short expiration with storage_class = \"standard\"."
+  default     = null
+
+  validation {
+    condition     = var.expiration_days == null || var.expiration_days >= 1
+    error_message = "expiration_days must be at least 1 (the S3 lifecycle API's minimum), or null for no expiration rule."
+  }
+}
+
 variable "enable_public_read" {
   type        = bool
   description = "Grant the bucket a public-read ACL (scaleway_object_bucket_acl)"

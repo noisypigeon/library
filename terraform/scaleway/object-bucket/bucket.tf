@@ -37,6 +37,18 @@ resource "scaleway_object_bucket" "bucket" {
       }
     }
   }
+
+  dynamic "lifecycle_rule" {
+    for_each = var.expiration_days != null ? [1] : []
+    content {
+      id      = "expire-objects"
+      enabled = true
+
+      expiration {
+        days = var.expiration_days
+      }
+    }
+  }
 }
 
 resource "scaleway_object_bucket_acl" "bucket" {
