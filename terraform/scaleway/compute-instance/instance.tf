@@ -101,6 +101,9 @@ locals {
     %{~if var.self_delete_on_exit~}
       - jq
     %{~endif~}
+    %{~if var.instance_config.enable_transcoding~}
+      - xz-utils
+    %{~endif~}
 
     write_files:
       - path: /etc/profile.d/pigeon-env.sh
@@ -325,14 +328,18 @@ locals {
       - echo 'eval "$(/root/.local/bin/mise activate bash)"' >> /root/.bashrc
       - curl -fsSL https://gist.githubusercontent.com/noisypigeon/1e96e8ef94380f913f6ae02782965149/raw/pigeon.sh | bash
     %{~if var.instance_config.enable_transcoding~}
-      # ADR-0150, renamed by ADR-0151: a general-purpose ffmpeg for
-      # pigeon-cli transform. This third-party PPA is used rather than
-      # Ubuntu's own archive build because the archive build isn't compiled
-      # with --enable-libheif, so it can't decode .heic input.
-      - apt-get install -y software-properties-common
-      - add-apt-repository -y ppa:savoury1/ffmpeg4
-      - apt-get update
-      - DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg
+      # ADR-0152: a pinned static ffmpeg build rather than an apt package.
+      # ffmpeg CLI grid-tiled HEIF reconstruction first shipped in 8.1; no
+      # Ubuntu archive reaches it (jammy 4.4, noble 6.1, resolute 8.0), and
+      # savoury1's ffmpeg7/8/9 PPAs require a donation-gated private PPA, so
+      # ppa:savoury1/ffmpeg4 (ADR-0150) could only ever install ffmpeg 4.4.
+      - curl -fsSL -o /tmp/ffmpeg.tar.xz https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-10-13-04/ffmpeg-n9.0.2-25-g67b60c310b-linux64-gpl-9.0.tar.xz
+      - echo '7e898ca0a18e8620c0caa9af9a728bc01be006398dd5db5a99d53f14de010a9a  /tmp/ffmpeg.tar.xz' | sha256sum -c -
+      - mkdir -p /tmp/ffmpeg
+      - tar -xJf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg --strip-components=1
+      - install -m 0755 /tmp/ffmpeg/bin/ffmpeg /tmp/ffmpeg/bin/ffprobe /usr/local/bin/
+      - rm -rf /tmp/ffmpeg /tmp/ffmpeg.tar.xz
+      - /usr/local/bin/ffmpeg -version
     %{~endif~}
     %{~if var.instance_config.cockpit != null~}
       - mkdir -p /etc/apt/keyrings
