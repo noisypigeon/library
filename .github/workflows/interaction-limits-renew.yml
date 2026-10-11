@@ -1,0 +1,24 @@
+# Reusable: re-applies a contributors_only interaction limit, since GitHub
+# auto-expires it after 6 months. Already fully generic -- keys off
+# `github.repository`, which in a called workflow is the caller's repo -- so
+# this move needed no parameterization at all.
+name: Renew interaction limits
+
+on:
+  workflow_call:
+    secrets:
+      GH_ADMIN_TOKEN:
+        required: true
+
+permissions: {}
+
+jobs:
+  renew:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Re-apply contributors_only interaction limit
+        env:
+          GH_TOKEN: ${{ secrets.GH_ADMIN_TOKEN }}
+        run: |
+          gh api -X PUT "repos/${{ github.repository }}/interaction-limits" \
+            -f limit=contributors_only -f expiry=six_months

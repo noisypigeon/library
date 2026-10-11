@@ -1,0 +1,91 @@
+# Reusable: builds one Zola site and syncs it to a Scaleway Object Storage
+# bucket. Deliberately single-site (noisypigeon ADR-0155 §3) -- the caller's
+# `secrets[matrix.access_key_secret]`-style dynamic lookup can't be expressed
+# in this workflow's own statically-declared `secrets:` block, so the caller
+# resolves which secret belongs to which site and passes the values down.
+# This also means "which sites exist" (the caller's business) stays separate
+# from "how to build and ship one Zola site" (this file).
+#
+# `actions/checkout` in the caller checked out the caller's own repo before
+# this is invoked, so `src_dir` below is a path in *that* checkout.
+name: Zola site deploy
+
+on:
+  workflow_call:
+    inputs:
+      src_dir:
+        description: "Path (in the caller's checkout) to the site's src/."
+        type: string
+        required: true
+      bucket:
+        description: "Destination Scaleway Object Storage bucket name."
+        type: string
+        required: true
+      build_cmd:
+        description: "Command to run (in src_dir) to build the site."
+        type: string
+        required: true
+      extra_step:
+        description: "Optional site-specific command to run before building."
+        type: string
+        required: false
+        default: ""
+      zola_version:
+        type: string
+        required: false
+        default: "0.23.6"
+    secrets:
+      scw_access_key:
+        required: true
+      scw_secret_key:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      # templates/ lives in noisypigeon/pigeon.dev (this repo) since
+      # ADR-0154; one clone feeds both the theme and, for pigeon.dev's own
+      # site, the module metadata the redirect generator reads.
+      - name: Fetch templates
+        run: workloads/pigeon.dev/fetch-templates.sh
+
+      - name: Resolve zola-site theme
+        working-directory: ${{ inputs.src_dir }}
+        run: "$(git rev-parse --show-toplevel)/.templates-src/templates/zola-site/resolve-theme.sh"
+
+      - name: Run site-specific pre-build step
+        if: inputs.extra_step != ''
+        run: ${{ inputs.extra_step }}
+
+      - name: Install Zola
+        env:
+          ZOLA_VERSION: ${{ inputs.zola_version }}
+        run: |
+          curl -sSL "https://github.com/getzola/zola/releases/download/v${ZOLA_VERSION}/zola-v${ZOLA_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar -xz -C /usr/local/bin zola
+
+      - name: Build with Zola
+        working-directory: ${{ inputs.src_dir }}
+        run: ${{ inputs.build_cmd }}
+
+      - name: Sync to Scaleway Object Storage
+        working-directory: ${{ inputs.src_dir }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.scw_access_key }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.scw_secret_key }}
+          AWS_DEFAULT_REGION: fr-par
+        run: |
+          aws s3 sync public "s3://${{ inputs.bucket }}" \
+            --endpoint-url https://s3.fr-par.scw.cloud \
+            --acl public-read \
+            --delete

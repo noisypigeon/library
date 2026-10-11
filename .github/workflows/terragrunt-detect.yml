@@ -1,0 +1,71 @@
+# Reusable: decides whether a PR touches anything terragrunt cares about, and
+# writes the `terragrunt/apply` commit status accordingly.
+#
+# Always runs, regardless of what changed, so that status (required by the
+# caller's branch ruleset, see noisypigeon ADR-0129) resolves to success
+# immediately for PRs that touch no terraform leaf, rather than staying
+# unreported and blocking the merge forever.
+#
+# Split out of the plan workflow rather than folded into terragrunt-run.yml
+# because it is plan-only and its result has to gate the run (ADR-0155 §2).
+# `github.*` is the caller's context throughout, and actions/checkout checks
+# out the caller's repo.
+name: Terragrunt detect
+
+on:
+  workflow_call:
+    inputs:
+      leaf_pattern:
+        description: "ERE matching paths that require a terragrunt run."
+        type: string
+        required: false
+        default: '^workloads/[^/]+/terraform/|^\.env\.enc$|^\.sops\.yaml$'
+    outputs:
+      affects-leaves:
+        description: "Whether the PR touches a terraform leaf ('true'/'false')."
+        value: ${{ jobs.detect.outputs.affects-leaves }}
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      affects-leaves: ${{ steps.check.outputs.affects-leaves }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check whether any terraform leaf is affected
+        id: check
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          LEAF_PATTERN: ${{ inputs.leaf_pattern }}
+        run: |
+          CHANGED_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          if echo "$CHANGED_FILES" | grep -qE "$LEAF_PATTERN"; then
+            echo "affects-leaves=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "affects-leaves=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set merge-gate status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const affectsLeaves = '${{ steps.check.outputs.affects-leaves }}' === 'true';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: '${{ github.event.pull_request.head.sha }}',
+              state: affectsLeaves ? 'pending' : 'success',
+              context: 'terragrunt/apply',
+              description: affectsLeaves
+                ? 'Awaiting successful terragrunt apply'
+                : 'No terraform leaves affected',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });

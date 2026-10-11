@@ -1,0 +1,163 @@
+# Reusable: on a merged PR touching a blog's src/, prepends an entry to that
+# blog's own CHANGELOG.md, rolls up a one-liner into the caller's root
+# CHANGELOG.md, appends to (or creates) a daily digest post under the site's
+# content/changelog/, and dispatches that site's deploy.
+#
+# Site paths are inputs rather than hardcoded, since this now runs from
+# another repo and has no business assuming the caller only ever has one
+# blog. `github.*` throughout is the caller's context (actions/checkout in
+# the caller already ran against the caller's own repo), which is what lets
+# this keep reading and writing the caller's own tree.
+name: Blog changelog
+
+on:
+  workflow_call:
+    inputs:
+      site_dir:
+        description: "Path (in the caller's checkout) to the blog's root, e.g. workloads/noisypigeon.com."
+        type: string
+        required: true
+      site_key:
+        description: "Deploy-dispatch `site` value for this blog."
+        type: string
+        required: true
+      root_changelog_tag:
+        description: "Bracket tag used in the caller's root CHANGELOG.md rollup line, e.g. 'blog'."
+        type: string
+        required: false
+        default: "blog"
+      git_user_name:
+        type: string
+        required: false
+        default: "istx25"
+      git_user_email:
+        type: string
+        required: false
+        default: "6799989+istx25@users.noreply.github.com"
+    secrets:
+      BOT_GITHUB_TOKEN:
+        required: true
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 0
+          token: ${{ secrets.BOT_GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        env:
+          GIT_USER_NAME: ${{ inputs.git_user_name }}
+          GIT_USER_EMAIL: ${{ inputs.git_user_email }}
+        run: |
+          git config user.name "$GIT_USER_NAME"
+          git config user.email "$GIT_USER_EMAIL"
+
+      - name: Update blog changelog and daily digest
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          SITE_DIR: ${{ inputs.site_dir }}
+          ROOT_CHANGELOG_TAG: ${{ inputs.root_changelog_tag }}
+        run: |
+          TODAY=$(TZ="America/Los_Angeles" date +%Y-%m-%d)
+          OFFSET=$(TZ="America/Los_Angeles" date +%z | sed -E 's/([+-][0-9]{2})([0-9]{2})/\1:\2/')
+
+          CHANGELOG="${SITE_DIR}/CHANGELOG.md"
+          if [ ! -f "$CHANGELOG" ]; then
+            cat > "$CHANGELOG" <<'HEADER'
+          # Changelog
+
+          All notable changes to the blog are documented in this file.
+
+          The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+          HEADER
+          fi
+
+          ENTRY=$(mktemp)
+          {
+            echo ""
+            echo "## ${TODAY} — ${PR_TITLE}"
+            echo ""
+            echo "${PR_BODY}"
+            echo ""
+            echo "[#${PR_NUMBER}](${PR_URL})"
+          } > "$ENTRY"
+
+          head -n 5 "$CHANGELOG" > "${CHANGELOG}.new"
+          cat "$ENTRY" >> "${CHANGELOG}.new"
+          tail -n +6 "$CHANGELOG" >> "${CHANGELOG}.new"
+          mv "${CHANGELOG}.new" "$CHANGELOG"
+          git add "$CHANGELOG"
+
+          ROOT_CHANGELOG="CHANGELOG.md"
+          ROOT_ENTRY="- [${ROOT_CHANGELOG_TAG}] ${PR_TITLE} ([#${PR_NUMBER}](${PR_URL}))"
+          if grep -q "^## ${TODAY}\$" "$ROOT_CHANGELOG"; then
+            awk -v today="## ${TODAY}" -v entry="$ROOT_ENTRY" '
+              { print }
+              $0 == today { print ""; print entry }
+            ' "$ROOT_CHANGELOG" > "${ROOT_CHANGELOG}.new"
+          else
+            awk -v today="## ${TODAY}" -v entry="$ROOT_ENTRY" '
+              BEGIN { inserted = 0 }
+              /^## / && !inserted { print today; print ""; print entry; print ""; inserted = 1 }
+              { print }
+              END { if (!inserted) { print ""; print today; print ""; print entry } }
+            ' "$ROOT_CHANGELOG" > "${ROOT_CHANGELOG}.new"
+          fi
+          mv "${ROOT_CHANGELOG}.new" "$ROOT_CHANGELOG"
+          git add "$ROOT_CHANGELOG"
+
+          DIGEST="${SITE_DIR}/src/content/changelog/${TODAY}-changelog.md"
+          if [ ! -f "$DIGEST" ]; then
+            mkdir -p "$(dirname "$DIGEST")"
+            cat > "$DIGEST" <<EOF2
+          +++
+          title = "Changelog: ${TODAY}"
+          date = ${TODAY}T12:00:00${OFFSET}
+          slug = "${TODAY}-changelog"
+          description = "Changelog: ${TODAY}"
+          +++
+
+          EOF2
+          fi
+          if ! grep -q "#${PR_NUMBER}\]" "$DIGEST"; then
+            echo "- ${PR_TITLE} ([#${PR_NUMBER}](${PR_URL}))" >> "$DIGEST"
+          fi
+
+          STRIP_RE='^[a-z]+(\([^)]+\))?: '
+          N=$(grep -c '^- ' "$DIGEST")
+          FIRST_RAW=$(grep '^- ' "$DIGEST" | head -n1 | sed -E 's/^- (.*) \(\[#?[^]]*\]\(.*\)\)$/\1/')
+          FIRST_CLEAN=$(printf '%s' "$FIRST_RAW" | sed -E "s/$STRIP_RE//")
+          if [ "$N" -gt 1 ]; then
+            DIGEST_TITLE="${FIRST_CLEAN} (+$((N-1)) more)"
+          else
+            DIGEST_TITLE="$FIRST_CLEAN"
+          fi
+          DIGEST_TITLE_ESCAPED=$(printf '%s' "$DIGEST_TITLE" | sed 's/\\/\\\\/g; s/"/\\"/g')
+          sed -i "s|^title = .*|title = \"${DIGEST_TITLE_ESCAPED}\"|" "$DIGEST"
+          sed -i "s|^description = .*|description = \"${DIGEST_TITLE_ESCAPED}\"|" "$DIGEST"
+
+          git add "$DIGEST"
+
+      - name: Commit changelog updates
+        run: |
+          git commit -m "chore: update changelog(s) for PR #${{ github.event.pull_request.number }}"
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
+
+      - name: Trigger blog Pages deploy
+        env:
+          GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+          SITE_KEY: ${{ inputs.site_key }}
+        run: gh workflow run zola-sites-deploy.yml -R ${{ github.repository }} --ref main -f site="$SITE_KEY"

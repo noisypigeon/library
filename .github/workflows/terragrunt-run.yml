@@ -1,0 +1,244 @@
+# Reusable: runs `terragrunt plan` or `terragrunt apply` across the caller's
+# `workloads/` tree, posts a truncate-and-minimize PR comment, and -- for
+# apply only -- reacts to the triggering comment, flips the `terragrunt/apply`
+# merge-gate status, and auto-merges on success.
+#
+# Collapses what were two nearly-identical files (noisypigeon ADR-0155 §2):
+# every substantive change either one ever needed, it turned out, both
+# needed, across six commits spanning ADR-0124/0128/0129/0134/0138. The
+# subcommand, the checkout ref, and the apply-only merge-gate/auto-merge step
+# are the only genuine differences, and all three are gated on `inputs.command`
+# below.
+name: Terragrunt run
+
+on:
+  workflow_call:
+    inputs:
+      # workflow_call doesn't start a new triggering event -- this run is
+      # still the caller's own pull_request/issue_comment event throughout,
+      # so context.issue / context.payload below are the caller's real event
+      # data without anything needing to be passed as an input.
+      command:
+        description: "terragrunt subcommand to run."
+        type: string
+        required: true
+      checkout_ref:
+        description: "git ref to check out before running."
+        type: string
+        required: false
+        default: ${{ github.ref }}
+    secrets:
+      SOPS_AGE_KEY:
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: React to triggering comment
+        if: inputs.command == 'apply'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: 'eyes',
+            });
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref }}
+          fetch-depth: 0
+
+      - name: Ensure a local main ref exists
+        run: git fetch origin main:refs/heads/main
+
+      - uses: jdx/mise-action@v2
+
+      - name: Debug resolved terraform binary
+        run: terraform version
+
+      - name: Mask decrypted secret values
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: |
+          while IFS='=' read -r key value; do
+            [[ -z "$key" || "$key" == \#* || "$key" == sops_* ]] && continue
+            echo "::add-mask::$value"
+          done < <(sops --decrypt --input-type dotenv --output-type dotenv .env.enc)
+
+      - name: Clear terragrunt cache
+        run: find workloads -type d -name ".terragrunt-cache" -exec rm -rf {} +
+
+      - name: terragrunt ${{ inputs.command }}
+        id: run
+        working-directory: workloads
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+          TG_TF_PATH: terraform
+          COMMAND: ${{ inputs.command }}
+        run: |
+          set +e
+
+          # terragrunt's own --filter-affected only tracks changes to a unit's
+          # terragrunt.hcl / HCL-level reads, not files a .tf module reads via
+          # Terraform's native file()/fileset() (e.g. a dashboard JSON asset) --
+          # a documented upstream gap (gruntwork-io/terragrunt#6952, not planned
+          # to be fixed pre-1.2; see noisypigeon docs/adr/0138). Union it with an
+          # explicit --filter per leaf directory containing any changed file,
+          # computed by walking up to the nearest terragrunt.hcl -- multiple
+          # --filter flags combine with OR logic.
+          FILTER_ARGS=(--filter '[main...HEAD]')
+          dirs=""
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            rel="${f#workloads/}"
+            [ "$rel" = "$f" ] && continue
+            dir=$(dirname "$rel")
+            while [ "$dir" != "." ] && [ ! -f "$dir/terragrunt.hcl" ]; do
+              dir=$(dirname "$dir")
+            done
+            [ -f "$dir/terragrunt.hcl" ] || continue
+            case " $dirs " in
+              *" $dir "*) continue ;;
+            esac
+            dirs="$dirs $dir"
+            FILTER_ARGS+=(--filter "./$dir")
+          done < <(git -C .. diff --name-only main...HEAD)
+
+          terragrunt --no-color run --all "${FILTER_ARGS[@]}" --filter-allow-destroy --non-interactive -- "$COMMAND" > output.txt 2>&1
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          set -e
+
+      - name: Comment ${{ inputs.command }} output on PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const command = '${{ inputs.command }}';
+            const marker = `<!-- terragrunt-${command} -->`;
+            const exitCode = '${{ steps.run.outputs.exit_code }}';
+            const success = exitCode === '0';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const label = command === 'apply' ? 'apply' : 'plan';
+            const Label = command === 'apply' ? 'Apply' : 'Plan';
+
+            let output;
+            try {
+              output = fs.readFileSync('workloads/output.txt', 'utf8');
+            } catch {
+              output = null;
+            }
+
+            let body;
+            if (output === null) {
+              body = [
+                marker,
+                `### ❌ Terragrunt ${label}`,
+                `_Job failed before \`terragrunt ${label}\` ran — see the [full log](${runUrl})._`,
+              ].join('\n');
+            } else {
+              const limit = 55000;
+              let truncated = false;
+              if (output.length > limit) {
+                output = output.slice(output.length - limit);
+                truncated = true;
+              }
+              body = [
+                marker,
+                `### ${success ? '✅' : '❌'} Terragrunt ${label}`,
+                truncated ? `_Output truncated — [full log](${runUrl})._` : '',
+                `<details><summary>Show ${label} output</summary>`,
+                '',
+                '```',
+                output,
+                '```',
+                '</details>',
+                '',
+                command !== 'apply' && success ? 'Comment `terragrunt apply` on this PR to apply these changes.' : '',
+              ].join('\n');
+            }
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const minimize = `mutation($id: ID!) { minimizeComment(input: { subjectId: $id, classifier: OUTDATED }) { clientMutationId } }`;
+            for (const c of comments.filter(c => c.body.includes(marker))) {
+              await github.graphql(minimize, { id: c.node_id });
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+
+            if (command === 'apply') {
+              await github.rest.reactions.createForIssueComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: context.payload.comment.id,
+                content: success ? '+1' : '-1',
+              });
+            }
+
+      - name: Set merge-gate status and auto-merge
+        if: always() && inputs.command == 'apply'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const exitCode = '${{ steps.run.outputs.exit_code }}';
+            const success = exitCode === '0';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: pr.head.sha,
+              state: success ? 'success' : 'failure',
+              context: 'terragrunt/apply',
+              description: success ? 'terragrunt apply succeeded' : 'terragrunt apply failed',
+              target_url: runUrl,
+            });
+
+            if (success) {
+              try {
+                await github.rest.pulls.merge({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: context.issue.number,
+                  merge_method: 'squash',
+                });
+                await github.rest.git.deleteRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: `heads/${pr.head.ref}`,
+                }).catch(() => {});
+              } catch (err) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body: `⚠️ Terragrunt apply succeeded, but auto-merge failed: ${err.message}. Please merge manually.`,
+                });
+              }
+            }
+
+      - name: Fail if ${{ inputs.command }} failed
+        run: exit "${{ steps.run.outputs.exit_code }}"
