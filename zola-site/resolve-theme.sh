@@ -6,10 +6,16 @@
 # checkout of a specific templates/<name>/v<version> tag. Nothing under
 # themes/<name> is ever committed -- this script is the only thing that
 # populates it. See templates/zola-site/README.md.
+#
+# Everything is resolved relative to this script's own location, not the
+# invoking site's -- since ADR-0154 the consuming site lives in a different
+# repo, so the templates root is wherever this copy of the script was fetched
+# to, and asking git for the *site's* toplevel would find the wrong repo.
 set -euo pipefail
 
-THEME_NAME="$(basename "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")"
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+THEME_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+THEME_NAME="$(basename "$THEME_DIR")"
+REPO_ROOT="$(cd "$THEME_DIR/../.." && pwd)"
 SITE_DIR="$(pwd)"
 
 VERSION=$(awk '/^\[extra\]/{f=1; next} f && /^theme_version[[:space:]]*=/{print; exit}' config.toml \

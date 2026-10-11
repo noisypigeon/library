@@ -2,7 +2,7 @@
 
 A `grafana_folder`/`grafana_dashboard` wrapper that creates a Grafana folder
 and provisions a set of dashboards into it from JSON dashboard models. See
-[ADR-0135](../../../../docs/adr/0135-grafana-dashboards-as-code.md) for why
+[ADR-0135](https://github.com/noisypigeon/noisypigeon/blob/main/docs/adr/0135-grafana-dashboards-as-code.md) for why
 a dedicated folder is required (Scaleway Cockpit's own preconfigured
 dashboards live in a folder that is always read-only) and how the `grafana`
 provider itself is authenticated against Cockpit (wired by the consuming

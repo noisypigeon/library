@@ -1,15 +1,18 @@
 # Terraform modules
 
-Versioned, reusable Terraform modules, consumed by this repo's own
-[`workloads/`](../workloads/) and any future infra repos. Originally the
-standalone `pigeon-tf` repo, merged into this
-repo by [ADR-0037](../docs/adr/0037-merge-pigeon-tf-terraform-modules.md);
-see [ADR-0054](../docs/adr/0054-pigeon-tf-scaffold.md) (originally
-`pigeon-do` ADR-0002) for the design decisions behind consuming the
+Versioned, reusable Terraform modules, consumed by
+[`noisypigeon/noisypigeon`](https://github.com/noisypigeon/noisypigeon)'s
+`workloads/` and any future infra repo. Originally the standalone `pigeon-tf`
+repo, merged into `noisypigeon` by
+[ADR-0037](https://github.com/noisypigeon/noisypigeon/blob/main/docs/adr/0037-merge-pigeon-tf-terraform-modules.md);
+see [ADR-0054](https://github.com/noisypigeon/noisypigeon/blob/main/docs/adr/0054-pigeon-tf-scaffold.md)
+(originally `pigeon-do` ADR-0002) for the design decisions behind consuming the
 original repo. Moved from `terraform/modules/` to top-level `modules/` by
-[ADR-0093](../docs/adr/0093-move-scaleway-modules-to-top-level-modules.md),
-then here, to `templates/terraform/`, by
-[ADR-0110](../docs/adr/0110-move-modules-to-templates-terraform.md).
+[ADR-0093](https://github.com/noisypigeon/noisypigeon/blob/main/docs/adr/0093-move-scaleway-modules-to-top-level-modules.md),
+then to `templates/terraform/` by
+[ADR-0110](https://github.com/noisypigeon/noisypigeon/blob/main/docs/adr/0110-move-modules-to-templates-terraform.md),
+and then into this repo — paths unchanged — by
+[ADR-0154](https://github.com/noisypigeon/noisypigeon/blob/main/docs/adr/0154-hoist-templates-to-pigeon-dev-repo.md).
 
 This directory holds only module source — it has no root provider/backend configuration and is never `terraform`/`terragrunt` run standalone.
 
@@ -33,19 +36,22 @@ This directory holds only module source — it has no root provider/backend conf
 
 ## Versioning
 
-Releases are tagged on `noisypigeon`'s `main` with per-module, path-scoped semantic versions matching wherever this directory lived at release time. Three tag-prefix eras exist: an original, even shorter pre-ADR-0037 form; `terraform/modules/<provider>/<module>/vX.Y.Z` (ADR-0037 era); `modules/<provider>/<module>/vX.Y.Z` (ADR-0093 era); and now `templates/terraform/<provider>/<module>/vX.Y.Z` (this directory, ADR-0110 era). Consuming repos pin to a tag by checking out that tag in their local clone of this repo. Old tags are never renamed or deleted — each is an immutable snapshot of the whole repo at that commit, so a tag from an earlier era still resolves correctly even after this directory later moved, see ADR-0037/ADR-0093/ADR-0110 for why.
+Releases are tagged with per-module, path-scoped semantic versions matching wherever this directory lived at release time. Four tag-prefix eras exist: an original, even shorter pre-ADR-0037 form; `terraform/modules/<provider>/<module>/vX.Y.Z` (ADR-0037 era); `modules/<provider>/<module>/vX.Y.Z` (ADR-0093 era); and `templates/terraform/<provider>/<module>/vX.Y.Z` (ADR-0110 era, and still current — ADR-0154 moved the directory into this repo without changing its path, so the prefix did not change either). Old tags are never renamed or deleted: each is an immutable snapshot of a whole repo at one commit, so a tag from an earlier era still resolves correctly even after this directory later moved.
 
-**The public `pigeon.dev/modules/<provider>/<module>/vX.Y.Z` short-URL namespace (see "Consuming" below, [ADR-0109](../docs/adr/0109-short-module-source-urls-via-blog-redirect.md)) stays `modules/...` forever, regardless of which era a given version's tag actually lives under or where this directory itself moves in the future.** It is a stable public interface, deliberately decoupled from the repo's internal layout.
+**The first three eras' tags live in `noisypigeon/noisypigeon`, not here** — their commits predate `templates/` existing, so ADR-0154's `git filter-repo --path templates/` could not carry them across, and 20 of them (the `modules/*` era) are still reachable through the short-URL layer, which maps each tag prefix to the repo that holds it. One of those, `scaleway/project/v1.0.0`, is still live-pinned by a consumer. Only `templates/*` tags exist in this repo.
+
+**The public `pigeon.dev/modules/<provider>/<module>/vX.Y.Z` short-URL namespace (see "Consuming" below, [ADR-0109](https://github.com/noisypigeon/noisypigeon/blob/main/docs/adr/0109-short-module-source-urls-via-blog-redirect.md)) stays `modules/...` forever, regardless of which era a given version's tag actually lives under or where this directory itself moves in the future.** It is a stable public interface, deliberately decoupled from the repo's internal layout.
 
 ## Consuming
 
-The recommended way to consume a tagged module — from this repo's own
-[`workloads/`](../workloads/) or any external infra repo — is the short
-`noisypigeon.com` URL for that module and version:
+The recommended way to consume a tagged module — from
+[`noisypigeon/noisypigeon`](https://github.com/noisypigeon/noisypigeon)'s
+`workloads/` or any external infra repo — is the short `pigeon.dev` URL for
+that module and version:
 
 ```hcl
 module "state_bucket" {
-  source = "https://pigeon.dev/modules/scaleway/object-bucket/v1.0.0"
+  source = "https://pigeon.dev/modules/scaleway/object-bucket/v4.2.0"
   ...
 }
 ```
@@ -58,20 +64,25 @@ write by hand:
 
 ```hcl
 module "state_bucket" {
-  source = "git::https://github.com/noisypigeon/noisypigeon.git//modules/scaleway/object-bucket?ref=modules/scaleway/object-bucket/v1.0.0"
+  source = "git::https://github.com/noisypigeon/pigeon.dev.git//templates/terraform/scaleway/object-bucket?ref=templates/terraform/scaleway/object-bucket/v4.2.0"
   ...
 }
 ```
 
-Both forms are equivalent; the short URL is a redirect page generated for
-every module version tag (see `workloads/pigeon.dev/generate-module-redirects.sh`
-and [ADR-0109](../docs/adr/0109-short-module-source-urls-via-blog-redirect.md)).
-For local iteration against an unreleased module change (no network fetch),
-clone this repo as a sibling directory instead and reference it by path:
+Both forms are equivalent, but note the `git::` form has to name the right
+repo *and* the right tag prefix for the era that version was released in —
+which is exactly what the short URL exists to hide. The redirect page behind it
+is generated for every module version tag by
+`workloads/pigeon.dev/generate-module-redirects.sh`, which lives in
+`noisypigeon/noisypigeon` alongside the Zola site that serves it (ADR-0109,
+ADR-0136, ADR-0154).
+
+For local iteration against an unreleased module change (no network fetch, no
+tag required), clone this repo as a sibling directory and reference it by path:
 
 ```
-git clone git@github.com:noisypigeon/noisypigeon.git ../noisypigeon
+git clone git@github.com:noisypigeon/pigeon.dev.git ../pigeon.dev
 ```
 
 then reference modules under `templates/terraform/`, e.g.
-`../noisypigeon/templates/terraform/scaleway/object-bucket`.
+`../pigeon.dev/templates/terraform/scaleway/object-bucket`.

@@ -1,0 +1,37 @@
+name: module-docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/*.tf'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: main-writer
+  cancel-in-progress: false
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.BOT_GITHUB_TOKEN }}
+
+      - name: Generate module docs
+        uses: terraform-docs/gh-actions@v1.4.1
+        with:
+          working-dir: templates/terraform/scaleway/project,templates/terraform/scaleway/object-bucket,templates/terraform/scaleway/iam-policy,templates/terraform/scaleway/compute-instance,templates/terraform/scaleway/compute-instance-config,templates/terraform/scaleway/block-volume,templates/terraform/scaleway/cockpit-observability,templates/terraform/scaleway/pigeon-cluster,templates/terraform/backblaze/bucket,templates/terraform/backblaze/api-key
+          output-file: README.md
+          output-method: inject
+          output-format: markdown table
+          args: --show inputs --show outputs
+          git-push: "true"
+          git-push-user-name: "istx25"
+          git-push-user-email: "6799989+istx25@users.noreply.github.com"
+          git-commit-message: "docs: regenerate module input/output tables"
