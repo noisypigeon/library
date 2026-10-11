@@ -133,4 +133,14 @@ variable "jobs" {
     condition     = length(var.jobs) == length(distinct([for j in var.jobs : j.job_name]))
     error_message = "jobs[*].job_name must be unique."
   }
+
+  # ADR-0153: compute-instance used to catch this one level down, with its own
+  # "private_network_id must be set when enable_private_network is true"
+  # validation -- ADR-0149 deliberately leaned on that instead of duplicating
+  # the check here. That validation is gone now that the NIC is this module's
+  # resource, so the check lands here, where it can name both variables.
+  validation {
+    condition     = var.cluster_config.enable_private_network || alltrue([for j in var.jobs : !j.enable_private_network])
+    error_message = "a job with enable_private_network = true requires cluster_config.enable_private_network = true."
+  }
 }
