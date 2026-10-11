@@ -120,13 +120,14 @@ variable "jobs" {
     # enable_private_network is false, this job always gets a public IP
     # regardless of this field's value -- it has no other network path.
     enable_ipv4 = optional(bool, false)
-    # ADR-0150: passed straight through to this job's own compute-instance
-    # call. false (default) preserves today's behavior -- no ffmpeg
-    # installed. true installs a libheif-enabled ffmpeg build, for jobs
-    # whose job_commands run `pigeon-cli transform --input-file-type=heic`.
-    enable_heic_transcoding = optional(bool, false)
+    # ADR-0150, renamed by ADR-0151: passed straight through to this job's
+    # own compute-instance call. false (default) preserves today's behavior
+    # -- no ffmpeg installed. true installs a general-purpose ffmpeg build,
+    # for jobs whose job_commands run `pigeon-cli transform` (of any input
+    # file type, not just heic).
+    enable_transcoding = optional(bool, false)
   }))
-  description = "Jobs to run right now, each entry naming its own job_name. Each entry becomes one self-deleting compute-instance (ADR-0138), with its own IAM application/policy/key scoped to exactly extra_permission_sets plus cluster_config.shared_permission_sets, and its own keyring (merged with cluster_config.shared_keyring, job-specific entries winning on alias collision) -- never shared with another job in this same cluster. Every kind = \"bucket\" keyring entry that omits access_key_id/secret_key defaults to this job's own API key (ADR-0144); job_commands strings may reference an entry by alias, e.g. \"--source '$${keyring.fastmail.alias}:'\" (use $${keyring[\"my-alias\"].alias} bracket syntax for a hyphenated alias). Remove an entry and re-apply once its instance has self-terminated, to reconcile Terraform state with reality. block_volume_iops defaults to 15000, matching block-volume's and compute-instance's own defaults. By default every job shares the cluster's Private Network/Public Gateway and gets no public IP (ADR-0146) -- use cluster_config.enable_bastion for debug SSH access, or set enable_private_network = false to opt this job out of the shared networking entirely (ADR-0149), or enable_ipv4 = true for a job that keeps its Private Network attachment but also wants its own public IP. enable_heic_transcoding = true (ADR-0150) installs a libheif-enabled ffmpeg build on this job's instance, for job_commands that run pigeon-cli transform --input-file-type=heic."
+  description = "Jobs to run right now, each entry naming its own job_name. Each entry becomes one self-deleting compute-instance (ADR-0138), with its own IAM application/policy/key scoped to exactly extra_permission_sets plus cluster_config.shared_permission_sets, and its own keyring (merged with cluster_config.shared_keyring, job-specific entries winning on alias collision) -- never shared with another job in this same cluster. Every kind = \"bucket\" keyring entry that omits access_key_id/secret_key defaults to this job's own API key (ADR-0144); job_commands strings may reference an entry by alias, e.g. \"--source '$${keyring.fastmail.alias}:'\" (use $${keyring[\"my-alias\"].alias} bracket syntax for a hyphenated alias). Remove an entry and re-apply once its instance has self-terminated, to reconcile Terraform state with reality. block_volume_iops defaults to 15000, matching block-volume's and compute-instance's own defaults. By default every job shares the cluster's Private Network/Public Gateway and gets no public IP (ADR-0146) -- use cluster_config.enable_bastion for debug SSH access, or set enable_private_network = false to opt this job out of the shared networking entirely (ADR-0149), or enable_ipv4 = true for a job that keeps its Private Network attachment but also wants its own public IP. enable_transcoding = true (ADR-0150, renamed by ADR-0151) installs a general-purpose ffmpeg build on this job's instance, for job_commands that run pigeon-cli transform -- any input file type, not just heic."
 
   validation {
     condition     = length(var.jobs) == length(distinct([for j in var.jobs : j.job_name]))
