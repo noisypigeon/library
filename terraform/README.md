@@ -19,13 +19,15 @@ This directory holds only module source — it has no root provider/backend conf
 | --- | --- |
 | `scaleway/project` | A thin wrapper around `scaleway_account_project`. |
 | `scaleway/object-bucket` | A Scaleway Object Storage bucket (`scaleway_object_bucket`) with a randomized name suffix, versioning, and a standard/glacier storage-class toggle implemented via an immediate lifecycle transition. |
-| `scaleway/compute-instance` | A Scaleway compute Instance (`scaleway_instance_server`) with a randomized name suffix; minimal interface — image, type (defaults to `STARDUST1-S`), optional block volume attachment via `additional_volume_ids`. |
+| `scaleway/compute-instance` | A Scaleway compute Instance (`scaleway_instance_server`) with a randomized name suffix. A thin wrapper since ADR-0153: image, type (defaults to `STARDUST1-S`), an already-rendered `cloud_init` document, and pass-through `ip_ids`/`additional_volume_ids` the caller creates. |
+| `scaleway/compute-instance-config` | Renders a `pigeon-cli` cloud-init document (keyring, rclone remotes, Cockpit/Alloy, post-provision systemd unit, optional self-delete trap and static ffmpeg) for `compute-instance`'s `cloud_init` input. Creates no resources — its only output is the rendered string. |
 | `scaleway/iam-application` | A thin wrapper around `scaleway_iam_application`. |
 | `scaleway/iam-policy` | A Scaleway `scaleway_iam_policy` wrapper granting organization/project permission-set rules to an existing IAM application. |
 | `scaleway/iam-api-key` | A thin wrapper around `scaleway_iam_api_key`, defaulting `expires_at` to 30 days after first creation. |
 | `scaleway/block-volume` | A Scaleway Block Storage volume (`scaleway_block_volume`) with a randomized name suffix; minimal interface — `size` (renamed from `size_in_gb`), `iops` (defaults to `15000`). |
 | `scaleway/cockpit-observability` | A Scaleway Cockpit (`scaleway_cockpit_source`/`scaleway_cockpit_token`) wrapper that creates a metrics and/or logs source plus a shared push token, each individually toggleable via `enable_metrics`/`enable_logs`. |
 | `scaleway/grafana-dashboard` | A `grafana_folder`/`grafana_dashboard` wrapper that creates a Grafana folder and provisions a set of dashboards into it from JSON dashboard models. |
+| `scaleway/pigeon-cluster` | A cluster of `pigeon-cli` job instances: one shared Private Network and Public Gateway, an optional debug bastion, and per job an instance, IAM application/policy/API keys, optional block volume, IP and private NIC. The composing layer for every `compute-instance` concern (ADR-0153). |
 | `backblaze/bucket` | A private Backblaze B2 bucket (`b2_bucket`) with a randomized name suffix; always `bucket_type = "allPrivate"`. |
 | `backblaze/api-key` | A thin wrapper around `b2_application_key`, defaulting `valid_duration_in_seconds` to 30 days. |
 

@@ -13,139 +13,56 @@ variable "name_suffix" {
   description = "Instance name suffix"
 }
 
-variable "user_config" {
-  type = object({
-    ssh_key = optional(string)
-  })
-  description = "Per-instance user/access configuration"
-  default     = {}
+variable "image" {
+  type        = string
+  description = "Instance image label (e.g. ubuntu_jammy, ubuntu_noble, ubuntu_resolute)"
+  default     = "ubuntu_jammy"
 }
 
-variable "instance_config" {
-  type = object({
-    image = optional(string, "ubuntu_jammy")
-    type  = optional(string, "STARDUST1-S")
-    cockpit = optional(object({
-      metrics_push_url = string
-      logs_push_url    = string
-      token_secret     = string
-      scrape_port      = optional(number, 9091)
-    }))
-    block_volume = optional(object({
-      size                  = optional(number)
-      iops                  = optional(number, 15000)
-      project_id            = optional(string)
-      additional_volume_ids = optional(list(string), [])
-    }))
-    post_provision_commands = optional(list(string), [])
-    enable_transcoding      = optional(bool, false)
-  })
-  description = "Instance-level configuration: image, commercial type, Cockpit/Alloy wiring (ADR-0102), block volume attachment (ADR-0120), and post-provision commands (ADR-0125). null cockpit disables Alloy entirely. null block_volume attaches nothing; block_volume.size unset skips creating a managed volume but still attaches block_volume.additional_volume_ids. post_provision_commands defaults to [] (nothing extra runs); when set, the commands run once, in order, as a systemd oneshot unit ordered after cloud-init's own completion (cloud-final.service) rather than blocking it -- inspect output with `journalctl -u pigeon-post-provision.service`. enable_transcoding (ADR-0150, renamed by ADR-0151, reworked by ADR-0152; default false) installs a pinned, checksum-verified static ffmpeg 9.0.2 build into /usr/local/bin, for job commands that run `pigeon-cli transform`. A static build is used rather than any apt package because grid-tiled HEIF images -- how phone cameras commonly encode large .heic photos, as a grid of separate HEVC tiles -- are only reconstructed by the ffmpeg CLI from 8.1 onwards, and no Ubuntu archive reaches that floor (jammy 4.4, noble 6.1, resolute 8.0) while every savoury1 PPA above ffmpeg4 needs a donation-gated private PPA to install. Below 8.1 ffmpeg exits 0 and silently writes a single tile instead of the full image, so the failure is easy to miss. The build is general-purpose and the flag is not HEIC-specific, but it is an x86_64 (linux64) binary: do not set this alongside an arm64 instance_config.type such as COPARM1-*."
-  default     = {}
-  sensitive   = true
-
-  validation {
-    condition     = var.instance_config.block_volume == null || var.instance_config.block_volume.size == null || var.instance_config.block_volume.project_id != null
-    error_message = "instance_config.block_volume.project_id is required when instance_config.block_volume.size is set."
-  }
+variable "type" {
+  type        = string
+  description = "Instance commercial type"
+  default     = "STARDUST1-S"
 }
 
-variable "keyring" {
-  type = list(object({
-    kind  = string
-    alias = string
-
-    # kind = "email"
-    email                = optional(string)
-    provider             = optional(string)
-    host                 = optional(string)
-    port                 = optional(number)
-    max_imap_connections = optional(number)
-
-    # kind = "bucket" -- also generates an rclone.conf remote
-    endpoint             = optional(string)
-    bucket               = optional(string)
-    access_key_id        = optional(string)
-    secret_key           = optional(string)
-    encryption_key_alias = optional(string)
-
-    # kind = "encryption-key"
-    created_at = optional(string)
-  }))
-  description = "pigeon-cli keyring.toml entries. kind = \"bucket\" entries also generate an rclone.conf remote; any entry with secret_key set also exports PIGEON_SECRET_<ALIAS> on the instance. secret_key is never written into keyring.toml itself."
-  default     = []
-  sensitive   = true
-
-  validation {
-    condition     = alltrue([for e in var.keyring : contains(["email", "bucket", "encryption-key"], e.kind)])
-    error_message = "keyring.kind must be one of \"email\", \"bucket\", \"encryption-key\"."
-  }
-
-  validation {
-    condition     = alltrue([for e in var.keyring : can(regex("^[a-z0-9][a-z0-9-]*[a-z0-9]$", e.alias))])
-    error_message = "keyring aliases must be lowercase alphanumeric with hyphens."
-  }
-
-  validation {
-    condition     = length(var.keyring) == length(distinct([for e in var.keyring : e.alias]))
-    error_message = "keyring aliases must be unique."
-  }
-}
-
-variable "iam_config" {
-  type = object({
-    application_id          = string
-    project_ids             = optional(list(string))
-    project_permission_sets = optional(list(string))
-    description             = optional(string)
-    api_key_expires_at      = optional(string)
-  })
-  description = "Composes an IAM policy + API key for this instance's application (ADR-0122). null (default): no policy/API key created. project_ids/project_permission_sets grant project-scoped permissions on the policy."
+variable "ssh_key" {
+  type        = string
+  description = "Public SSH key to authorize on the instance, passed through as an AUTHORIZED_KEY tag. Exactly one key, not a list (ADR-0118)."
   default     = null
 }
 
+# ADR-0153: this module no longer renders cloud-init -- it takes an
+# already-rendered document, which compute-instance-config produces. Changing
+# the document replaces the server, via terraform_data.cloud_init below. Note
+# that this means rotating any secret the document embeds (notably the
+# self-delete API key) also replaces the server.
+variable "cloud_init" {
+  type        = string
+  description = "Rendered cloud-init document for user_data[\"cloud-init\"], normally compute-instance-config's cloud_init output. null attaches no user_data at all. Changing it replaces the instance."
+  default     = null
+  sensitive   = true
+}
+
+variable "ip_ids" {
+  type        = list(string)
+  description = "IDs of scaleway_instance_ip resources to attach. Created by the caller (ADR-0153) -- an IP must exist before the server that references it, so this module cannot create one and attach it in the same step."
+  default     = []
+}
+
+variable "additional_volume_ids" {
+  type        = list(string)
+  description = "IDs of block volumes to attach. Created by the caller (ADR-0153, reversing ADR-0120's internal block-volume composition). Note the instance only mounts /dev/sdb if its cloud-init was rendered with has_attached_volume = true."
+  default     = []
+}
+
+# ADR-0126, narrowed by ADR-0153: false destroys the server, and only the
+# server. It used to also tear down this module's IP addresses, block volume
+# and IAM policy/key, but those are now the caller's resources and are
+# unaffected -- a caller wanting a full teardown has to gate them too.
+# random_string.suffix stays unconditional, so the instance's name is stable
+# across a disable/re-enable cycle.
 variable "enabled" {
   type        = bool
-  description = "Kill switch. false destroys every resource this module manages for this instance -- the server, its IP address(es), its block volume (and the volume's data -- this is a real data-loss event, not a pause), and its IAM policy/API key (ADR-0126) -- while the module block itself stays in the caller's configuration. true (default) runs normally. The instance's name (random suffix) stays stable across a disable/re-enable cycle."
+  description = "Whether to create the instance. false destroys the server only; any IP, volume or IAM the caller created for it is untouched."
   default     = true
-}
-
-variable "self_delete_on_exit" {
-  type        = bool
-  description = "When true, the instance deletes itself (server, IP(s), block volume) once post_provision_commands finishes, success or failure, using its own composed IAM API key (ADR-0138). Requires iam_config to be set -- the module folds the permission needed to delete itself into the composed IAM policy automatically, on top of whatever project_permission_sets the caller already requested."
-  default     = false
-
-  validation {
-    condition     = !var.self_delete_on_exit || var.iam_config != null
-    error_message = "self_delete_on_exit requires iam_config to be set -- the instance needs its own IAM credential to delete itself."
-  }
-}
-
-variable "enable_ipv4" {
-  type        = bool
-  description = "Create and attach a routed IPv4 address (true/false)"
-  default     = true
-}
-
-variable "enable_ipv6" {
-  type        = bool
-  description = "Create and attach a routed IPv6 address (true/false)"
-  default     = false
-}
-
-variable "private_network_id" {
-  type        = string
-  description = "ID of an existing Scaleway Private Network to attach this instance to via a dedicated private NIC (scaleway_instance_private_nic), alongside its normal public IP(s). null (default): no private NIC, unchanged behavior. Bring-your-own ID -- this module does not create the Private Network itself (see pigeon-cluster, which creates one shared PN per cluster and passes its ID here to every job instance). Whether the NIC is actually created is controlled by enable_private_network, not by this value's nullness -- see that variable's description."
-  default     = null
-}
-
-variable "enable_private_network" {
-  type        = bool
-  description = "Whether to attach a scaleway_instance_private_nic using private_network_id. Kept separate from private_network_id (rather than gating on private_network_id != null) because that ID's value is frequently only known after apply -- e.g. a Private Network created in the same apply, as pigeon-cluster does -- and count/for_each can never depend on such a value without OpenTofu failing to plan with \"Invalid count argument\". default false."
-  default     = false
-
-  validation {
-    condition     = !var.enable_private_network || var.private_network_id != null
-    error_message = "private_network_id must be set when enable_private_network is true."
-  }
 }
