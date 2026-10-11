@@ -324,10 +324,11 @@ locals {
       - curl -fsSL https://mise.run | sh
       - echo 'eval "$(/root/.local/bin/mise activate bash)"' >> /root/.bashrc
       - curl -fsSL https://gist.githubusercontent.com/noisypigeon/1e96e8ef94380f913f6ae02782965149/raw/pigeon.sh | bash
-    %{~if var.instance_config.enable_heic_transcoding~}
-      # ADR-0150: Ubuntu's own archive ffmpeg isn't built with --enable-libheif,
-      # so pigeon-cli transform --input-file-type=heic needs this third-party
-      # PPA instead.
+    %{~if var.instance_config.enable_transcoding~}
+      # ADR-0150, renamed by ADR-0151: a general-purpose ffmpeg for
+      # pigeon-cli transform. This third-party PPA is used rather than
+      # Ubuntu's own archive build because the archive build isn't compiled
+      # with --enable-libheif, so it can't decode .heic input.
       - apt-get install -y software-properties-common
       - add-apt-repository -y ppa:savoury1/ffmpeg4
       - apt-get update
