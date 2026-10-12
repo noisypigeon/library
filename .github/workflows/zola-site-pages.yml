@@ -1,0 +1,91 @@
+# Reusable: builds one Zola site and deploys it to GitHub Pages. Sibling to
+# zola-site-deploy.yml (the Scaleway-bucket equivalent, ADR-0155) -- same
+# input vocabulary so the two stay interchangeable at the call site. No
+# secrets: Pages deployment authenticates via OIDC (id-token: write), not a
+# key pair, which is why this workflow is simpler than the bucket one rather
+# than merely different.
+#
+# `actions/deploy-pages` always deploys to the *calling* repo's own Pages
+# site (ADR-0156 confirmed this against the live API), so a caller of this
+# workflow has to live in the repo whose Pages site it means to deploy --
+# there is no cross-repo equivalent of zola-site-deploy.yml's bucket target.
+#
+# Two jobs, not one: actions/deploy-pages requires its own job bound to the
+# github-pages environment, separate from the job that builds the artifact.
+name: Zola site pages
+
+on:
+  workflow_call:
+    inputs:
+      src_dir:
+        description: "Path (in the caller's checkout) to the site's src/."
+        type: string
+        required: true
+      build_cmd:
+        description: "Command to run (in src_dir) to build the site."
+        type: string
+        required: false
+        default: "zola build"
+      extra_step:
+        description: "Optional site-specific command to run before building."
+        type: string
+        required: false
+        default: ""
+      zola_version:
+        type: string
+        required: false
+        default: "0.23.6"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve zola-site theme
+        working-directory: ${{ inputs.src_dir }}
+        run: "$(git rev-parse --show-toplevel)/templates/zola-site/resolve-theme.sh"
+
+      - name: Run site-specific pre-build step
+        if: inputs.extra_step != ''
+        run: ${{ inputs.extra_step }}
+
+      - name: Install Zola
+        env:
+          ZOLA_VERSION: ${{ inputs.zola_version }}
+        run: |
+          curl -sSL "https://github.com/getzola/zola/releases/download/v${ZOLA_VERSION}/zola-v${ZOLA_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar -xz -C /usr/local/bin zola
+
+      - name: Build with Zola
+        working-directory: ${{ inputs.src_dir }}
+        run: ${{ inputs.build_cmd }}
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ inputs.src_dir }}/public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

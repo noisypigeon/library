@@ -266,22 +266,31 @@ jobs:
             gh release create "$tag" --title "$tag" --notes-file "$NOTES"
           done
 
-      # The sites that publish these releases -- pigeon.dev's module pages and
-      # release posts, and the zola-site theme both sites consume -- live in
-      # noisypigeon/noisypigeon (ADR-0154), so this is a cross-repo dispatch.
-      # It runs *after* the tags are pushed above, not before: those sites
-      # generate their pages from this repo's tag list, so dispatching first
-      # raced the tag into existence.
-      #
-      # Needs BOT_GITHUB_TOKEN to carry actions: write on that repo. If it
-      # doesn't, this step fails loudly -- which is the point. A missed
-      # dispatch leaves the version tagged and released here but with no
-      # redirect page there, so its short URL 404s.
-      - name: Trigger site deploy in noisypigeon/noisypigeon
+      # pigeon.dev's own module pages / release posts live here since
+      # ADR-0156, so a module release's redirect pages are an in-repo
+      # dispatch now -- no cross-repo call needed for that case any more.
+      # Runs *after* the tags are pushed above: the generator reads this
+      # repo's own tag list, so dispatching first would race the tag into
+      # existence.
+      - name: Trigger pigeon.dev Pages deploy
         if: steps.versions.outputs.tags != '' || steps.zola_site.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
-          SITE: ${{ steps.zola_site.outputs.changed == 'true' && 'all' || 'pigeon.dev' }}
+        run: gh workflow run pigeon-dev-pages.yml -R ${{ github.repository }} --ref main
+
+      # noisypigeon.com is a separate repo and still on the Scaleway-bucket
+      # deploy path (ADR-0132/0155) -- a zola-site release is the only case
+      # that still needs a cross-repo dispatch, since that's the one change
+      # that affects a site this repo doesn't host.
+      #
+      # Needs BOT_GITHUB_TOKEN to carry actions: write on that repo. If it
+      # doesn't, this step fails loudly -- which is the point. A missed
+      # dispatch leaves the theme tagged and released here but
+      # noisypigeon.com never rebuilds against it.
+      - name: Trigger noisypigeon.com deploy in noisypigeon/noisypigeon
+        if: steps.zola_site.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
         run: |
           gh workflow run zola-sites-deploy.yml \
-            -R noisypigeon/noisypigeon --ref main -f site="$SITE"
+            -R noisypigeon/noisypigeon --ref main -f site=noisypigeon.com
