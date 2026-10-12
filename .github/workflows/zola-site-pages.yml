@@ -5,6 +5,12 @@
 # key pair, which is why this workflow is simpler than the bucket one rather
 # than merely different.
 #
+# Theme resolution assumes the caller's own repo vendors templates/ at its
+# root (true for pigeon.dev itself, ADR-0154). A caller whose repo doesn't
+# (e.g. noisypigeon.com, ADR-0158) passes fetch_templates_script -- a script
+# in its own checkout that fetches templates/ into .templates-src/, the same
+# mechanism zola-site-deploy.yml already uses.
+#
 # `actions/deploy-pages` always deploys to the *calling* repo's own Pages
 # site (ADR-0156 confirmed this against the live API), so a caller of this
 # workflow has to live in the repo whose Pages site it means to deploy --
@@ -35,6 +41,11 @@ on:
         type: string
         required: false
         default: "0.23.6"
+      fetch_templates_script:
+        description: "Optional script (relative to repo root) to run before resolving the theme, for callers whose repo doesn't vendor templates/ locally -- it must leave the theme script at .templates-src/templates/zola-site/resolve-theme.sh."
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -49,9 +60,18 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      - name: Fetch templates
+        if: inputs.fetch_templates_script != ''
+        run: ${{ inputs.fetch_templates_script }}
+
       - name: Resolve zola-site theme
         working-directory: ${{ inputs.src_dir }}
-        run: "$(git rev-parse --show-toplevel)/templates/zola-site/resolve-theme.sh"
+        run: |
+          if [ -n "${{ inputs.fetch_templates_script }}" ]; then
+            "$(git rev-parse --show-toplevel)/.templates-src/templates/zola-site/resolve-theme.sh"
+          else
+            "$(git rev-parse --show-toplevel)/templates/zola-site/resolve-theme.sh"
+          fi
 
       - name: Run site-specific pre-build step
         if: inputs.extra_step != ''
