@@ -57,7 +57,7 @@ jobs:
       # ADR-0154; one clone feeds both the theme and, for pigeon.dev's own
       # site, the module metadata the redirect generator reads.
       - name: Fetch templates
-        run: workloads/pigeon.dev/fetch-templates.sh
+        run: noisypigeon.com/fetch-templates.sh
 
       - name: Resolve zola-site theme
         working-directory: ${{ inputs.src_dir }}

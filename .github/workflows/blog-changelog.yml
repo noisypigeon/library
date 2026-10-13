@@ -14,13 +14,18 @@ on:
   workflow_call:
     inputs:
       site_dir:
-        description: "Path (in the caller's checkout) to the blog's root, e.g. workloads/noisypigeon.com."
+        description: "Path (in the caller's checkout) to the blog's root, e.g. noisypigeon.com."
+        type: string
+        required: true
+      deploy_workflow:
+        description: "Workflow filename (in the caller's repo) to dispatch after committing the changelog."
         type: string
         required: true
       site_key:
-        description: "Deploy-dispatch `site` value for this blog."
+        description: "Optional `site` input to pass the dispatched workflow, for callers whose deploy workflow still multiplexes sites. Omit for a single-purpose deploy workflow (e.g. a Pages caller) that takes no such input."
         type: string
-        required: true
+        required: false
+        default: ""
       root_changelog_tag:
         description: "Bracket tag used in the caller's root CHANGELOG.md rollup line, e.g. 'blog'."
         type: string
@@ -156,8 +161,14 @@ jobs:
           git rebase origin/main
           git push origin HEAD:main
 
-      - name: Trigger blog Pages deploy
+      - name: Trigger blog deploy
         env:
           GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+          DEPLOY_WORKFLOW: ${{ inputs.deploy_workflow }}
           SITE_KEY: ${{ inputs.site_key }}
-        run: gh workflow run zola-sites-deploy.yml -R ${{ github.repository }} --ref main -f site="$SITE_KEY"
+        run: |
+          if [ -n "$SITE_KEY" ]; then
+            gh workflow run "$DEPLOY_WORKFLOW" -R ${{ github.repository }} --ref main -f site="$SITE_KEY"
+          else
+            gh workflow run "$DEPLOY_WORKFLOW" -R ${{ github.repository }} --ref main
+          fi
