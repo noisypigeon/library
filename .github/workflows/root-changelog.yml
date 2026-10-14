@@ -1,0 +1,91 @@
+name: root-changelog
+
+# Every merged PR gets exactly one line in the root CHANGELOG.md (PD-0160).
+# template-release.yml already writes that line for PRs that release a module or
+# the theme; this workflow covers everything else -- the site, the ADRs, CI, root
+# docs -- which until PD-0160 produced no changelog entry anywhere.
+#
+# Deliberately no `paths:` filter: the whole point is that no merged PR is
+# exempt.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: main-writer
+  cancel-in-progress: false
+
+jobs:
+  rollup:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 0
+          token: ${{ secrets.BOT_GITHUB_TOKEN }}
+
+      - name: Derive the rollup tag, or stand down
+        id: tag
+        env:
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          CHANGED_FILES=$(git diff --name-only "${MERGE_SHA}~1" "$MERGE_SHA")
+
+          # template-release.yml owns the root line for any PR that releases a
+          # unit. Its two detection predicates are duplicated here on purpose so
+          # that no PR ever gets two lines -- if one copy drifts from the other,
+          # a releasing PR gets either two entries or none. PD-0160 names this.
+          if echo "$CHANGED_FILES" | grep -qE '^templates/terraform/[^/]+/[^/]+/.*\.tf$' \
+            || echo "$CHANGED_FILES" | grep -qE '^templates/zola-site/(templates/|static/|theme\.toml$)'; then
+            echo "This PR releases a unit; template-release.yml writes its root entry."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # One line per PR means one tag per PR: first match in this fixed
+          # precedence wins, even for a PR spanning several areas.
+          if echo "$CHANGED_FILES" | grep -q '^pigeon\.dev/'; then
+            TAG="pigeon.dev"
+          elif echo "$CHANGED_FILES" | grep -q '^templates/'; then
+            TAG="templates"
+          elif echo "$CHANGED_FILES" | grep -q '^adr/'; then
+            TAG="adr"
+          elif echo "$CHANGED_FILES" | grep -q '^\.github/'; then
+            TAG="ci"
+          else
+            TAG="repo"
+          fi
+
+          echo "Rollup tag: ${TAG}"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Write the root changelog line
+        if: steps.tag.outputs.skip == 'false'
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          git config user.name "istx25"
+          git config user.email "6799989+istx25@users.noreply.github.com"
+
+          .github/scripts/root-changelog.sh \
+            --tag "$TAG" \
+            --title "$PR_TITLE" \
+            --number "$PR_NUMBER" \
+            --url "$PR_URL"
+
+          git add CHANGELOG.md
+          git commit -m "chore: root changelog entry for PR #${PR_NUMBER}"
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main

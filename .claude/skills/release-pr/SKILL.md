@@ -53,7 +53,10 @@ later — get the PR body right the first time.
      directory or `templates/zola-site/templates/`, `static/`, or
      `theme.toml` (e.g. workflow, root-doc, or
      `templates/zola-site/README.md`/`CHANGELOG.md`-only changes) doesn't
-     need a label at all — nothing will be tagged or released regardless.
+     need a label at all — nothing will be tagged or released regardless. It
+     still gets a one-line entry in the root `CHANGELOG.md` from
+     `root-changelog.yml` (PD-0160), so the PR title still has a second life as
+     published copy.
    ```
    gh pr edit <pr-number> --add-label "release:patch"
    ```
@@ -64,12 +67,14 @@ later — get the PR body right the first time.
    gh pr merge <pr-number> --squash --delete-branch
    ```
    Merging triggers `template-release.yml` automatically (tags the changed
-   module(s), updates their `CHANGELOG.md`, cuts a GitHub Release, then
-   dispatches a site deploy in `noisypigeon/noisypigeon`, where `pigeon.dev`'s
-   Zola site lives and generates this version's redirect page and release post)
-   and, on any resulting `.tf` changes, `module-docs.yml` (regenerates the
-   module's `README.md` input/output table). Neither needs to be triggered
-   manually.
+   module(s), updates their `CHANGELOG.md` and the root one, cuts a GitHub
+   Release, then dispatches `pigeon-dev-pages.yml` **in this repo** — the
+   `pigeon.dev` Zola site lives here since ADR-0156 and generates this
+   version's redirect page and release post) and, on any resulting `.tf`
+   changes, `module-docs.yml` (regenerates the module's `README.md`
+   input/output table). A `templates/zola-site` release additionally dispatches
+   `zola-sites-deploy.yml` in `noisypigeon/noisypigeon` for `noisypigeon.com`,
+   the one site this repo doesn't host. None need triggering manually.
 
    Watch that final dispatch step. It is the one part of the chain that reaches
    another repo, so it fails if `BOT_GITHUB_TOKEN` loses `actions: write`
