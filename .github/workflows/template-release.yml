@@ -5,8 +5,8 @@ on:
     types: [closed]
     branches: [main]
     paths:
-      - "templates/terraform/**"
-      - "templates/zola-site/**"
+      - "terraform/**"
+      - "zola-site/**"
 
 permissions:
   contents: write
@@ -50,7 +50,7 @@ jobs:
         run: |
           CHANGED_FILES=$(git diff --name-only "${MERGE_SHA}~1" "$MERGE_SHA")
 
-          MODULE_DIRS=$(find templates/terraform -mindepth 3 -maxdepth 3 -name versions.tf -printf '%h\n' | sort)
+          MODULE_DIRS=$(find terraform -mindepth 3 -maxdepth 3 -name versions.tf -printf '%h\n' | sort)
 
           CHANGED_MODULES=""
           for dir in $MODULE_DIRS; do
@@ -67,7 +67,7 @@ jobs:
           MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
         run: |
           CHANGED_FILES=$(git diff --name-only "${MERGE_SHA}~1" "$MERGE_SHA")
-          if echo "$CHANGED_FILES" | grep -qE '^templates/zola-site/(templates/|static/|theme\.toml$)'; then
+          if echo "$CHANGED_FILES" | grep -qE '^zola-site/(templates/|static/|theme\.toml$)'; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -144,7 +144,7 @@ jobs:
             # Passing --date reuses the $TODAY above, so the rollup line and this
             # module's own entry can never straddle a midnight boundary.
             .github/scripts/root-changelog.sh \
-              --tag "${dir#templates/terraform/}" \
+              --tag "${dir#terraform/}" \
               --title "$PR_TITLE" \
               --number "$PR_NUMBER" \
               --url "$PR_URL" \
@@ -165,7 +165,7 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
           TODAY=$(TZ="America/Los_Angeles" date +%Y-%m-%d)
-          DIR="templates/zola-site"
+          DIR="zola-site"
 
           LATEST=$(git tag -l "${DIR}/v*" | sed "s#${DIR}/v##" | sort -V | tail -n1)
 
@@ -247,31 +247,31 @@ jobs:
             gh release create "$tag" --title "$tag" --notes-file "$NOTES"
           done
 
-      # pigeon.dev's own module pages / release posts live here since
-      # ADR-0156, so a module release's redirect pages are an in-repo
-      # dispatch now -- no cross-repo call needed for that case any more.
-      # Runs *after* the tags are pushed above: the generator reads this
-      # repo's own tag list, so dispatching first would race the tag into
+      # The hub hosts no site, so every deploy dispatch is cross-repo
+      # (LIB-0002). pigeon.dev publishes the module redirect pages, overview
+      # pages, theme-version pages and release posts, so it rebuilds on any
+      # release; noisypigeon.com only renders with the theme, so it rebuilds
+      # on a theme release only.
+      #
+      # Runs *after* the tags are pushed above: the spoke's generator reads
+      # this repo's tag list, so dispatching first would race the tag into
       # existence.
+      #
+      # Both need BOT_GITHUB_TOKEN to carry actions: write on the target. If
+      # it doesn't, these steps fail loudly -- which is the point. A missed
+      # dispatch leaves a version tagged and released here whose short URL
+      # 404s on the site.
       - name: Trigger pigeon.dev Pages deploy
         if: steps.versions.outputs.tags != '' || steps.zola_site.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
-        run: gh workflow run pigeon-dev-pages.yml -R ${{ github.repository }} --ref main
+        run: gh workflow run pigeon-dev-pages.yml -R noisypigeon/pigeon.dev --ref main
 
-      # noisypigeon.com is a separate repo and still on the Scaleway-bucket
-      # deploy path (ADR-0132/0155) -- a zola-site release is the only case
-      # that still needs a cross-repo dispatch, since that's the one change
-      # that affects a site this repo doesn't host.
-      #
-      # Needs BOT_GITHUB_TOKEN to carry actions: write on that repo. If it
-      # doesn't, this step fails loudly -- which is the point. A missed
-      # dispatch leaves the theme tagged and released here but
-      # noisypigeon.com never rebuilds against it.
-      - name: Trigger noisypigeon.com deploy in noisypigeon/noisypigeon
+      # Replaces a dispatch at zola-sites-deploy.yml in noisypigeon/noisypigeon,
+      # which PD-0159 removed from that repo -- so this step had been failing
+      # on every theme release until LIB-0002 repointed it here.
+      - name: Trigger noisypigeon.com Pages deploy
         if: steps.zola_site.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
-        run: |
-          gh workflow run zola-sites-deploy.yml \
-            -R noisypigeon/noisypigeon --ref main -f site=noisypigeon.com
+        run: gh workflow run noisypigeon-com-pages.yml -R noisypigeon/noisypigeon.com --ref main

@@ -42,8 +42,8 @@ jobs:
           # unit. Its two detection predicates are duplicated here on purpose so
           # that no PR ever gets two lines -- if one copy drifts from the other,
           # a releasing PR gets either two entries or none. PD-0160 names this.
-          if echo "$CHANGED_FILES" | grep -qE '^templates/terraform/[^/]+/[^/]+/.*\.tf$' \
-            || echo "$CHANGED_FILES" | grep -qE '^templates/zola-site/(templates/|static/|theme\.toml$)'; then
+          if echo "$CHANGED_FILES" | grep -qE '^terraform/[^/]+/[^/]+/.*\.tf$' \
+            || echo "$CHANGED_FILES" | grep -qE '^zola-site/(templates/|static/|theme\.toml$)'; then
             echo "This PR releases a unit; template-release.yml writes its root entry."
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -51,11 +51,11 @@ jobs:
 
           # One line per PR means one tag per PR: first match in this fixed
           # precedence wins, even for a PR spanning several areas.
-          if echo "$CHANGED_FILES" | grep -q '^pigeon\.dev/'; then
-            TAG="pigeon.dev"
-          elif echo "$CHANGED_FILES" | grep -q '^templates/'; then
-            TAG="templates"
-          elif echo "$CHANGED_FILES" | grep -q '^adr/'; then
+          if echo "$CHANGED_FILES" | grep -q '^terraform/'; then
+            TAG="terraform"
+          elif echo "$CHANGED_FILES" | grep -q '^zola-site/'; then
+            TAG="zola-site"
+          elif echo "$CHANGED_FILES" | grep -q '^docs/adr/'; then
             TAG="adr"
           elif echo "$CHANGED_FILES" | grep -q '^\.github/'; then
             TAG="ci"

@@ -1,9 +1,9 @@
 ---
 name: release-pr
-description: Use this skill when making a change to one of this repo's templates/terraform/ Terraform modules or the templates/zola-site/ theme and getting it merged to main. This is the pigeon.dev templates repo; consumers live in noisypigeon/noisypigeon and are bumped in a separate PR there. Covers branching off main, committing, opening the pull request, applying the required release:* label, merging, and syncing local main afterward. Trigger on requests like "open a PR for this", "release this module change", "ship this to main", or "merge this terraform module or zola-site theme change".
+description: Use this skill when making a change to one of this repo's terraform/ Terraform modules or the zola-site/ theme and getting it merged to main. This is the pigeon-lib hub repo; consumers are the spoke repos (noisypigeon, pigeon.dev, noisypigeon.com) and are bumped in a separate PR there. Covers branching off main, committing, opening the pull request, applying the required release:* label, merging, and syncing local main afterward. Trigger on requests like "open a PR for this", "release this module change", "ship this to main", or "merge this terraform module or zola-site theme change".
 ---
 
-# Releasing a templates/terraform/ or templates/zola-site/ change
+# Releasing a terraform/ or zola-site/ change
 
 This repo's release automation has no human reviewer and no branch-protection
 rules — this skill *is* the PR discipline. Follow it in full for every
@@ -33,8 +33,8 @@ later — get the PR body right the first time.
      would want to read later, describing what changed and why it matters to
      someone consuming it — not "fixed bug" or a raw commit list. It is
      copied verbatim into that unit's own `CHANGELOG.md`
-     (`templates/terraform/<provider>/<module>/CHANGELOG.md` or
-     `templates/zola-site/CHANGELOG.md`) and into the GitHub Release notes by
+     (`terraform/<provider>/<module>/CHANGELOG.md` or
+     `zola-site/CHANGELOG.md`) and into the GitHub Release notes by
      `template-release.yml` on merge, with no editing pass in between.
    ```
    gh pr create --title "<title>" --body "<body>" --base main
@@ -49,10 +49,10 @@ later — get the PR body right the first time.
      applying it explicitly isn't strictly required to get a release, but do
      it anyway — an unlabeled PR is a signal something was skipped, not a
      deliberate patch decision.
-   - A PR that doesn't touch any `templates/terraform/<provider>/<module>/`
-     directory or `templates/zola-site/templates/`, `static/`, or
+   - A PR that doesn't touch any `terraform/<provider>/<module>/`
+     directory or `zola-site/templates/`, `static/`, or
      `theme.toml` (e.g. workflow, root-doc, or
-     `templates/zola-site/README.md`/`CHANGELOG.md`-only changes) doesn't
+     `zola-site/README.md`/`CHANGELOG.md`-only changes) doesn't
      need a label at all — nothing will be tagged or released regardless. It
      still gets a one-line entry in the root `CHANGELOG.md` from
      `root-changelog.yml` (PD-0160), so the PR title still has a second life as
@@ -68,18 +68,18 @@ later — get the PR body right the first time.
    ```
    Merging triggers `template-release.yml` automatically (tags the changed
    module(s), updates their `CHANGELOG.md` and the root one, cuts a GitHub
-   Release, then dispatches `pigeon-dev-pages.yml` **in this repo** — the
-   `pigeon.dev` Zola site lives here since ADR-0156 and generates this
-   version's redirect page and release post) and, on any resulting `.tf`
-   changes, `module-docs.yml` (regenerates the module's `README.md`
-   input/output table). A `templates/zola-site` release additionally dispatches
-   `zola-sites-deploy.yml` in `noisypigeon/noisypigeon` for `noisypigeon.com`,
-   the one site this repo doesn't host. None need triggering manually.
+   Release, then dispatches `pigeon-dev-pages.yml` in `noisypigeon/pigeon.dev`,
+   which regenerates this version's redirect page, overview entry and release
+   post) and, on any resulting `.tf` changes, `module-docs.yml` (regenerates
+   the module's `README.md` input/output table). A `zola-site` release
+   additionally dispatches `noisypigeon-com-pages.yml` in
+   `noisypigeon/noisypigeon.com`, the other site that renders with the theme.
+   None need triggering manually.
 
-   Watch that final dispatch step. It is the one part of the chain that reaches
-   another repo, so it fails if `BOT_GITHUB_TOKEN` loses `actions: write`
-   there — and the symptom is a tagged, released version whose short
-   `pigeon.dev/modules/...` URL 404s, not an obviously broken release.
+   Watch those dispatch steps. This repo hosts no site, so **every** deploy it
+   triggers reaches another repo, and each fails if `BOT_GITHUB_TOKEN` loses
+   `actions: write` there — the symptom being a tagged, released version whose
+   short `pigeon.dev/modules/...` URL 404s, not an obviously broken release.
 
 6. **Sync local `main`.** "Run on main" here means syncing your local clone
    after the automation has landed its own commits — not re-running any
@@ -91,9 +91,11 @@ later — get the PR body right the first time.
    Pulling after merge picks up both the squash-merge commit and the
    automated changelog/docs commits that landed on top of it.
 
-7. **Bump the consumer, if there is one.** Consumers live in
+7. **Bump the consumer, if there is one.** Module consumers live in
    `noisypigeon/noisypigeon`, pinned by exact version in
-   `workloads/**/*.tf` as `source = "https://pigeon.dev/modules/<provider>/<module>/vX.Y.Z"`.
-   That bump is a separate PR in that repo, and it can only be opened once this
-   release's deploy has finished — the short URL has to resolve before
-   `terragrunt init` can fetch it.
+   `*/terraform/**/*.tf` as `source = "https://pigeon.dev/modules/<provider>/<module>/vX.Y.Z"`.
+   Theme consumers are the `pigeon.dev` and `noisypigeon.com` site repos, each
+   pinning a version per LIB-0001 invariant 2. Either bump is a separate PR in
+   that repo, and it can only be opened once this release's deploy has
+   finished — the short URL has to resolve before `terragrunt init` can fetch
+   it.

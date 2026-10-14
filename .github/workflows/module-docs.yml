@@ -26,7 +26,7 @@ jobs:
       - name: Generate module docs
         uses: terraform-docs/gh-actions@v1.4.1
         with:
-          working-dir: templates/terraform/scaleway/project,templates/terraform/scaleway/object-bucket,templates/terraform/scaleway/iam-policy,templates/terraform/scaleway/compute-instance,templates/terraform/scaleway/compute-instance-config,templates/terraform/scaleway/block-volume,templates/terraform/scaleway/cockpit-observability,templates/terraform/scaleway/pigeon-cluster,templates/terraform/backblaze/bucket,templates/terraform/backblaze/api-key
+          working-dir: terraform/scaleway/project,terraform/scaleway/object-bucket,terraform/scaleway/iam-policy,terraform/scaleway/compute-instance,terraform/scaleway/compute-instance-config,terraform/scaleway/block-volume,terraform/scaleway/cockpit-observability,terraform/scaleway/pigeon-cluster,terraform/backblaze/bucket,terraform/backblaze/api-key
           output-file: README.md
           output-method: inject
           output-format: markdown table
