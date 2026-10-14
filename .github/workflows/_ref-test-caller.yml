@@ -1,0 +1,6 @@
+name: ref-test caller
+on:
+  workflow_dispatch: {}
+jobs:
+  call:
+    uses: noisypigeon/pigeon-lib/.github/workflows/_ref-test.yml@workflows/v1.0.0
