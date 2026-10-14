@@ -34,6 +34,25 @@ Recorded in [ADR-0151](https://github.com/noisypigeon/noisypigeon/blob/main/docs
 
 [#262](https://github.com/noisypigeon/noisypigeon/pull/262)
 
+## [4.1.1] - 2026-10-05
+
+### Fix object-bucket ACL/website-config resources to honor project_id
+
+## Summary
+- `scaleway_object_bucket_acl` and `scaleway_object_bucket_website_configuration` each have their own `project_id` argument, independent of the bucket resource's `project_id`, defaulting to the provider's default project when omitted.
+- v4.1.0 (#194) set `project_id` on the `scaleway_object_bucket` resource but not on these two new child resources it added — so a bucket created via `exact_name` + `project_id` in a non-default project got its ACL/website-config calls silently scoped to the *wrong* project.
+- Confirmed live on `workloads/pigeon.dev/terraform/bucket` (its own dedicated `pigeon-dev` project): the bucket itself created fine, but `PutBucketAcl`/`ListObjects` both failed with deterministic `403 AccessDenied`, unchanged across 4 retries over ~30 minutes — ruling out IAM propagation delay and confirming this project-id mismatch as the actual cause.
+- Fix: pass `project_id = var.project_id` through to both child resources. No input/output signature change — restores the module's own already-documented intent that a bucket and its ACL/website-config live in the same project.
+
+## Test plan
+- [x] `terraform validate` clean
+- [x] `terraform fmt -diff` clean
+- [ ] Re-running `terragrunt apply` on #195 against `v4.1.1` succeeds for the `pigeon.dev` bucket's ACL + website-configuration resources
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#196](https://github.com/noisypigeon/noisypigeon/pull/196)
+
 ## [4.1.0] - 2026-10-05
 
 ### Add exact_name, website hosting, and public-read ACL to object-bucket
@@ -63,6 +82,27 @@ Both changes are breaking: existing callers must rename their `namespace`/`name`
 See docs/adr/0119-decouple-scaleway-iam-application-api-key-rename-object-bucket.md for the full decision record (this PR covers only the `object-bucket` half of that ADR).
 
 [#161](https://github.com/noisypigeon/noisypigeon/pull/161)
+
+## [3.0.0] - 2026-10-03
+
+### Seed the templates/terraform path move, major release each
+
+The `templates/terraform/` path move (PD-0110) cut one bookkeeping seed tag per
+module so the release automation's tag-prefix-based version lookup had a baseline
+under the new prefix. PD-0110 described them as seeds with "no GitHub Release, no
+CHANGELOG entry, just enough for `module-release.yml`'s `$LATEST` lookup to find a
+baseline", which is why this entry is written by hand rather than from a PR body.
+
+**No behaviour change.** This version's `bucket.tf`, `inputs.tf`, `outputs.tf` and `versions.tf` are byte-identical to
+`v2.0.0`'s. The major bump records a change to the module's *source path* only:
+a module's source path is part of its public interface, so relocating it is
+breaking for every consumer regardless of whether any resource definition changed
+(PD-0093, PD-0110).
+
+Consumers pinning `v2.0.0` and `v3.0.0` resolve identical module content; the
+difference is which repo and tag the short URL resolves to.
+
+[#144](https://github.com/noisypigeon/noisypigeon/pull/144)
 
 ## [2.0.0] - 2026-10-04
 

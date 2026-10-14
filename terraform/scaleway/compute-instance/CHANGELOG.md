@@ -279,6 +279,27 @@ Breaking change — every top-level input except `enable_ipv4`/`enable_ipv6`/`ad
 
 [#157](https://github.com/noisypigeon/noisypigeon/pull/157)
 
+## [3.0.0] - 2026-10-03
+
+### Seed the templates/terraform path move, major release each
+
+The `templates/terraform/` path move (PD-0110) cut one bookkeeping seed tag per
+module so the release automation's tag-prefix-based version lookup had a baseline
+under the new prefix. PD-0110 described them as seeds with "no GitHub Release, no
+CHANGELOG entry, just enough for `module-release.yml`'s `$LATEST` lookup to find a
+baseline", which is why this entry is written by hand rather than from a PR body.
+
+**No behaviour change.** This version's `instance.tf`, `inputs.tf`, `outputs.tf` and `versions.tf` are byte-identical to
+`v2.3.4`'s. The major bump records a change to the module's *source path* only:
+a module's source path is part of its public interface, so relocating it is
+breaking for every consumer regardless of whether any resource definition changed
+(PD-0093, PD-0110).
+
+Consumers pinning `v2.3.4` and `v3.0.0` resolve identical module content; the
+difference is which repo and tag the short URL resolves to.
+
+[#144](https://github.com/noisypigeon/noisypigeon/pull/144)
+
 ## [2.3.4] - 2026-10-03
 
 ### Fix environment_variables/PIGEON_LOG_DIR not reaching non-login SSH invocations
