@@ -18,6 +18,14 @@ here. The full argument is
 | [`zola-site/`](zola-site) | a reusable Zola theme | `zola-site/vX.Y.Z` |
 | `.github/workflows/` | the reusable CI the spokes call | `workflows/vX.Y.Z` |
 
+Plus two scripts a consuming site runs at build time:
+[`zola-site/resolve-theme.sh`](zola-site/resolve-theme.sh) (materializes the
+theme version a site pins) and
+[`generate-module-redirects.sh`](generate-module-redirects.sh) (generates
+`pigeon.dev`'s module pages and release posts from this repo's tags and
+changelogs). Both resolve their own location rather than asking git, so they
+work wherever a site fetched them to.
+
 ## Consuming a module
 
 Pin the short URL, not this repo:

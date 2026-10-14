@@ -23,6 +23,12 @@ nothing that is deployed:
   templates convention (PD-0155).
 - `.github/scripts/root-changelog.sh` — the one implementation of PD-0160's
   root-changelog contract, used by this repo and fetched by the spokes.
+- `generate-module-redirects.sh` — generates the `pigeon.dev` site's module
+  redirect pages, overview pages, theme-version pages and release posts from
+  this repo's tags, READMEs and CHANGELOGs. Runs in a *consuming* site's build,
+  so it reads two roots: `LIB_ROOT`, derived from `${BASH_SOURCE[0]}` so it
+  finds the clone it was fetched into rather than the site's repo, and
+  `--content-root`, which only the caller knows.
 
 See `README.md` for the consumption contract and `terraform/README.md` for the
 module index.
