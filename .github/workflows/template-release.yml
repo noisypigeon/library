@@ -76,7 +76,7 @@ jobs:
 
       # The spokes call the reusable workflows and fetch root-changelog.sh, so
       # all of .github/ travels under one version -- LIB-0001 invariant 2 says a
-      # spoke pins a version rather than tracking a branch, and PD-0155 deferred
+      # spoke pins a version rather than tracking a branch, and DEV-0155 deferred
       # exactly this track on the grounds that live @main was cheaper. It is no
       # longer cheaper now that three spokes consume it.
       #
@@ -161,7 +161,7 @@ jobs:
             git add "$CHANGELOG"
             TAGS="$TAGS ${dir}/v${NEXT}"
 
-            # Also add a one-liner to the repo-wide root CHANGELOG.md (PD-0160).
+            # Also add a one-liner to the repo-wide root CHANGELOG.md (DEV-0160).
             # Passing --date reuses the $TODAY above, so the rollup line and this
             # module's own entry can never straddle a midnight boundary.
             .github/scripts/root-changelog.sh \
@@ -232,7 +232,7 @@ jobs:
           mv "${CHANGELOG}.new" "$CHANGELOG"
           git add "$CHANGELOG"
 
-          # One-liner into the root CHANGELOG.md, same contract as above (PD-0160).
+          # One-liner into the root CHANGELOG.md, same contract as above (DEV-0160).
           .github/scripts/root-changelog.sh \
             --tag "zola-site" \
             --title "$PR_TITLE" \
@@ -357,7 +357,7 @@ jobs:
         run: gh workflow run pigeon-dev-pages.yml -R noisypigeon/pigeon.dev --ref main
 
       # Replaces a dispatch at zola-sites-deploy.yml in noisypigeon/noisypigeon,
-      # which PD-0159 removed from that repo -- so this step had been failing
+      # which DEV-0159 removed from that repo -- so this step had been failing
       # on every theme release until LIB-0002 repointed it here.
       - name: Trigger noisypigeon.com Pages deploy
         if: steps.zola_site.outputs.changed == 'true'

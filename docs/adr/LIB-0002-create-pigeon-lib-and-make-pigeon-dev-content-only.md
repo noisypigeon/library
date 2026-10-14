@@ -6,7 +6,7 @@
 
 ## Context
 
-LIB-0001 named a hub-and-spoke target and a six-step rollout. PD-0160 step 0
+LIB-0001 named a hub-and-spoke target and a six-step rollout. DEV-0160 step 0
 shipped: every module version now resolves through one rule, because the last
 consumer of a `modules/*`-era tag was repinned and the frozen mapping arm
 deleted. This ADR executes steps 1 and 2.
@@ -18,7 +18,7 @@ build has four hard dependencies on those assets being local — the module
 directory, and the generator itself. Done literally and in order, step 1 leaves
 `pigeon.dev` unable to build, and every published module short URL 404s on the
 next deploy. LIB-0001 §7(7) predicted exactly this: splitting the site from
-`templates/` again "re-opens every coupling PD-0156 closed".
+`templates/` again "re-opens every coupling DEV-0156 closed".
 
 So the work lands as one effort. Step 3, the Terraform hoist, stays out — it is
 separately blocked on LIB-0001 §8's `state/iam` problem.
@@ -35,8 +35,8 @@ held as one string — `//${prefix}/${provider}/${module}?ref=${full_tag}` uses
 This ADR flattens both. The hub's roots are `terraform/` and `zola-site/`, and
 tags are `terraform/<provider>/<module>/vX.Y.Z` and `zola-site/vX.Y.Z`. Prefix
 and subdirectory stay identical, the generator keeps one value, and the
-`templates/` segment — which PD-0154 §1 kept *only* to hold its own blast radius
-down, and which PD-0154's `## Out of scope` costed as deferred work — is gone.
+`templates/` segment — which DEV-0154 §1 kept *only* to hold its own blast radius
+down, and which DEV-0154's `## Out of scope` costed as deferred work — is gone.
 It refines LIB-0001's role table rather than following it.
 
 The seed was one `filter-repo` pass with three `--path-rename`s and a
@@ -49,18 +49,18 @@ The seed was one `filter-repo` pass with three `--path-rename`s and a
 the `release-pr` skill, the generator, and `adr/pigeon-lib/` → `docs/adr/`.
 
 `pigeon-dev-pages.yml` stays in `pigeon.dev`: `actions/deploy-pages` targets the
-calling repo, which PD-0156 established is a constraint and not a style choice.
+calling repo, which DEV-0156 established is a constraint and not a style choice.
 
 `zola-site-deploy.yml` is **deleted rather than moved.** It had no caller in any
 of the three repos, and its `:60` hardcoded `noisypigeon.com/fetch-templates.sh`
-— a path into a caller's checkout that PD-0159 moved away. Both sites are on
+— a path into a caller's checkout that DEV-0159 moved away. Both sites are on
 Pages now, so the Scaleway-bucket variant has no future consumer. Carrying dead,
 broken code into a new repo to preserve it is not preservation.
 
 ### 3. The reusable CI becomes a third release track
 
 LIB-0001 invariant 2 says a spoke consumes versions, never branches, but all
-five callers pinned `@main`. PD-0155 deferred a `workflows/vX.Y.Z` track
+five callers pinned `@main`. DEV-0155 deferred a `workflows/vX.Y.Z` track
 deliberately — live `@main` was cheaper than paying for the track upfront, with
 the track named as the escape hatch "if it ever actually bites". With three
 spokes consuming the hub it stops being cheaper, so the track exists:
@@ -72,7 +72,7 @@ Verified empirically with a throwaway caller at `@workflows/v1.0.0` before
 committing to the design; it resolves.
 
 `workflows/v1.0.0` is a seed tag, cut by hand for the bootstrapping reason
-PD-0110's five module seeds had: the automation that cuts the track is added by
+DEV-0110's five module seeds had: the automation that cuts the track is added by
 the PR the track would be documenting.
 
 ### 4. The generator reads two roots, and neither is `git rev-parse`
@@ -82,13 +82,13 @@ The generator moves to the hub and takes `--content-root` (the consuming site's
 `LIB_ROOT` derived from `${BASH_SOURCE[0]}` and the repo slug an input
 defaulting to `noisypigeon/pigeon-lib`.
 
-Deriving from the script's own path rather than git is the property PD-0154 gave
+Deriving from the script's own path rather than git is the property DEV-0154 gave
 `resolve-theme.sh`, for the reason it recorded: an env override "fails
 *silently*", because the copy that runs is the one in the fetched clone, so until
 that clone is override-aware `git rev-parse` quietly resolves the **consuming**
 repo and the output looks right while pointing at the wrong tree.
 
-`url_path` is untouched. PD-0110 called that line "the entire stable-URL
+`url_path` is untouched. DEV-0110 called that line "the entire stable-URL
 guarantee", and it is the reason this ADR rewrites zero consumer `source =`
 lines — the third time that decision has paid for itself, after ADR-0136's
 hostname swap and ADR-0154's repo swap.
@@ -98,18 +98,18 @@ hostname swap and ADR-0154's repo swap.
 That script is `../..`-relative by design, so dropping a path level invalidated
 its root, its symlink target, its tag shape and its archive strip depth. All
 four are patched, and the patch lands **in the hub**, because the clone's copy is
-the one that runs — PD-0154 §9 hit this and carried its patch across rather than
+the one that runs — DEV-0154 §9 hit this and carried its patch across rather than
 relying on seed timing.
 
-A related trap, recorded so the next reader does not design against it: PD-0154
-§5, PD-0154 `:184` and PD-0156 §1 all describe a `TEMPLATES_REPO_ROOT`
+A related trap, recorded so the next reader does not design against it: DEV-0154
+§5, DEV-0154 `:184` and DEV-0156 §1 all describe a `TEMPLATES_REPO_ROOT`
 environment override. It was considered, rejected for the silent-failure reason
 above, and never shipped. `grep` finds nothing.
 
 ### 6. Two pre-existing breakages fixed in passing
 
 - `template-release.yml` dispatched `zola-sites-deploy.yml` in
-  `noisypigeon/noisypigeon`, a workflow PD-0159 deleted from that repo. Every
+  `noisypigeon/noisypigeon`, a workflow DEV-0159 deleted from that repo. Every
   theme release had been failing that step. It now dispatches
   `noisypigeon-com-pages.yml` in `noisypigeon/noisypigeon.com`, the repo that
   actually renders with the theme.
@@ -119,17 +119,17 @@ above, and never shipped. `grep` finds nothing.
 
 ## Consequences
 
-- **`pull_request: closed` runs from the head ref, not the base.** PD-0154 §9
+- **`pull_request: closed` runs from the head ref, not the base.** DEV-0154 §9
   justified splitting "retire the automation" from "delete the content" on the
   grounds that GitHub "runs the workflow file from the **base** branch". It does
   not: the first `.github/`-touching PR here fired a `template-release.yml` step
   that existed only on the branch. The split is still the right order — smaller
   diffs, one failure mode each — but its stated *reason* is wrong, and anything
   inheriting that reason should be re-checked rather than trusted.
-- **PD-0160's predicate-drift warning came true within one commit.** Adding the
+- **DEV-0160's predicate-drift warning came true within one commit.** Adding the
   `workflows/` track to `template-release.yml` without the matching arm in
   `root-changelog.yml`'s stand-down test made both write a root changelog line
-  for the same PR; they collided on rebase. PD-0160 wrote "if one drifts, a PR
+  for the same PR; they collided on rebase. DEV-0160 wrote "if one drifts, a PR
   gets either two root lines or none" when it created the duplication. Three
   predicates now live in two files and nothing enforces that they agree.
 - **A new repo needs provisioning that no ADR had enumerated.** The hub's own
@@ -142,13 +142,13 @@ above, and never shipped. `grep` finds nothing.
 - **Three repos now carry tags for the same 53 versions.** `noisypigeon` has the
   original `templates/*` set plus 20 `modules/*`, `pigeon.dev` has the
   `templates/*` set it was seeded with, and only this repo's `terraform/*` and
-  `zola-site/*` tags resolve. None are deleted — PD-0154 made that a permanent
+  `zola-site/*` tags resolve. None are deleted — DEV-0154 made that a permanent
   boundary — so the cost is three inert sets a reader may mistake for live ones.
-- **The hub hosts nothing, so every deploy it triggers is cross-repo.** PD-0156
+- **The hub hosts nothing, so every deploy it triggers is cross-repo.** DEV-0156
   collapsed that coupling by colocation and this ADR re-opens it deliberately.
-  PD-0154 called the dispatch "the one piece that fails silently rather than
+  DEV-0154 called the dispatch "the one piece that fails silently rather than
   loudly if missed"; there are now two of them.
-- **`pigeon.dev` gains a fetch step it had deleted.** PD-0156 removed
+- **`pigeon.dev` gains a fetch step it had deleted.** DEV-0156 removed
   `fetch-templates.sh` from that repo as the whole point of colocating. It comes
   back, which is the honest price of the spoke role.
 
@@ -167,12 +167,12 @@ above, and never shipped. `grep` finds nothing.
   domain moved, because this is the `pigeon-lib` migration LIB-0001 deferred the
   decision to. The other two stay in `pigeon.dev` pending their own ADRs.
 - **Deleting any superseded tag,** in any of the three repos. Permanent
-  boundary, inherited from PD-0154.
+  boundary, inherited from DEV-0154.
 - **Enforcing that the three release predicates stay in sync** across
   `template-release.yml` and `root-changelog.yml`. Genuinely deferred; the
   collision above is the argument for it. Needs an issue.
 - **Branch protection on the hub.** Permanent boundary for now — raised for the
-  sixth time across PD-0157, PD-0159, NPC-0000, PD-0160, LIB-0001 and here.
+  sixth time across DEV-0157, DEV-0159, NPC-0000, DEV-0160, LIB-0001 and here.
 
 ## Verification
 

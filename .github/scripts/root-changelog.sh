@@ -4,7 +4,7 @@
 # "## YYYY-MM-DD" section, newest first.
 #
 # This is the single home for logic that used to be copy-pasted into
-# template-release.yml twice. See PD-0160 for the contract it implements: every
+# template-release.yml twice. See DEV-0160 for the contract it implements: every
 # merged PR gets exactly one line in the root changelog, and a PR that changes a
 # releasable unit additionally gets its full PR body in that unit's own
 # CHANGELOG.md.
@@ -12,7 +12,7 @@
 # Insertion is anchored on $SENTINEL rather than on the first "## " heading. The
 # root file's prose header has no "## " of its own, so a first-"## " anchor
 # never matches on an empty changelog and silently appends the first-ever entry
-# to the *bottom* of the header -- the defect PD-0160 fixes. Keep the sentinel
+# to the *bottom* of the header -- the defect DEV-0160 fixes. Keep the sentinel
 # line in CHANGELOG.md or this script refuses to guess.
 #
 # Not shared with blog-changelog.yml: that one is a reusable workflow running in
@@ -60,7 +60,7 @@ if [ ! -f "$changelog" ]; then
 fi
 
 if ! grep -qF "$SENTINEL" "$changelog"; then
-  echo "::error::${changelog} has no '${SENTINEL}' line; cannot place the entry (see PD-0160)." >&2
+  echo "::error::${changelog} has no '${SENTINEL}' line; cannot place the entry (see DEV-0160)." >&2
   exit 1
 fi
 

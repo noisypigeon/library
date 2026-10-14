@@ -32,11 +32,11 @@ See docs/adr/0120-compose-scaleway-block-volume-inside-compute-instance.md for t
 
 ### Continue this module's version lineage under the templates/terraform prefix
 
-PD-0110 moved `modules/` to `templates/terraform/` and cut one tag per module
+DEV-0110 moved `modules/` to `templates/terraform/` and cut one tag per module
 under the new prefix to continue each module's version lineage there. This
 version's own GitHub Release describes it as "Bookkeeping only -- same tree
 content as the move commit, no resource/behavior change", following the same
-pattern PD-0093 used for its own prior move. The tag and its Release were created
+pattern DEV-0093 used for its own prior move. The tag and its Release were created
 with PR #144; only the changelog entry was missed, which is what this backfills by
 hand, since the automation writes entries from PR bodies alone.
 
@@ -44,7 +44,7 @@ hand, since the automation writes entries from PR bodies alone.
 `v2.0.0`'s. The major bump records a change to the module's *source path* only:
 a module's source path is part of its public interface, so relocating it is
 breaking for every consumer regardless of whether any resource definition changed
-(PD-0093, PD-0110).
+(DEV-0093, DEV-0110).
 
 Consumers pinning `v2.0.0` and `v3.0.0` resolve identical module content; the
 difference is which repo and tag the short URL resolves to.

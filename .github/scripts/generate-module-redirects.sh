@@ -5,10 +5,10 @@
 # `terraform init` can resolve a short pigeon.dev module source URL to the
 # tagged git:: source. The public URL always uses "modules/..." regardless of
 # the prefix the tag actually lives under, so the public namespace stays
-# stable even as the repo's internal layout moves (PD-0109, PD-0110).
+# stable even as the repo's internal layout moves (DEV-0109, DEV-0110).
 #
 # Every module tag lives in THIS repo (pigeon-lib), under the terraform
-# prefix -- PD-0160 step 0 retired the last cross-repo mapping arm and
+# prefix -- DEV-0160 step 0 retired the last cross-repo mapping arm and
 # LIB-0002 flattened the prefix, so the mapping is a single constant.
 #
 # This script lives in the library and runs against a consuming site, so it
@@ -18,7 +18,7 @@
 #                   from ${BASH_SOURCE[0]} two levels up (this script lives in
 #                   .github/scripts/), never from git rev-parse: the invoking
 #                   site is a different repo, so asking git for *its* toplevel
-#                   finds the wrong tree. Same property PD-0154 gave
+#                   finds the wrong tree. Same property DEV-0154 gave
 #                   resolve-theme.sh, and the same path arithmetic to keep
 #                   right if this file ever moves again.
 #   CONTENT_ROOT -- the consuming site's content/ directory, passed with
@@ -98,7 +98,7 @@ while IFS= read -r tag; do
   full_tag="${prefix}/${provider}/${module}/v${version}"
   repo="$TAG_REPO"
   # The public URL stays "modules/..." forever, independent of the prefix the
-  # tag actually lives under (PD-0110) — this is the whole point.
+  # tag actually lives under (DEV-0110) — this is the whole point.
   url_path="modules/${provider}/${module}/v${version}"
   git_source="git::https://github.com/${repo}.git//${prefix}/${provider}/${module}?ref=${full_tag}"
   github_url="https://github.com/${repo}/releases/tag/${full_tag}"
