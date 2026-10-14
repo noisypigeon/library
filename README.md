@@ -21,7 +21,7 @@ here. The full argument is
 Plus two scripts a consuming site runs at build time:
 [`zola-site/resolve-theme.sh`](zola-site/resolve-theme.sh) (materializes the
 theme version a site pins) and
-[`generate-module-redirects.sh`](generate-module-redirects.sh) (generates
+[`.github/scripts/generate-module-redirects.sh`](.github/scripts/generate-module-redirects.sh) (generates
 `pigeon.dev`'s module pages and release posts from this repo's tags and
 changelogs). Both resolve their own location rather than asking git, so they
 work wherever a site fetched them to.
