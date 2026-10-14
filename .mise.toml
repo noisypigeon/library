@@ -1,0 +1,12 @@
+[tools]
+terraform = "1.16.3"
+
+[tasks.fmt-terraform]
+run = "terraform fmt -recursive"
+
+[tasks.fmt-check-terraform]
+run = "terraform fmt -recursive -check"
+
+# No Zola here. This repo publishes the zola-site theme but builds no site --
+# consuming sites pin a version and resolve it with zola-site/resolve-theme.sh
+# (LIB-0001 invariant 2), and zola-site-pages.yml carries its own Zola pin.
