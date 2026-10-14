@@ -15,10 +15,12 @@
 # reads from two roots that are deliberately separate:
 #
 #   LIB_ROOT     -- the library clone this script was fetched into. Derived
-#                   from ${BASH_SOURCE[0]}, never from git rev-parse: the
-#                   invoking site is a different repo, so asking git for *its*
-#                   toplevel finds the wrong tree. Same property PD-0154 gave
-#                   resolve-theme.sh, and for the same reason.
+#                   from ${BASH_SOURCE[0]} two levels up (this script lives in
+#                   .github/scripts/), never from git rev-parse: the invoking
+#                   site is a different repo, so asking git for *its* toplevel
+#                   finds the wrong tree. Same property PD-0154 gave
+#                   resolve-theme.sh, and the same path arithmetic to keep
+#                   right if this file ever moves again.
 #   CONTENT_ROOT -- the consuming site's content/ directory, passed with
 #                   --content-root. Required: only the caller knows it.
 #
@@ -39,7 +41,7 @@
 # tags and changelogs. Safe to run repeatedly; fully idempotent.
 set -euo pipefail
 
-LIB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TAG_REPO="${TAG_REPO:-noisypigeon/pigeon-lib}"
 CONTENT_ROOT=""
 
