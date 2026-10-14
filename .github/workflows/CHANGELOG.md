@@ -4,6 +4,51 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.3] - 2026-10-14
+
+### Follow pigeon.dev's DEV- prefix rename
+
+[DEV-0161](https://github.com/noisypigeon/pigeon.dev/pull/17) flattened `pigeon.dev`'s ADR corpus to `adr/` and re-prefixed it `PD-` → `DEV-`. This repo holds **133** of those citations, so they follow.
+
+### Why rewrite rather than grandfather
+
+PD-0160 grandfathered 1,100+ bare `ADR-NNNN` on volume: rewriting them would churn published changelog entries and another repo's `.hcl`/`.tf`. `PD-` carries none of that weight and was one day old, so DEV-0161 rewrote it instead — leaving **two** live spellings for that corpus rather than three. This PR is this repo's share of that.
+
+Breakdown of the 133:
+
+| Where | Count |
+| --- | --- |
+| `LIB-0001` + `LIB-0002` | 82 |
+| five published module changelogs | 20 |
+| `CLAUDE.md`, `README.md`, `CHANGELOG.md`, `terraform/README.md`, the skill | 14 |
+| workflows and scripts | 17 |
+
+### The published changelogs are included, deliberately
+
+NPC-0000's precedent is that published changelog copy is **not** retrofitted to a later layout — the reason those files still carry `docs/adr/` paths that stopped existing two moves ago. It doesn't bite here, and I checked rather than assumed:
+
+- Those versions have **no GitHub Release in this repo** to diverge from (`gh release view` → `release not found`). The historical Releases live in `noisypigeon` under the old `templates/terraform/…` tag names.
+- The site's release posts are **generated** from these files, so rewriting keeps file and published post consistent rather than splitting them.
+
+DEV-0161's permanent boundary covers bare `ADR-NNNN`, not `PD-`, so this is in scope rather than against it.
+
+One quotation needed care: `LIB-0002` quotes LIB-0001's own phrase *"re-opens every coupling PD-0156 closed"*. Since LIB-0001 is rewritten in the same commit, the quote stays an accurate quotation of its source.
+
+### Verified
+
+- `grep -r 'PD-'` over the repo returns **0**.
+- Bare `ADR-NNNN` is **334 before and after** — the grandfathering is not collateral damage.
+- `shellcheck` clean on both fetched scripts and `resolve-theme.sh`; `actionlint` clean apart from the pre-existing `terragrunt-run.yml` SC2242 that predates this repo.
+- The generator still produces 49 / 13 / 4 / 87 after its comment rewrite — same counts as before.
+
+### On merge
+
+Touches `.github/workflows/` and `.github/scripts/`, so `template-release.yml` cuts **`workflows/v1.0.3`** with this body as its changelog entry and Release notes. No module or theme release: no `.tf` and no theme asset changes.
+
+The five callers stay pinned at `v1.0.2`. A pin exists so it needn't track latest, and the delta here is comment text — but `pigeon.dev` will pin **v1.0.3** when it starts fetching, so it gets the DEV-corrected scripts from the outset.
+
+[#6](https://github.com/noisypigeon/pigeon-lib/pull/6)
+
 ## [1.0.2] - 2026-10-13
 
 ### Version the generator with the workflows track

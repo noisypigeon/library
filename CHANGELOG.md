@@ -36,6 +36,10 @@ ADR-0154 and ADR-0084 each made before it.
 
 <!-- entries below; newest first -->
 
+## 2026-10-14
+
+- [workflows] Follow pigeon.dev's DEV- prefix rename ([#6](https://github.com/noisypigeon/pigeon-lib/pull/6))
+
 ## 2026-10-13
 
 - [workflows] Version the generator with the workflows track ([#5](https://github.com/noisypigeon/pigeon-lib/pull/5))
