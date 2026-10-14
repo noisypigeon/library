@@ -7,6 +7,7 @@ on:
     paths:
       - "terraform/**"
       - "zola-site/**"
+      - ".github/**"
 
 permissions:
   contents: write
@@ -73,8 +74,28 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # The spokes call the reusable workflows and fetch root-changelog.sh, so
+      # all of .github/ travels under one version -- LIB-0001 invariant 2 says a
+      # spoke pins a version rather than tracking a branch, and PD-0155 deferred
+      # exactly this track on the grounds that live @main was cheaper. It is no
+      # longer cheaper now that three spokes consume it.
+      #
+      # CHANGELOG.md is excluded: the automation writes it, and a release must
+      # not be able to trigger itself.
+      - name: Determine reusable-CI change
+        id: workflows
+        env:
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          CHANGED_FILES=$(git diff --name-only "${MERGE_SHA}~1" "$MERGE_SHA")
+          if echo "$CHANGED_FILES" | grep -qE '^\.github/(workflows/[^/]+\.yml|scripts/)'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Configure git identity
-        if: steps.modules.outputs.changed != '' || steps.zola_site.outputs.changed == 'true'
+        if: steps.modules.outputs.changed != '' || steps.zola_site.outputs.changed == 'true' || steps.workflows.outputs.changed == 'true'
         run: |
           git config user.name "istx25"
           git config user.email "6799989+istx25@users.noreply.github.com"
@@ -222,21 +243,89 @@ jobs:
 
           echo "tag=${DIR}/v${NEXT}" >> "$GITHUB_OUTPUT"
 
+      - name: Update reusable-CI changelog and compute version
+        id: workflows_version
+        if: steps.workflows.outputs.changed == 'true'
+        env:
+          BUMP: ${{ steps.bump.outputs.level }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          TODAY=$(TZ="America/Los_Angeles" date +%Y-%m-%d)
+
+          LATEST=$(git tag -l "workflows/v*" | sed "s#workflows/v##" | sort -V | tail -n1)
+
+          if [ -z "$LATEST" ]; then
+            NEXT="1.0.0"
+          else
+            MA=$(echo "$LATEST" | cut -d. -f1)
+            MI=$(echo "$LATEST" | cut -d. -f2)
+            PA=$(echo "$LATEST" | cut -d. -f3)
+            case "$BUMP" in
+              major) NEXT="$((MA+1)).0.0" ;;
+              minor) NEXT="${MA}.$((MI+1)).0" ;;
+              patch) NEXT="${MA}.${MI}.$((PA+1))" ;;
+            esac
+          fi
+
+          # Lives beside the workflows it versions. GitHub only reads *.yml from
+          # this directory, so a CHANGELOG.md here is inert to Actions.
+          CHANGELOG=".github/workflows/CHANGELOG.md"
+          if [ ! -f "$CHANGELOG" ]; then
+            cat > "$CHANGELOG" <<'HEADER'
+          # Changelog
+
+          All notable changes to the reusable CI are documented in this file.
+
+          The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+          HEADER
+          fi
+
+          ENTRY=$(mktemp)
+          {
+            echo ""
+            echo "## [${NEXT}] - ${TODAY}"
+            echo ""
+            echo "### ${PR_TITLE}"
+            echo ""
+            echo "${PR_BODY}"
+            echo ""
+            echo "[#${PR_NUMBER}](${PR_URL})"
+          } > "$ENTRY"
+
+          head -n 5 "$CHANGELOG" > "${CHANGELOG}.new"
+          cat "$ENTRY" >> "${CHANGELOG}.new"
+          tail -n +6 "$CHANGELOG" >> "${CHANGELOG}.new"
+          mv "${CHANGELOG}.new" "$CHANGELOG"
+          git add "$CHANGELOG"
+
+          .github/scripts/root-changelog.sh \
+            --tag "workflows" \
+            --title "$PR_TITLE" \
+            --number "$PR_NUMBER" \
+            --url "$PR_URL" \
+            --date "$TODAY"
+          git add CHANGELOG.md
+
+          echo "tag=workflows/v${NEXT}" >> "$GITHUB_OUTPUT"
+
       - name: Commit changelog updates
-        if: steps.modules.outputs.changed != '' || steps.zola_site.outputs.changed == 'true'
+        if: steps.modules.outputs.changed != '' || steps.zola_site.outputs.changed == 'true' || steps.workflows.outputs.changed == 'true'
         run: |
           git commit -m "chore: update changelog(s) for PR #${{ github.event.pull_request.number }}"
           git fetch origin main
           git rebase origin/main
           git push origin HEAD:main
 
-      - name: Tag and release each changed module/theme
-        if: steps.modules.outputs.changed != '' || steps.zola_site.outputs.changed == 'true'
+      - name: Tag and release each changed module/theme/CI version
+        if: steps.modules.outputs.changed != '' || steps.zola_site.outputs.changed == 'true' || steps.workflows.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_URL: ${{ github.event.pull_request.html_url }}
-          RELEASE_TAGS: ${{ steps.versions.outputs.tags }} ${{ steps.zola_site_version.outputs.tag }}
+          RELEASE_TAGS: ${{ steps.versions.outputs.tags }} ${{ steps.zola_site_version.outputs.tag }} ${{ steps.workflows_version.outputs.tag }}
         run: |
           NOTES=$(mktemp)
           printf '%s\n\nPR: %s\n' "$PR_BODY" "$PR_URL" > "$NOTES"
