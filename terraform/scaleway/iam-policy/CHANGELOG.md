@@ -26,13 +26,15 @@ See docs/adr/0119-decouple-scaleway-iam-application-api-key-rename-object-bucket
 
 ## [3.0.0] - 2026-10-03
 
-### Seed the templates/terraform path move, major release each
+### Continue this module's version lineage under the templates/terraform prefix
 
-The `templates/terraform/` path move (PD-0110) cut one bookkeeping seed tag per
-module so the release automation's tag-prefix-based version lookup had a baseline
-under the new prefix. PD-0110 described them as seeds with "no GitHub Release, no
-CHANGELOG entry, just enough for `module-release.yml`'s `$LATEST` lookup to find a
-baseline", which is why this entry is written by hand rather than from a PR body.
+PD-0110 moved `modules/` to `templates/terraform/` and cut one tag per module
+under the new prefix to continue each module's version lineage there. This
+version's own GitHub Release describes it as "Bookkeeping only -- same tree
+content as the move commit, no resource/behavior change", following the same
+pattern PD-0093 used for its own prior move. The tag and its Release were created
+with PR #144; only the changelog entry was missed, which is what this backfills by
+hand, since the automation writes entries from PR bodies alone.
 
 **No behaviour change.** This version's `iam_policy.tf`, `inputs.tf`, `outputs.tf` and `versions.tf` are byte-identical to
 `v2.0.1`'s. The major bump records a change to the module's *source path* only:
