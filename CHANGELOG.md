@@ -2,7 +2,7 @@
 
 One line per PR across this whole repo, sectioned by date, newest first. Every
 merged PR gets exactly one line here; a PR that changes a releasable unit
-additionally gets its full PR body in that unit's own `CHANGELOG.md`. PD-0160 is
+additionally gets its full PR body in that unit's own `CHANGELOG.md`. DEV-0160 is
 the contract, inherited with the automation when LIB-0002 moved it here.
 
 Not versioned — for versioned, package-scoped changelogs see

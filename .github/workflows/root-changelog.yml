@@ -1,9 +1,9 @@
 name: root-changelog
 
-# Every merged PR gets exactly one line in the root CHANGELOG.md (PD-0160).
+# Every merged PR gets exactly one line in the root CHANGELOG.md (DEV-0160).
 # template-release.yml already writes that line for PRs that release a module or
 # the theme; this workflow covers everything else -- the site, the ADRs, CI, root
-# docs -- which until PD-0160 produced no changelog entry anywhere.
+# docs -- which until DEV-0160 produced no changelog entry anywhere.
 #
 # Deliberately no `paths:` filter: the whole point is that no merged PR is
 # exempt.
@@ -41,7 +41,7 @@ jobs:
           # template-release.yml owns the root line for any PR that releases a
           # unit. All THREE of its detection predicates are duplicated here on
           # purpose so that no PR ever gets two lines -- if one copy drifts from
-          # the other, a releasing PR gets either two entries or none. PD-0160
+          # the other, a releasing PR gets either two entries or none. DEV-0160
           # named that risk and LIB-0002 walked straight into it: adding the
           # workflows/ track here without the matching arm made both workflows
           # write a line for the same PR, and they collided on rebase.

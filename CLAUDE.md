@@ -20,8 +20,8 @@ nothing that is deployed:
 - `.github/workflows/` — the reusable CI the spokes call, tagged
   `workflows/vX.Y.Z`. Reusable workflows must live in `.github/workflows/`, so
   they sit beside this repo's own release automation rather than under a
-  templates convention (PD-0155).
-- `.github/scripts/root-changelog.sh` — the one implementation of PD-0160's
+  templates convention (DEV-0155).
+- `.github/scripts/root-changelog.sh` — the one implementation of DEV-0160's
   root-changelog contract, used by this repo and fetched by the spokes.
 - `.github/scripts/generate-module-redirects.sh` — generates the `pigeon.dev` site's module
   redirect pages, overview pages, theme-version pages and release posts from
@@ -49,7 +49,7 @@ symptom otherwise is a tagged, released version whose short URL 404s.
 
 `pigeon-dev-pages.yml` deliberately does **not** live here: `actions/deploy-pages`
 always targets the calling repo's own Pages site, so that caller has to live in
-the repo whose site it deploys (PD-0156 — a constraint, not a style choice).
+the repo whose site it deploys (DEV-0156 — a constraint, not a style choice).
 
 ## Where the decisions live
 
@@ -67,8 +67,8 @@ Filing one, by hand:
 - **Sections**: `## Context` / `## Decision` / `## Consequences` /
   `## Out of scope`, optionally then `## Verification`. No YAML frontmatter and
   no index — there isn't one.
-- Cite `LIB-NNNN` for this domain and `PD-NNNN`/`NPC-NNNN` for the others.
-  Bare `ADR-NNNN` in older prose means the `PD-` corpus (PD-0160 grandfathered
+- Cite `LIB-NNNN` for this domain and `DEV-NNNN`/`NPC-NNNN` for the others.
+  Bare `ADR-NNNN` in older prose means the `DEV-` corpus (DEV-0160 grandfathered
   those citations).
 - Genuinely-deferred `## Out of scope` items get a GitHub issue against
   `noisypigeon/noisypigeon` (ADR-0031); permanent design boundaries do not.
@@ -95,7 +95,7 @@ theme release needs a change under `zola-site/templates/`, `zola-site/static/`
 or `zola-site/theme.toml`. A README- or CHANGELOG-only change releases nothing.
 
 Every merged PR also gets exactly one line in the root `CHANGELOG.md`, under a
-`## YYYY-MM-DD` section, newest first (PD-0160). The
+`## YYYY-MM-DD` section, newest first (DEV-0160). The
 `<!-- entries below; newest first -->` marker is where entries get inserted —
 `root-changelog.sh` refuses to write without it.
 

@@ -55,7 +55,7 @@ later — get the PR body right the first time.
      `zola-site/README.md`/`CHANGELOG.md`-only changes) doesn't
      need a label at all — nothing will be tagged or released regardless. It
      still gets a one-line entry in the root `CHANGELOG.md` from
-     `root-changelog.yml` (PD-0160), so the PR title still has a second life as
+     `root-changelog.yml` (DEV-0160), so the PR title still has a second life as
      published copy.
    ```
    gh pr edit <pr-number> --add-label "release:patch"
