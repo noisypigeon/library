@@ -35,3 +35,7 @@ root `CHANGELOG.md` rather than being untangled from it — the same call
 ADR-0154 and ADR-0084 each made before it.
 
 <!-- entries below; newest first -->
+
+## 2026-10-13
+
+- [repo] Give pigeon-lib its CLAUDE.md, README.md, CHANGELOG.md, .mise.toml and .gitignore ([#1](https://github.com/noisypigeon/pigeon-lib/pull/1))
