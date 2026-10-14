@@ -1,7 +1,12 @@
 # Reusable: on a merged PR touching a blog's src/, prepends an entry to that
-# blog's own CHANGELOG.md, rolls up a one-liner into the caller's root
-# CHANGELOG.md, appends to (or creates) a daily digest post under the site's
-# content/changelog/, and dispatches that site's deploy.
+# blog's own CHANGELOG.md, optionally rolls up a one-liner into the caller's
+# root CHANGELOG.md, appends to (or creates) a daily digest post under the
+# site's content/changelog/, and dispatches that site's deploy.
+#
+# The root rollup earns its keep in a repo aggregating several workloads; a
+# single-site repo wants one changelog, at its root. So `changelog_path` names
+# the blog's changelog independently of `site_dir`, and an empty
+# `root_changelog_tag` (the default) skips the rollup altogether. See NPC-0000.
 #
 # Site paths are inputs rather than hardcoded, since this now runs from
 # another repo and has no business assuming the caller only ever has one
@@ -14,9 +19,14 @@ on:
   workflow_call:
     inputs:
       site_dir:
-        description: "Path (in the caller's checkout) to the blog's root, e.g. noisypigeon.com."
+        description: "Path (in the caller's checkout) to the blog's root, e.g. noisypigeon.com. Still resolves the daily digest under <site_dir>/src/content/changelog/; no longer the only way to locate the changelog (see changelog_path)."
         type: string
         required: true
+      changelog_path:
+        description: "Path (in the caller's checkout) to the blog's CHANGELOG.md. Defaults to <site_dir>/CHANGELOG.md when empty; set it to e.g. CHANGELOG.md for a single-site repo that keeps its changelog at the repo root."
+        type: string
+        required: false
+        default: ""
       deploy_workflow:
         description: "Workflow filename (in the caller's repo) to dispatch after committing the changelog."
         type: string
@@ -27,10 +37,10 @@ on:
         required: false
         default: ""
       root_changelog_tag:
-        description: "Bracket tag used in the caller's root CHANGELOG.md rollup line, e.g. 'blog'."
+        description: "Bracket tag used in the caller's root CHANGELOG.md rollup line, e.g. 'blog'. Empty (the default) skips the root rollup entirely -- what a single-site repo wants."
         type: string
         required: false
-        default: "blog"
+        default: ""
       git_user_name:
         type: string
         required: false
@@ -72,12 +82,13 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_URL: ${{ github.event.pull_request.html_url }}
           SITE_DIR: ${{ inputs.site_dir }}
+          CHANGELOG_PATH: ${{ inputs.changelog_path }}
           ROOT_CHANGELOG_TAG: ${{ inputs.root_changelog_tag }}
         run: |
           TODAY=$(TZ="America/Los_Angeles" date +%Y-%m-%d)
           OFFSET=$(TZ="America/Los_Angeles" date +%z | sed -E 's/([+-][0-9]{2})([0-9]{2})/\1:\2/')
 
-          CHANGELOG="${SITE_DIR}/CHANGELOG.md"
+          CHANGELOG="${CHANGELOG_PATH:-${SITE_DIR}/CHANGELOG.md}"
           if [ ! -f "$CHANGELOG" ]; then
             cat > "$CHANGELOG" <<'HEADER'
           # Changelog
@@ -104,23 +115,33 @@ jobs:
           mv "${CHANGELOG}.new" "$CHANGELOG"
           git add "$CHANGELOG"
 
-          ROOT_CHANGELOG="CHANGELOG.md"
-          ROOT_ENTRY="- [${ROOT_CHANGELOG_TAG}] ${PR_TITLE} ([#${PR_NUMBER}](${PR_URL}))"
-          if grep -q "^## ${TODAY}\$" "$ROOT_CHANGELOG"; then
-            awk -v today="## ${TODAY}" -v entry="$ROOT_ENTRY" '
-              { print }
-              $0 == today { print ""; print entry }
-            ' "$ROOT_CHANGELOG" > "${ROOT_CHANGELOG}.new"
-          else
-            awk -v today="## ${TODAY}" -v entry="$ROOT_ENTRY" '
-              BEGIN { inserted = 0 }
-              /^## / && !inserted { print today; print ""; print entry; print ""; inserted = 1 }
-              { print }
-              END { if (!inserted) { print ""; print today; print ""; print entry } }
-            ' "$ROOT_CHANGELOG" > "${ROOT_CHANGELOG}.new"
+          # Optional: a one-line rollup into the caller's *repo-root* CHANGELOG.md,
+          # for a repo aggregating several workloads. Empty tag => single-site repo,
+          # whose only changelog is $CHANGELOG above. See NPC-0000.
+          if [ -n "$ROOT_CHANGELOG_TAG" ]; then
+            ROOT_CHANGELOG="CHANGELOG.md"
+            if [ ! -f "$ROOT_CHANGELOG" ]; then
+              printf '%s\n' '# Changelog' '' \
+                'One line per PR across this repo, sectioned by date, newest first.' \
+                > "$ROOT_CHANGELOG"
+            fi
+            ROOT_ENTRY="- [${ROOT_CHANGELOG_TAG}] ${PR_TITLE} ([#${PR_NUMBER}](${PR_URL}))"
+            if grep -q "^## ${TODAY}\$" "$ROOT_CHANGELOG"; then
+              awk -v today="## ${TODAY}" -v entry="$ROOT_ENTRY" '
+                { print }
+                $0 == today { print ""; print entry }
+              ' "$ROOT_CHANGELOG" > "${ROOT_CHANGELOG}.new"
+            else
+              awk -v today="## ${TODAY}" -v entry="$ROOT_ENTRY" '
+                BEGIN { inserted = 0 }
+                /^## / && !inserted { print today; print ""; print entry; print ""; inserted = 1 }
+                { print }
+                END { if (!inserted) { print ""; print today; print ""; print entry } }
+              ' "$ROOT_CHANGELOG" > "${ROOT_CHANGELOG}.new"
+            fi
+            mv "${ROOT_CHANGELOG}.new" "$ROOT_CHANGELOG"
+            git add "$ROOT_CHANGELOG"
           fi
-          mv "${ROOT_CHANGELOG}.new" "$ROOT_CHANGELOG"
-          git add "$ROOT_CHANGELOG"
 
           DIGEST="${SITE_DIR}/src/content/changelog/${TODAY}-changelog.md"
           if [ ! -f "$DIGEST" ]; then
