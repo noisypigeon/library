@@ -39,11 +39,15 @@ jobs:
           CHANGED_FILES=$(git diff --name-only "${MERGE_SHA}~1" "$MERGE_SHA")
 
           # template-release.yml owns the root line for any PR that releases a
-          # unit. Its two detection predicates are duplicated here on purpose so
-          # that no PR ever gets two lines -- if one copy drifts from the other,
-          # a releasing PR gets either two entries or none. PD-0160 names this.
+          # unit. All THREE of its detection predicates are duplicated here on
+          # purpose so that no PR ever gets two lines -- if one copy drifts from
+          # the other, a releasing PR gets either two entries or none. PD-0160
+          # named that risk and LIB-0002 walked straight into it: adding the
+          # workflows/ track here without the matching arm made both workflows
+          # write a line for the same PR, and they collided on rebase.
           if echo "$CHANGED_FILES" | grep -qE '^terraform/[^/]+/[^/]+/.*\.tf$' \
-            || echo "$CHANGED_FILES" | grep -qE '^zola-site/(templates/|static/|theme\.toml$)'; then
+            || echo "$CHANGED_FILES" | grep -qE '^zola-site/(templates/|static/|theme\.toml$)' \
+            || echo "$CHANGED_FILES" | grep -qE '^\.github/(workflows/[^/]+\.yml|scripts/)'; then
             echo "This PR releases a unit; template-release.yml writes its root entry."
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
