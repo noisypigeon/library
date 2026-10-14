@@ -4,6 +4,34 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.2] - 2026-10-13
+
+### Version the generator with the workflows track
+
+Corrects a placement mistake from #4, before Phase C pins anything to a version.
+
+### The gap
+
+I put `generate-module-redirects.sh` at the repo root. The `workflows/` release predicate covers `.github/workflows/*.yml` and `.github/scripts/` — so the generator sat outside it. A spoke pinning `@workflows/vX.Y.Z` would have got a pinned *workflow* and a generator tracked from `main`: invariant 2 half-satisfied, in exactly the branch-tracking direction it exists to forbid. A hub commit touching the generator would have reached every site's next build with no version change to show for it.
+
+Moving it beside `root-changelog.sh` — the other script spokes fetch — means **one pin covers everything a spoke takes from the hub**.
+
+### The path arithmetic, re-verified rather than assumed
+
+`LIB_ROOT` is derived from `${BASH_SOURCE[0]}` precisely so the script finds the clone it was fetched into rather than the consuming site's repo. Moving the file down two directories invalidates that derivation — the same class of breakage the flatten caused in `resolve-theme.sh`, where `../..` silently became one level too high.
+
+So it climbs two levels now, and the proof is empirical: the generator's output from `.github/scripts/` is **byte-identical** to its output from the root — same 49 / 13 / 4 / 87 counts, and `diff -r` across all three content directories is clean.
+
+The comment now also says *why* the arithmetic is what it is, so the next move doesn't get it wrong by inheritance.
+
+### On merge
+
+This touches `.github/scripts/`, so it fires the `workflows/` track and cuts **`workflows/v1.0.2`** — and that is the ref Phase C pins into five caller files across two repos. I'll confirm the cut version before writing it anywhere, since a typo'd ref is how `noisypigeon`'s merge gate gets stuck.
+
+`root-changelog.yml` stands down; `template-release.yml` writes the `[workflows]` line.
+
+[#5](https://github.com/noisypigeon/pigeon-lib/pull/5)
+
 ## [1.0.1] - 2026-10-13
 
 ### Stand down root-changelog for the workflows release track
