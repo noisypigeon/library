@@ -1,10 +1,18 @@
 #!/usr/bin/env bash
-# Run from a consuming spoke's repo root (the directory holding spoke.hcl),
-# before any terragrunt command. Reads root_hcl_version from that spoke.hcl and
-# materializes ./root.hcl from terragrunt/root-hcl/root.hcl -- either the
-# working-tree copy ("main") or the copy at tag terragrunt/root-hcl/v<version>.
-# The spoke never commits root.hcl; this script is the only thing that writes
-# it. See terragrunt/root-hcl/README.md and LIB-0003.
+# Run from a consuming spoke's repo root (the directory holding spoke.hcl).
+# Reads root_hcl_version from that spoke.hcl and materializes ./root.hcl from
+# terragrunt/root-hcl/root.hcl -- either the working-tree copy ("main") or the
+# copy at tag terragrunt/root-hcl/v<version>. See
+# terragrunt/root-hcl/README.md and LIB-0003.
+#
+# The spoke commits the result. Terragrunt's [main...HEAD] git filter plans
+# every unit inside temporary git worktrees of both refs, so an untracked
+# root.hcl does not exist where the plan actually runs -- and the base ref's
+# own committed copy is what lets a removed leaf still plan its destroy.
+#
+# --check writes nothing: it exits 1 unless ./root.hcl is byte-identical to the
+# pinned template, which is how CI keeps the committed copy honest. Without it,
+# the script (re)writes ./root.hcl, which is how a spoke takes a version bump.
 #
 # Copied, never symlinked: the template locates spoke.hcl through
 # get_parent_terragrunt_dir(), and a leaf's path_relative_to_include() -- which
@@ -18,6 +26,13 @@
 # track versions it -- resolve-theme.sh, under zola-site/, is covered by no
 # release predicate at all.
 set -euo pipefail
+
+CHECK=false
+case "${1:-}" in
+  --check) CHECK=true ;;
+  "") ;;
+  *) echo "usage: $0 [--check]" >&2; exit 2 ;;
+esac
 
 LIB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TEMPLATE_PATH="terragrunt/root-hcl/root.hcl"
@@ -60,6 +75,20 @@ else
   SOURCE="$TAG"
 fi
 
+if [ "$CHECK" = true ]; then
+  if [ ! -f "$TARGET" ]; then
+    echo "::error::No committed root.hcl; run resolve-root-hcl.sh and commit the result" >&2
+    exit 1
+  fi
+  if ! cmp -s "$TMP" "$TARGET"; then
+    echo "::error::root.hcl differs from $SOURCE; run resolve-root-hcl.sh and commit the result, never edit it by hand" >&2
+    exit 1
+  fi
+  echo "root.hcl matches $SOURCE"
+  exit 0
+fi
+
 mv "$TMP" "$TARGET"
+chmod 644 "$TARGET"
 trap - EXIT
 echo "Resolved root.hcl -> $SOURCE"
