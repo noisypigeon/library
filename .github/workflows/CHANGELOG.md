@@ -4,6 +4,33 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.1] - 2026-10-15
+
+### Add a --check mode to resolve-root-hcl.sh
+
+`resolve-root-hcl.sh` gains a `--check` mode. It writes nothing, and exits 1 unless the spoke's `./root.hcl` is byte-identical to the `root.hcl` template at the version `spoke.hcl` pins.
+
+This is needed because spokes now **commit** the generated `root.hcl` instead of gitignoring it. The reusable `terragrunt-run.yml` plans with Terragrunt's `[main...HEAD]` git filter, and Terragrunt 1.1.6 evaluates every unit inside temporary git worktrees, which contain only tracked files.
+
+- **Against the gitignored design,** a dry run of the `pigeon.dev` hoist failed on every leaf with `Could not find a root.hcl`.
+- **With the file committed,** the same command planned `No changes.` for all four leaves.
+- **Committing also keeps destroy plans working:** a leaf removed from a spoke still plans its destroy, because the base ref's worktree has its own `root.hcl`.
+
+A spoke's CI runs `./fetch-lib.sh && .lib-src/.github/scripts/resolve-root-hcl.sh --check` through `prepare_cmd`, so a hand-edited or stale `root.hcl` fails the plan. Without arguments, the script still (re)writes `./root.hcl`, which is how a spoke takes a template bump. An unknown argument exits 2.
+
+Tested against a scratch library repo:
+
+- a missing `root.hcl` exits 1;
+- a matching one exits 0;
+- a one-line drift exits 1;
+- a bad argument exits 2.
+
+The written file is now mode 644, not the 600 `mktemp` left behind.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#17](https://github.com/noisypigeon/pigeon-lib/pull/17)
+
 ## [1.3.0] - 2026-10-15
 
 ### Let a spoke run terragrunt CI against a materialized root.hcl
