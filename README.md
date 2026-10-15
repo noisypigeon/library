@@ -69,5 +69,6 @@ Per-module and theme `CHANGELOG.md` files carry the full, versioned entries.
 ## Decision records
 
 This repo's ADRs live in [`docs/adr/`](docs/adr), as `LIB-NNNN-<slug>.md`.
-Sibling domains live with their own repos; `noisypigeon/pigeon.dev` still holds
-the `DEV-` and `NPC-` corpora.
+Sibling domains live with their own repos: `DEV-` records in
+`noisypigeon/pigeon.dev`, `COM-` records in `noisypigeon/noisypigeon.com`
+(`NPC-` in older prose is an alias for `COM-`).
