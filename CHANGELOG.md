@@ -6,8 +6,12 @@ additionally gets its full PR body in that unit's own `CHANGELOG.md`. DEV-0160 i
 the contract, inherited with the automation when LIB-0002 moved it here.
 
 Not versioned — for versioned, package-scoped changelogs see
-`terraform/*/*/CHANGELOG.md` (each Terraform module) and
-[`zola-site/CHANGELOG.md`](zola-site/CHANGELOG.md) (the theme). Those files
+`terraform/*/*/CHANGELOG.md` (each Terraform module),
+[`zola-site/CHANGELOG.md`](zola-site/CHANGELOG.md) (the theme),
+[`terragrunt/root-hcl/CHANGELOG.md`](terragrunt/root-hcl/CHANGELOG.md) (the
+`root.hcl` template) and
+[`.github/workflows/CHANGELOG.md`](.github/workflows/CHANGELOG.md) (the
+reusable CI). Those files
 predate this repo: they travelled with their modules through every move since
 `pigeon-tf`, so their older entries cite paths and PR numbers from repos this
 one never was. That is deliberate — rewriting published release notes to match
@@ -18,12 +22,14 @@ Entry format is `- [<tag>] <PR title> ([#N](pr-url))`, where `<tag>` is one of:
 - `<provider>/<module>` — a released Terraform module
 - `zola-site` — a released theme version
 - `workflows` — a released version of the reusable CI
+- `terragrunt/root-hcl` — a released version of the spokes' `root.hcl` template
 - `terraform` — a `terraform/` change that releases nothing (e.g. a README)
+- `terragrunt` — a `terragrunt/` change that releases nothing
 - `adr` — decision records under `docs/adr/`
 - `ci` — `.github/` workflows and scripts
 - `repo` — anything else (root docs, `.mise.toml`, tooling)
 
-The first three are written by `template-release.yml` as part of tagging a
+The first four are written by `template-release.yml` as part of tagging a
 release; the rest by `root-changelog.yml`, which runs on every merged PR and
 stands down when `template-release.yml` owns the entry. Both go through
 `.github/scripts/root-changelog.sh`, which inserts below the marker at the end

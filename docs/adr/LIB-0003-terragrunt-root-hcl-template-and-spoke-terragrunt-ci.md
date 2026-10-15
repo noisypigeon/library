@@ -1,8 +1,8 @@
 # LIB-0003: a versioned `root.hcl` template, and Terragrunt CI a spoke can call
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
-- **Date**: 2026-10-16.
-- **Status**: Accepted.
+- **Date**: 2026-10-15.
+- **Status**: Accepted; amended 2026-10-15 (see `## Amendments`).
 
 ## Context
 
@@ -130,3 +130,39 @@ behaviour exactly:
    - This record's PR changes `terragrunt/root-hcl/root.hcl`, so its merge should
      cut `terragrunt/root-hcl/v1.0.0` and write one `[terragrunt/root-hcl]` root
      line, with no second line from `root-changelog.yml`.
+
+## Amendments
+
+### 2026-10-15: the spoke commits `root.hcl`; CI verifies it
+
+§2 said the spoke gitignores the materialized `root.hcl`. That does not survive
+contact with the CI. Running `terragrunt-run.yml`'s exact filter construction
+against the `pigeon.dev` hoist branch failed on all four leaves with:
+
+```
+Could not find a root.hcl in any of the parent folders of
+…/terragrunt-worktree-HEAD-…/terraform/fastmail/dns/terragrunt.hcl
+```
+
+Terragrunt 1.1.6's `[main...HEAD]` git filter plans every unit inside temporary
+git worktrees of both refs, and a worktree contains only tracked files. With
+the materialized copy committed on that same branch, the identical command
+planned `No changes.` for all four leaves against live state.
+
+So the spoke **commits** the generated `root.hcl`, and the resolver gains a
+`--check` mode that writes nothing and exits 1 unless `./root.hcl` is
+byte-identical to the template at the pinned version. A spoke's CI runs
+`--check` through `prepare_cmd`. A hand edit or a forgotten re-run therefore
+fails the plan instead of reaching `main`. The template's own header now says
+"GENERATED in a spoke -- do not edit there", since that header is what the
+spoke commits.
+
+This is better than the gitignored design on its own terms. The base ref's
+worktree has the `root.hcl` it was planned with, so a leaf removed from a spoke
+still plans its destroy. A gitignored copy would have made that path fail too.
+
+What does not change: the template is still copied, never included or
+symlinked, for §2's other two reasons.
+
+The fix shipped as `workflows/v1.3.1` (the resolver) and
+`terragrunt/root-hcl/v1.0.1` (the header).
