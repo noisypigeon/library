@@ -4,6 +4,43 @@ All notable changes to this template are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.1.0] - 2026-10-15
+
+### Optional extra providers and Backblaze support in the root.hcl template
+
+The `root.hcl` template gains two optional `spoke.hcl` settings, which `willowgraysen.com` needs before its Terraform can move into its own repo. Both are off by default, and a spoke that sets neither gets no new file.
+
+### `extra_required_providers`
+
+A map of `{ source, version }` entries, appended to the one `required_providers` block:
+
+```hcl
+extra_required_providers = {
+  grafana = { source = "grafana/grafana", version = "~> 4.0" }
+}
+```
+
+A provider's own configuration, if it needs one, still lives in the leaf that uses it.
+
+### `backblaze = true`
+
+This turns on the latent Backblaze B2 provider from DEV-0148, unchanged in behaviour:
+
+- A leaf opts in by dropping a sibling `backblaze_config.hcl` with `enabled = true`. It then gets the `b2` required-provider entry and a `provider "b2"` block configured from `BACKBLAZE_APPLICATION_KEY_ID` and `BACKBLAZE_APPLICATION_KEY`.
+- Other leaves in that spoke get a comment-only `provider_backblaze_generated.tf`.
+- In a spoke without `backblaze = true`, that generate block is disabled, so the file is never written.
+
+### Verified with `terragrunt render --format=json`
+
+- **`willowgraysen.com`'s 14 hoistable leaves:** compared against their current root, each differs in one key, the generated provider file, and only in whitespace. The original root left a blank indented line where the Backblaze entry would go. State keys are equal.
+- **`pigeon.dev`'s 4 leaves and `noisypigeon.com`'s 6:** compared against `v1.0.1`, each differs only by the disabled Backblaze generate block (`disable: true`, `if_disabled: skip`), which writes nothing.
+
+[LIB-0003](docs/adr/LIB-0003-terragrunt-root-hcl-template-and-spoke-terragrunt-ci.md) records this as its second amendment.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#21](https://github.com/noisypigeon/pigeon-lib/pull/21)
+
 ## [1.0.1] - 2026-10-15
 
 ### Mark the root.hcl template as generated and committed in spokes
