@@ -65,9 +65,10 @@ the repo whose site it deploys (DEV-0156 — a constraint, not a style choice).
 
 ADRs for this repo live at `docs/adr/LIB-NNNN-<slug>.md`, numbered from `0001`
 within that directory. `LIB-0001` defines the architecture; `LIB-0002` created
-this repo. Sibling domains live in their own repos — `pigeon-cli/docs/adr/`, and
-for now `noisypigeon/pigeon.dev`'s `adr/pigeon.dev/` and `adr/noisypigeon.com/`,
-whose dispersal LIB-0001 left to each repo's own migration.
+this repo. Sibling domains live in their own repos, flat in each one's `adr/`:
+`DEV-` in `noisypigeon/pigeon.dev`, `COM-` in `noisypigeon/noisypigeon.com`, and
+`RUN-` in `noisypigeon/willowgraysen.com`; `pigeon-cli` keeps its own unprefixed
+`docs/adr/`.
 
 Filing one, by hand:
 
@@ -77,7 +78,7 @@ Filing one, by hand:
 - **Sections**: `## Context` / `## Decision` / `## Consequences` /
   `## Out of scope`, optionally then `## Verification`. No YAML frontmatter and
   no index — there isn't one.
-- Cite `LIB-NNNN` for this domain and `DEV-NNNN`/`COM-NNNN` for the others (`NPC-NNNN` in older prose is an alias for `COM-`).
+- Cite `LIB-NNNN` for this domain and `DEV-NNNN`/`COM-NNNN`/`RUN-NNNN` for the others (`NPC-NNNN` in older prose is an alias for `COM-`).
   Bare `ADR-NNNN` in older prose means the `DEV-` corpus (DEV-0160 grandfathered
   those citations).
 - Genuinely-deferred `## Out of scope` items get a GitHub issue against

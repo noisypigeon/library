@@ -6,7 +6,8 @@ releases and deploys them.
 
 This repo is the **hub**. It holds what other repos reuse and nothing that is
 deployed — no site, no Terraform state, no secrets. The repos that consume it
-(`noisypigeon`, `pigeon.dev`, `noisypigeon.com`) are spokes: content plus the
+(`pigeon.dev`, `noisypigeon.com`, `willowgraysen.com`, and what is left of
+`noisypigeon`) are spokes: content plus the
 infrastructure that serves it, each pinning a version of what it takes from
 here. The full argument is
 [LIB-0001](docs/adr/LIB-0001-composable-hub-and-spoke-repo-architecture.md).
@@ -73,4 +74,5 @@ Per-module and theme `CHANGELOG.md` files carry the full, versioned entries.
 This repo's ADRs live in [`docs/adr/`](docs/adr), as `LIB-NNNN-<slug>.md`.
 Sibling domains live with their own repos: `DEV-` records in
 `noisypigeon/pigeon.dev`, `COM-` records in `noisypigeon/noisypigeon.com`
-(`NPC-` in older prose is an alias for `COM-`).
+(`NPC-` in older prose is an alias for `COM-`), and `RUN-` records in
+`noisypigeon/willowgraysen.com`.

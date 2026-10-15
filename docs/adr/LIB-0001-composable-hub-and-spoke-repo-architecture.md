@@ -464,6 +464,9 @@ describes what is actually true.
    - The `noisypigeon.com` domain is **`COM-`**, not `NPC-` (COM-0001). Existing
      `NPC-NNNN` citations, including this record's, are aliases and are never
      rewritten, the same treatment DEV-0160 gave `ADR-`.
+   - `willowgraysen.com` opened a fourth spoke domain, **`RUN-`** (RUN-0000). It
+     is named for what the namespace holds, `pigeon-cli` and the data-ops
+     projects, rather than for the domain.
 2. **The role table (§2).**
    - The hub's roots are flat: `terraform/`, `zola-site/`, `terragrunt/root-hcl/`
      and `.github/`. There is no `templates/` segment on directories or tags
@@ -476,6 +479,10 @@ describes what is actually true.
      `spoke.hcl` and a generated, committed `root.hcl` (COM-0003). There is no
      `docs/blog/{posts,media}`; posts and media are `web/content/` and
      `web/static/`.
+   - **`willowgraysen.com`** holds `terraform/`, `spoke.hcl`, a generated,
+     committed `root.hcl` and `adr/` (RUN-0000, RUN-0001). It has no `web/`,
+     because the domain's only web presence is the redirect it manages. The
+     table's `docs/adr/` became `adr/`, like the other spokes.
 3. **Invariant 1 has exactly one exception: `fetch-lib.sh`** (DEV-0162).
    - A spoke cannot fetch its own fetcher.
    - Every other spoke workflow is now a thin caller, including the root
@@ -498,12 +505,20 @@ describes what is actually true.
      because Terragrunt's `[main...HEAD]` filter plans inside git worktrees that
      hold only tracked files. CI runs the resolver with `--check` to catch drift
      (LIB-0003 and its amendment).
-   - A spoke's `spoke.hcl` varies **one** value today, its state-bucket secret
-     name, not §3's six. The other differences belonged to the monorepo's shared
-     root, which no spoke inherits.
-   - The key arithmetic held exactly. DEV-0163 §2 and COM-0003 §2 tabulate ten
-     unchanged keys between them, and both hoists planned `No changes.` on every
-     leaf.
+   - A spoke's `spoke.hcl` carries the state-bucket secret name, not §3's six
+     differences; the rest belonged to the monorepo's shared root, which no spoke
+     inherits. `willowgraysen.com` also sets the two optional extensions that
+     template `v1.1.0` added for it: `backblaze = true` and a `grafana` entry in
+     `extra_required_providers` (LIB-0003's second amendment).
+   - The key arithmetic held exactly. DEV-0163 §2, COM-0003 §2 and RUN-0001 §2
+     tabulate 24 unchanged keys between them, and no hoist planned a destroy.
+   - **A leaf's state can be ahead of its committed config.** RUN-0001 §6 found an
+     IAM policy and API key in `willowgraysen.com`'s
+     `pigeon-cli/bucket/pigeon/deduplicate` state, applied from a worktree that
+     was never committed, and planned for destruction. It was brought into
+     config rather than deleted. Before a hoist, plan each leaf from a clean
+     environment; a shell with exported credentials can plan something different
+     from what CI sees.
 6. **Rollout (§7).**
    - Steps 1 and 2 shipped as one effort, because neither could land alone
      (LIB-0002).
@@ -512,28 +527,36 @@ describes what is actually true.
    - Step 4 is done. The content half is COM-0001 and COM-0002. The Terraform
      half is COM-0003 (noisypigeon/noisypigeon.com#13, noisypigeon/noisypigeon#311),
      which reused template `v1.0.1` and `workflows/v1.3.1` with no hub change.
+   - Step 5 is done. `noisypigeon/willowgraysen.com` was created and
+     bootstrapped (RUN-0000, noisypigeon/willowgraysen.com#1), and fourteen of
+     its fifteen leaves were hoisted (RUN-0001, noisypigeon/willowgraysen.com#2,
+     noisypigeon/noisypigeon#312). The repo is public, by choice, with the
+     shared age key and a `contributors_only` interaction limit; RUN-0000 §1
+     records what that accepts.
+   - Step 6 is not done, and §7 below explains why it cannot be done as written:
+     `noisypigeon` still runs three `state/iam` leaves.
    - §7's "steps 2 and 3 must not be combined" held.
-7. **§8, for `pigeon.dev` and `noisypigeon.com`: option 1.** Both
-   `state/iam` leaves stay in `noisypigeon/noisypigeon`, on the shared root,
-   `.env.enc` and shared bucket (DEV-0163 §1, COM-0003 §1). Consequently step 6
-   cannot leave `noisypigeon` content-only while any spoke makes that choice.
-   Only `willowgraysen.com`'s choice remains, tracked as
-   noisypigeon/noisypigeon#308.
+7. **§8, for all three spokes: option 1.** Every domain's `state/iam` leaf stays
+   in `noisypigeon/noisypigeon`, on the shared root, `.env.enc` and shared
+   bucket (DEV-0163 §1, COM-0003 §1, RUN-0001 §1). That is now the **only**
+   Terraform in `noisypigeon`. Step 6 therefore cannot leave `noisypigeon`
+   content-only while that choice stands; its realistic end state is "content
+   plus the three bootstrap leaves". noisypigeon/noisypigeon#308 is closed.
 8. **Consequences, corrected.**
    - "`web/` … silently breaks DEV-0160's root-changelog tag precedence" was
      fixed when it happened: `^web/` is labelled `pigeon.dev` (DEV-0162).
-   - "Every spoke needs its own `.sops.yaml`" is now true of `pigeon.dev` and
-     `noisypigeon.com` (DEV-0163, COM-0003).
+   - "Every spoke needs its own `.sops.yaml`" is now true of all three spokes
+     (DEV-0163, COM-0003, RUN-0001).
    - "Branch protection … deferred" was never true of `noisypigeon`, which has
      had a ruleset requiring the `terragrunt/apply` status since ADR-0129.
-     `pigeon.dev` and `noisypigeon.com` each gained a copy of it with their
-     Terraform (DEV-0163, COM-0003), resolving noisypigeon/noisypigeon#295 for
-     both spokes. Only `pigeon-lib` remains unprotected.
+     All three spokes gained a copy of it with their Terraform (DEV-0163,
+     COM-0003, RUN-0001), resolving noisypigeon/noisypigeon#295. Only
+     `pigeon-lib` remains unprotected.
    - The hub ended with two cross-repo dispatches, as LIB-0002 recorded, and with
      **four** copies of the release predicates in two files, not three
      (LIB-0003; noisypigeon/noisypigeon#301).
 9. **Out-of-scope items now tracked.**
-   - `state/iam` resolution: noisypigeon/noisypigeon#308.
+   - `state/iam` resolution: noisypigeon/noisypigeon#308, now closed (§7).
    - The `willowgraysen.com` → `noisypigeon.com` redirect documentation gap:
      noisypigeon/noisypigeon#309.
    - `module-docs.yml`'s hand-maintained list: noisypigeon/noisypigeon#302.
