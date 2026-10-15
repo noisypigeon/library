@@ -4,6 +4,59 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.7] - 2026-10-15
+
+### Read release notes from the default branch, not the pinned tree
+
+`terraform/scaleway/project/v2.0.1` published its **redirect page** but not its **release post**. Found by checking the live site after the release, not by reading code.
+
+```
+/modules/scaleway/project/v2.0.1/      -> 200   (tag-derived)
+/releases/scaleway-project-v2-0-1/     -> 404   (file-derived)
+```
+
+### The asymmetry
+
+Two halves of the same generator read from two different points in time:
+
+| Content | Source | Liveness |
+| --- | --- | --- |
+| Redirect pages, overview pages, version lists | `git tag --list` on `LIB_ROOT` | **Live** — `fetch-lib.sh` fetches tags in full regardless of checkout |
+| Release posts | `find "$LIB_ROOT/terraform" -name CHANGELOG.md` | **Pinned** — working tree is at whatever `.lib-version` names |
+
+`.lib-version` pins a ref that *by construction* predates any release cut after it. So the newest entry — the one a fresh release most needs published — is precisely the one the pinned working tree cannot have. The site would only show the post after an unrelated `.lib-version` bump.
+
+### Why `origin/main` and not the version tag
+
+The tag **does** carry its own entry: `template-release.yml` commits the changelog, pushes to `main`, then tags that same commit (`47f4755` is both `v2.0.1` and `main`'s head). So reading `<tag>:…/CHANGELOG.md` was my first fix, and it was wrong.
+
+**A version tag does not carry entries backfilled for *older* tags afterwards.** Four such entries exist — from #14, which backfilled six previously undocumented module tags without cutting new ones. Reading the tag alone silently dropped all four: **87 posts became 83.**
+
+Neither source is a superset of the other. The default branch is a superset of both. And since release notes are append-only published history, and the tag graph is *already* read live, pinning only the notes is what created the mismatch in the first place.
+
+`CHANGELOG_REF` is overridable and verified with `rev-parse` up front, so a missing ref fails loudly instead of yielding an empty site.
+
+### Verification
+
+Ran both generators against the same `LIB_ROOT` into separate content roots and diffed the full output trees:
+
+```
+OLD posts: 87
+NEW posts: 88
+files only in NEW:   ./releases/scaleway-project-v2.0.1.md
+files only in OLD:   (none)
+content differences: 0
+```
+
+Exactly one added file. Nothing removed, nothing changed. The four backfilled posts are all present. `bash -n` and `shellcheck -S warning` clean — the latter caught a genuine `rm -rf` expansion risk in my first draft, now `${var:?}`-guarded.
+
+### Note on scope
+
+The module **description** on overview pages is still read from the pinned `README.md`, so it has the same staleness in principle. Left alone deliberately — it's a different code path with a much weaker failure mode (descriptions rarely change, and a stale one is wrong rather than missing), and I'd rather not widen a verified fix. It goes in the tracked issue.
+
+
+[#12](https://github.com/noisypigeon/pigeon-lib/pull/12)
+
 ## [1.0.6] - 2026-10-15
 
 ### Stop the shared concurrency group dropping a release
