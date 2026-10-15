@@ -4,6 +4,67 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.6] - 2026-10-15
+
+### Stop the shared concurrency group dropping a release
+
+`template-release`, `root-changelog` and `module-docs` all declared `concurrency.group: main-writer` with `cancel-in-progress: false`.
+
+**GitHub keeps at most one *pending* run per concurrency group, and cancels any previously-pending run when a third arrives.** A `.tf` merge triggers all three of these. So one is always lost — and it was the release.
+
+### It already cost a real release
+
+PR #9 merged, and:
+
+```
+template-release  pull_request  completed/cancelled   ← the release
+module-docs       push          completed/success
+root-changelog    pull_request  completed/success
+```
+
+`root-changelog` started and held the group, `template-release` went pending, `module-docs` arrived 1 second later and displaced it.
+
+Outcome: **no tag, no Release, no module `CHANGELOG.md` entry** — and because `root-changelog` had *correctly* stood down for a releasing PR, no root changelog line either. A labelled release PR merged to a completely silent outcome. Nothing failed loudly; the run just said `cancelled`.
+
+### Why four earlier merges didn't hit it
+
+The failure is timing-dependent and shape-dependent. `module-docs` triggers on `**/*.tf`, so a `.github/`-only change triggers two of the three — and two fit, one running and one pending. Every merge in this repo so far has been structural. The first genuine module release found it immediately, which is exactly why that release was worth doing before anything depended on it.
+
+### The fix
+
+Each workflow gets its own group: `main-writer-release`, `main-writer-rollup`, `main-writer-docs`. Nothing can displace anything.
+
+That removes the serialization those groups were providing, so the two writers we control now **retry a rejected push** — up to five times, re-fetching and rebasing each round, with a backoff:
+
+```bash
+for attempt in 1 2 3 4 5; do
+  git fetch origin main
+  if ! git rebase origin/main; then
+    git rebase --abort || true
+    echo "::error::rebase onto origin/main conflicted; refusing to guess"
+    exit 1
+  fi
+  if git push origin HEAD:main; then echo "Pushed on attempt ${attempt}."; exit 0; fi
+  echo "Push rejected (attempt ${attempt}/5); another writer won the race."
+  sleep $((attempt * 5))
+done
+```
+
+**A rebase conflict stays fatal.** A rejected push means someone else moved `main` and rebasing is correct; a conflict means two writers touched the same lines, and that's the `pigeon-lib#2` → `#3` double-write class of bug — guessing there is worse than failing.
+
+For a releasing PR the writers touch disjoint files anyway (`template-release` owns the root changelog, `root-changelog` stands down, `module-docs` writes READMEs), so a conflict should mean a genuine defect.
+
+`module-docs` pushes through `terraform-docs/gh-actions`, so its push isn't retry-protected here. Low stakes — it only regenerates README tables and self-heals on the next `.tf` change.
+
+### After this
+
+Re-running PR #9's cancelled run to recover `terraform/scaleway/project/v2.0.1`. The state is clean for that: the merge commit is on `main` and none of the four release artifacts were written, so the re-run has nothing to collide with.
+
+`actionlint` clean on all three files. (`terragrunt-run.yml` reports a pre-existing SC2242 that also reproduces at `origin/main`; untouched here.)
+
+
+[#10](https://github.com/noisypigeon/pigeon-lib/pull/10)
+
 ## [1.0.5] - 2026-10-15
 
 ### The Pages deploy timeout ceiling is hard, not a default
