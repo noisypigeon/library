@@ -67,7 +67,7 @@ Filing one, by hand:
 - **Sections**: `## Context` / `## Decision` / `## Consequences` /
   `## Out of scope`, optionally then `## Verification`. No YAML frontmatter and
   no index — there isn't one.
-- Cite `LIB-NNNN` for this domain and `DEV-NNNN`/`NPC-NNNN` for the others.
+- Cite `LIB-NNNN` for this domain and `DEV-NNNN`/`COM-NNNN` for the others (`NPC-NNNN` in older prose is an alias for `COM-`).
   Bare `ADR-NNNN` in older prose means the `DEV-` corpus (DEV-0160 grandfathered
   those citations).
 - Genuinely-deferred `## Out of scope` items get a GitHub issue against

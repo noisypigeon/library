@@ -6,7 +6,15 @@
 # The root rollup earns its keep in a repo aggregating several workloads; a
 # single-site repo wants one changelog, at its root. So `changelog_path` names
 # the blog's changelog independently of `site_dir`, and an empty
-# `root_changelog_tag` (the default) skips the rollup altogether. See NPC-0000.
+# `root_changelog_tag` (the default) skips the rollup altogether. See COM-0000
+# (filed as NPC-0000).
+#
+# Where the site lives is named one of two ways. `src_dir` is the Zola site
+# root itself -- the same vocabulary zola-site-pages.yml uses -- and puts the
+# daily digest under <src_dir>/content/changelog/. `site_dir` is the older
+# shape, a directory holding a src/ beneath it, and puts the digest under
+# <site_dir>/src/content/changelog/. A spoke whose site root is web/ cannot be
+# described by site_dir at all, which is why src_dir exists.
 #
 # Site paths are inputs rather than hardcoded, since this now runs from
 # another repo and has no business assuming the caller only ever has one
@@ -19,11 +27,17 @@ on:
   workflow_call:
     inputs:
       site_dir:
-        description: "Path (in the caller's checkout) to the blog's root, e.g. noisypigeon.com. Still resolves the daily digest under <site_dir>/src/content/changelog/; no longer the only way to locate the changelog (see changelog_path)."
+        description: "Path (in the caller's checkout) to a directory holding the blog's src/, e.g. noisypigeon.com. Resolves the daily digest under <site_dir>/src/content/changelog/. Set this or src_dir, not both."
         type: string
-        required: true
+        required: false
+        default: ""
+      src_dir:
+        description: "Path (in the caller's checkout) to the Zola site root itself, e.g. web. Resolves the daily digest under <src_dir>/content/changelog/. Set this or site_dir, not both; requires changelog_path."
+        type: string
+        required: false
+        default: ""
       changelog_path:
-        description: "Path (in the caller's checkout) to the blog's CHANGELOG.md. Defaults to <site_dir>/CHANGELOG.md when empty; set it to e.g. CHANGELOG.md for a single-site repo that keeps its changelog at the repo root."
+        description: "Path (in the caller's checkout) to the blog's CHANGELOG.md. Defaults to <site_dir>/CHANGELOG.md when empty; required with src_dir, which has no such default."
         type: string
         required: false
         default: ""
@@ -61,6 +75,25 @@ jobs:
   changelog:
     runs-on: ubuntu-latest
     steps:
+      - name: Validate site inputs
+        env:
+          SITE_DIR: ${{ inputs.site_dir }}
+          SRC_DIR: ${{ inputs.src_dir }}
+          CHANGELOG_PATH: ${{ inputs.changelog_path }}
+        run: |
+          if [ -n "$SITE_DIR" ] && [ -n "$SRC_DIR" ]; then
+            echo "::error::Set site_dir or src_dir, not both" >&2
+            exit 1
+          fi
+          if [ -z "$SITE_DIR" ] && [ -z "$SRC_DIR" ]; then
+            echo "::error::One of site_dir or src_dir is required" >&2
+            exit 1
+          fi
+          if [ -n "$SRC_DIR" ] && [ -z "$CHANGELOG_PATH" ]; then
+            echo "::error::src_dir requires changelog_path; there is no <src_dir>/CHANGELOG.md default" >&2
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
@@ -82,6 +115,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_URL: ${{ github.event.pull_request.html_url }}
           SITE_DIR: ${{ inputs.site_dir }}
+          SRC_DIR: ${{ inputs.src_dir }}
           CHANGELOG_PATH: ${{ inputs.changelog_path }}
           ROOT_CHANGELOG_TAG: ${{ inputs.root_changelog_tag }}
         run: |
@@ -117,7 +151,7 @@ jobs:
 
           # Optional: a one-line rollup into the caller's *repo-root* CHANGELOG.md,
           # for a repo aggregating several workloads. Empty tag => single-site repo,
-          # whose only changelog is $CHANGELOG above. See NPC-0000.
+          # whose only changelog is $CHANGELOG above. See COM-0000 (filed as NPC-0000).
           if [ -n "$ROOT_CHANGELOG_TAG" ]; then
             ROOT_CHANGELOG="CHANGELOG.md"
             if [ ! -f "$ROOT_CHANGELOG" ]; then
@@ -143,7 +177,12 @@ jobs:
             git add "$ROOT_CHANGELOG"
           fi
 
-          DIGEST="${SITE_DIR}/src/content/changelog/${TODAY}-changelog.md"
+          if [ -n "$SRC_DIR" ]; then
+            CONTENT_DIR="${SRC_DIR}/content"
+          else
+            CONTENT_DIR="${SITE_DIR}/src/content"
+          fi
+          DIGEST="${CONTENT_DIR}/changelog/${TODAY}-changelog.md"
           if [ ! -f "$DIGEST" ]; then
             mkdir -p "$(dirname "$DIGEST")"
             cat > "$DIGEST" <<EOF2
