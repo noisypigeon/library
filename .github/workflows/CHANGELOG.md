@@ -4,6 +4,35 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.2.0] - 2026-10-15
+
+### Add a reusable spoke-root-changelog.yml
+
+Adds `spoke-root-changelog.yml`, a reusable workflow that writes DEV-0160's single root `CHANGELOG.md` line for a merged PR in a spoke.
+
+Before this, `pigeon.dev` and `noisypigeon.com` each carried that job inline. Both copies fetched `pigeon-lib`, derived a tag from the changed paths, ran `root-changelog.sh` and pushed, and they differed only in their tag precedence. Spokes carrying their own workflow bodies goes against LIB-0001's first invariant. Resolves noisypigeon/noisypigeon#306.
+
+### Inputs
+
+- `precedence` (required): ordered `<ERE>=<tag>` lines matched against the PR's changed paths. The first line with any match wins.
+  - Each line is split on its last `=`, so a pattern may contain `=` and a tag may not.
+  - Blank lines are ignored. A line with no `=`, or with an empty pattern or tag, fails the run rather than being skipped.
+- `fallback_tag` (default `repo`): the tag for a PR that matches no line.
+- `fetch_script` (default `fetch-lib.sh`) and `changelog_script` (default `.lib-src/.github/scripts/root-changelog.sh`): where the caller's fetcher is, and where it leaves the script.
+- `git_user_name` and `git_user_email`: the same defaults as `blog-changelog.yml`.
+
+The caller keeps the `pull_request: closed` trigger, the merged-only gate, permissions and concurrency.
+
+### Push retry
+
+A rejected push is now retried up to five times with a rebase each time, as the hub's own `root-changelog.yml` already does. The inline copies did one rebase and one push. That was enough while they shared the `main-writer` concurrency group, but it also exposed them to GitHub's one-pending-run-per-group cancellation, the cause of the lost release in pigeon-lib#9. Callers can now use their own concurrency group. A rebase conflict still fails the run outright.
+
+This is deliberately a separate file from the hub's own `root-changelog.yml`. That workflow has to stand down for PRs that `template-release.yml` releases, and it runs the script from its own tree. A spoke releases nothing, so it never stands down.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#14](https://github.com/noisypigeon/pigeon-lib/pull/14)
+
 ## [1.1.0] - 2026-10-15
 
 ### Let blog-changelog.yml take a site root via src_dir
