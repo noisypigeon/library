@@ -4,6 +4,43 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.5] - 2026-10-15
+
+### The Pages deploy timeout ceiling is hard, not a default
+
+**#7 does not work, and this corrects it.**
+
+`actions/deploy-pages` clamps the `timeout` input to a hard maximum of **600000 ms**. #7 set `1200000`, and the action's own log says what became of it:
+
+```
+timeout: 1200000
+##[warning]Warning: timeout value is greater than the allowed maximum
+           - timeout set to the maximum of 600000 milliseconds.
+```
+
+So #7 was inert in the worst way: it set the value back to the exact default it was trying to raise, and added a warning to every deploy from then on. Caught in `pigeon.dev#20`'s deploy log, which is the first deploy that actually ran the change — the step then succeeded in 43 s, so the raised value was never the reason it passed.
+
+I had the input name right and verified it against the action's echoed inputs. What I didn't check was whether the value was *accepted*, and "600000" was sitting there in that same echo as the clue that it was a ceiling rather than a default.
+
+### What this changes
+
+`timeout: 600000` — equal to the default, so behaviour is unchanged and the warning stops. Kept rather than deleted because it documents the ceiling at the exact point someone would try to raise it, which is the mistake #7 made. The comment carries the warning text verbatim so the next reader doesn't have to discover it from a log.
+
+### What this means for the wedge
+
+**The orphaning risk is unmitigated, and cannot be mitigated this way.** Waiting longer is not available at any price:
+
+- 600 s is the ceiling, so the action will always give up while GitHub may still be working.
+- When it does, it cancels a deployment the Pages *service* still holds, and later deployments fail with `due to in progress deployment` until a server-side reaper clears it — ~45 minutes in the one incident we have.
+- No client-reachable API shortens that. `POST .../cancel` returns 204 and is reflected in the read path without releasing the creation lock; a Deployments-API status write is accepted with no effect; reruns fail identically.
+
+That makes this a tracked issue rather than a fixed bug, and raises its priority — it's the one failure mode in this architecture with no self-service recovery. Filing it against `noisypigeon/noisypigeon` per ADR-0031 with the full log evidence, since "wait for a reaper" is not a conclusion anyone should have to re-derive at 2am.
+
+Cuts `workflows/v1.0.5`; `pigeon.dev` re-pins in the follow-up.
+
+
+[#8](https://github.com/noisypigeon/pigeon-lib/pull/8)
+
 ## [1.0.4] - 2026-10-15
 
 ### Raise the Pages deploy timeout to 20 minutes
