@@ -141,14 +141,15 @@ is what makes the rename's paths true.
 
 ## Out of scope
 
-- **`noisypigeon.com`'s adoption.** Genuinely deferred, a fast follow.
+- **`noisypigeon.com`'s adoption.** Genuinely deferred, a fast follow, tracked
+  as noisypigeon/noisypigeon#313.
   - Its four raw-DNS leaves would become `cloudflare/dns-record/<instance>`, for
     example `github-pages`, `bluesky`, `google-search` and `proton`.
   - `project` and `state/bucket` would become `scaleway/project/<instance>` and
     `scaleway/object-bucket/terraform-state`.
   - The instance names are that spoke's to choose.
 - **`willowgraysen.com`'s adoption.** Genuinely deferred, a fast follow, and
-  the first spoke with splits. Shallowly:
+  the first spoke with splits. Tracked as noisypigeon/noisypigeon#314. Shallowly:
   - **`terraform/scaleway/pigeon-cluster/`.** `pigeon-cluster` is a composite
     hub module, but it is still one module, so `pigeon-cli/cluster` becomes
     `scaleway/pigeon-cluster/<instance>` with no split. Composition inside a hub
@@ -174,21 +175,42 @@ is what makes the rename's paths true.
 
 ## Verification
 
-1. **`cloudflare/dns-record`:** its first version is tagged and released, and its
-   `pigeon.dev/modules/cloudflare/dns-record/vX.Y.Z` short URL resolves to the
-   hub.
-2. **`pigeon.dev`'s rewire PR:**
-   - It plans only moves (eight `has moved to` lines, `0 to add, 0 to change,
-     0 to destroy`) on the two DNS leaves, before and after its apply.
-   - `dig` returns the same MX, SPF, DKIM and apex/www records afterwards.
-3. **`pigeon.dev`'s rename PR:**
-   - Each new key was empty before its push.
-   - Each new path plans `No changes` after its push.
-   - Each old key is empty afterwards.
-   - The PR's CI plan shows no destroy.
-   - `main` plans `No changes.` on all four leaves after merge.
-4. **The state keys afterwards are exactly:**
+All checked on 2026-10-15, as `pigeon.dev` adopted the layout.
+
+1. **The wrapper module.** `cloudflare/dns-record` (pigeon-lib#24) was tagged
+   `terraform/cloudflare/dns-record/v0.1.0`. `terraform validate` passed. Its
+   short URL, `pigeon.dev/modules/cloudflare/dns-record/v0.1.0/`, returned 200
+   and named `pigeon-lib.git//terraform/cloudflare/dns-record?ref=terraform/cloudflare/dns-record/v0.1.0`.
+   It was the first `cloudflare/` module the redirect generator served, and it
+   needed no change.
+2. **The rewire (noisypigeon/pigeon.dev#28).** The local and CI plans showed
+   exactly 6 and 2 `has moved to` lines, with `0 to add, 0 to change, 0 to
+   destroy`, on the two DNS leaves. The apply reported `0 added, 0 changed,
+   0 destroyed`. `dig` returned the same MX, SPF, DKIM and `www` records
+   afterwards.
+3. **The rename (noisypigeon/pigeon.dev#29).** The §3 runbook ran per leaf, in
+   order: `fastmail`, `github-pages`, `dev`, then `terraform-state`.
+   - It pulled 6, 2, 1 and 2 resources.
+   - Each new key was empty before its push and held the same count after.
+   - Each new path planned `No changes`.
+   - Each old key was emptied with `state rm`.
+
+   The PR's re-run CI plan showed:
+   - `No changes.` on all four new paths;
+   - "No objects need to be destroyed" on the removed DNS leaves;
+   - only stale *output* removals on the removed `project` and `state/bucket`
+     leaves. `state rm` does not clear outputs, and Terraform labels those
+     changes "without changing any real infrastructure".
+
+   Every unit applied `0 added, 0 changed, 0 destroyed`.
+4. **After the merge.** `mise run plan` on `main` gave `No changes.` on all four
+   leaves. `https://pigeon.dev/` returned 200, and MX and `www` resolved as
+   before. The state keys are now exactly:
    - `terraform/cloudflare/dns-record/fastmail/terraform.tfstate`
    - `terraform/cloudflare/dns-record/github-pages/terraform.tfstate`
    - `terraform/scaleway/project/dev/terraform.tfstate`
    - `terraform/scaleway/object-bucket/terraform-state/terraform.tfstate`
+5. **A runbook note for the next spoke.** A removed leaf that had `output`s plans
+   "Changes to Outputs" against its emptied key, even after `state rm`. That's
+   expected, and harmless: those are output removals, not resource changes. The
+   gate is "no resource add/change/destroy", not "the words No changes".
