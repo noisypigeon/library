@@ -472,10 +472,10 @@ describes what is actually true.
      and a **generated, committed** `root.hcl` (DEV-0163, LIB-0003). It holds no
      `docs/adr/`.
    - **`noisypigeon.com`** holds `web/`, including the blog's long-form
-     `web/CHANGELOG.md`, and `adr/` (COM-0001, COM-0002). There is no
+     `web/CHANGELOG.md`, and `adr/` (COM-0001, COM-0002), plus `terraform/`,
+     `spoke.hcl` and a generated, committed `root.hcl` (COM-0003). There is no
      `docs/blog/{posts,media}`; posts and media are `web/content/` and
-     `web/static/`. Its `terraform/` and `root.hcl` are still pending: step 4's
-     Terraform half.
+     `web/static/`.
 3. **Invariant 1 has exactly one exception: `fetch-lib.sh`** (DEV-0162).
    - A spoke cannot fetch its own fetcher.
    - Every other spoke workflow is now a thin caller, including the root
@@ -501,31 +501,34 @@ describes what is actually true.
    - A spoke's `spoke.hcl` varies **one** value today, its state-bucket secret
      name, not §3's six. The other differences belonged to the monorepo's shared
      root, which no spoke inherits.
-   - The key arithmetic held exactly: DEV-0163 §2 tabulates four unchanged keys,
-     and the hoist planned `No changes.` on all four.
+   - The key arithmetic held exactly. DEV-0163 §2 and COM-0003 §2 tabulate ten
+     unchanged keys between them, and both hoists planned `No changes.` on every
+     leaf.
 6. **Rollout (§7).**
    - Steps 1 and 2 shipped as one effort, because neither could land alone
      (LIB-0002).
    - Step 3 is done for `pigeon.dev` (DEV-0163, noisypigeon/pigeon.dev#25,
      noisypigeon/noisypigeon#307).
-   - Step 4's content half is done (COM-0001, COM-0002). Its Terraform half is
-     not, and template `v1.0.1` already serves it unchanged.
+   - Step 4 is done. The content half is COM-0001 and COM-0002. The Terraform
+     half is COM-0003 (noisypigeon/noisypigeon.com#13, noisypigeon/noisypigeon#311),
+     which reused template `v1.0.1` and `workflows/v1.3.1` with no hub change.
    - §7's "steps 2 and 3 must not be combined" held.
-7. **§8, for `pigeon.dev`: option 1.** `pigeon.dev/terraform/state/iam` stays in
-   `noisypigeon/noisypigeon`, on the shared root, `.env.enc` and shared bucket
-   (DEV-0163 §1). Consequently step 6 cannot leave `noisypigeon` content-only
-   while any spoke makes the same choice. The other two spokes' choices are
-   tracked as noisypigeon/noisypigeon#308.
+7. **§8, for `pigeon.dev` and `noisypigeon.com`: option 1.** Both
+   `state/iam` leaves stay in `noisypigeon/noisypigeon`, on the shared root,
+   `.env.enc` and shared bucket (DEV-0163 §1, COM-0003 §1). Consequently step 6
+   cannot leave `noisypigeon` content-only while any spoke makes that choice.
+   Only `willowgraysen.com`'s choice remains, tracked as
+   noisypigeon/noisypigeon#308.
 8. **Consequences, corrected.**
    - "`web/` … silently breaks DEV-0160's root-changelog tag precedence" was
      fixed when it happened: `^web/` is labelled `pigeon.dev` (DEV-0162).
-   - "Every spoke needs its own `.sops.yaml`" is now true of `pigeon.dev`
-     (DEV-0163).
+   - "Every spoke needs its own `.sops.yaml`" is now true of `pigeon.dev` and
+     `noisypigeon.com` (DEV-0163, COM-0003).
    - "Branch protection … deferred" was never true of `noisypigeon`, which has
      had a ruleset requiring the `terragrunt/apply` status since ADR-0129.
-     `pigeon.dev` gained a copy of it with its Terraform (DEV-0163), partly
-     resolving noisypigeon/noisypigeon#295. `pigeon-lib` and `noisypigeon.com`
-     remain unprotected.
+     `pigeon.dev` and `noisypigeon.com` each gained a copy of it with their
+     Terraform (DEV-0163, COM-0003), resolving noisypigeon/noisypigeon#295 for
+     both spokes. Only `pigeon-lib` remains unprotected.
    - The hub ended with two cross-repo dispatches, as LIB-0002 recorded, and with
      **four** copies of the release predicates in two files, not three
      (LIB-0003; noisypigeon/noisypigeon#301).
