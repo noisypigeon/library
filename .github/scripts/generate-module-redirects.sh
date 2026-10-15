@@ -273,7 +273,48 @@ offset_for_date() {
   echo "$raw" | sed -E 's/([+-][0-9]{2})([0-9]{2})/\1:\2/'
 }
 
-changelogs="$(find "$LIB_ROOT/terraform" -mindepth 3 -maxdepth 3 -name CHANGELOG.md | sort)"
+# Read each module's CHANGELOG.md from the library's default branch, not from the
+# working tree. LIB_ROOT is checked out at whatever ref a spoke pins in
+# .lib-version, which by construction predates any release cut after that pin --
+# so the working-tree copy is missing exactly the newest entry, the one a fresh
+# release most needs published. That asymmetry is subtle and bit once: a module
+# release published its redirect page (tag-derived, and tags are fetched in full)
+# while its release post silently did not appear (file-derived, and pinned).
+#
+# Deliberately origin/main rather than the version tag. The tag carries its own
+# entry, but it does NOT carry entries backfilled for *older* tags afterwards --
+# and four such entries exist, from the backfill of six previously undocumented
+# module tags. Reading the tag alone silently dropped them. Neither the tag nor
+# the pinned tree is a superset of the other; the default branch is a superset of
+# both.
+#
+# Release notes are append-only published history, and the tag graph above is
+# already read live, so pinning only the notes is what created the mismatch.
+#
+# Module list comes from the tag graph too, so a module released after the pin is
+# still covered.
+CHANGELOG_REF="${CHANGELOG_REF:-origin/main}"
+if ! git -C "$LIB_ROOT" rev-parse --verify --quiet "$CHANGELOG_REF" >/dev/null; then
+  echo "::error::$LIB_ROOT has no ref $CHANGELOG_REF to read release notes from" >&2
+  exit 1
+fi
+
+changelog_src="$(mktemp -d)"
+trap 'rm -rf "${changelog_src:?}"' EXIT
+
+while IFS= read -r mdir; do
+  [ -z "$mdir" ] && continue
+  rel="${mdir#terraform/}"
+  mkdir -p "${changelog_src}/${rel}"
+  if ! git -C "$LIB_ROOT" show "${CHANGELOG_REF}:${mdir}/CHANGELOG.md" \
+      > "${changelog_src}/${rel}/CHANGELOG.md" 2>/dev/null; then
+    echo "::warning::No CHANGELOG.md at ${CHANGELOG_REF}:${mdir}; skipping its release posts" >&2
+    rm -rf "${changelog_src:?}/${rel:?}"
+  fi
+done < <(templates_tags 'terraform/*/*/v*' \
+  | sed -E 's#/v[0-9]+\.[0-9]+\.[0-9]+$##' | sort -u)
+
+changelogs="$(find "$changelog_src" -mindepth 3 -maxdepth 3 -name CHANGELOG.md | sort)"
 
 offset_map=""
 while IFS= read -r d; do
