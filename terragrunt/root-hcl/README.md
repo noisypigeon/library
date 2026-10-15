@@ -24,7 +24,7 @@ moves no state (LIB-0001 invariant 4).
 
 ## Consuming it
 
-A spoke never commits `root.hcl`. It commits a `spoke.hcl` at its repo root:
+A spoke commits a `spoke.hcl` at its repo root:
 
 ```hcl
 locals {
@@ -36,13 +36,18 @@ locals {
 }
 ```
 
-…gitignores `/root.hcl`, and runs this before any `terragrunt` command, from its
-repo root:
+…runs this from its repo root, and **commits the resulting `root.hcl`**:
 
 ```sh
 ./fetch-lib.sh                                   # pigeon-lib at /.lib-version
 .lib-src/.github/scripts/resolve-root-hcl.sh     # writes ./root.hcl
 ```
+
+The committed copy is generated output; never edit it in the spoke. To take a
+template change, bump `root_hcl_version` and rerun the script. CI runs the same
+script with `--check`, which writes nothing and fails unless `./root.hcl` is
+byte-identical to the pinned template, so a hand edit or a forgotten re-run
+cannot reach `main` unnoticed.
 
 Leaves include it the usual way:
 
@@ -52,10 +57,11 @@ include "root" {
 }
 ```
 
-In CI, the reusable `terragrunt-run.yml` does the same through its `prepare_cmd`
+In CI, the reusable `terragrunt-run.yml` runs `./fetch-lib.sh &&
+.lib-src/.github/scripts/resolve-root-hcl.sh --check` through its `prepare_cmd`
 input, with `secrets_files: terraform/secrets.enc`.
 
-### Why copied, not included or symlinked
+### Why copied and committed, not included, symlinked or gitignored
 
 - Terragrunt does not support nested includes (DEV-0059), so a spoke file
   cannot `include` this one on a leaf's behalf.
@@ -64,6 +70,11 @@ input, with `secrets_files: terraform/secrets.enc`.
   would silently shorten every key. DEV-0059 hit exactly that failure.
 - The template finds `spoke.hcl` through `get_parent_terragrunt_dir()`, which a
   symlink into the library clone would point at the wrong repo.
+- Terragrunt's `[main...HEAD]` git filter, which `terragrunt-run.yml` uses,
+  plans every unit inside temporary git worktrees of both refs. Only tracked
+  files exist there, so a gitignored `root.hcl` makes every leaf fail with
+  `Could not find a root.hcl`. Tracking it has a second benefit: the base ref's
+  worktree has its own `root.hcl`, so a removed leaf can still plan its destroy.
 
 ## Two pins, deliberately
 

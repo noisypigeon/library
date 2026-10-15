@@ -18,10 +18,12 @@ nothing that is deployed:
   That script resolves everything relative to its **own** location rather than
   asking git, so it works wherever the consuming site fetched it to (ADR-0154).
 - `terragrunt/root-hcl/` — the spokes' `root.hcl` template, tagged
-  `terragrunt/root-hcl/vX.Y.Z` (LIB-0003). A spoke never commits a `root.hcl`:
-  `.github/scripts/resolve-root-hcl.sh` copies this one to the spoke's root at
-  the version its `spoke.hcl` pins, and the template reads the spoke's instance
-  values (its state-bucket secret name) back out of `spoke.hcl`. Copied, never
+  `terragrunt/root-hcl/vX.Y.Z` (LIB-0003). `.github/scripts/resolve-root-hcl.sh`
+  copies it to a spoke's root at the version the spoke's `spoke.hcl` pins, and
+  the template reads the spoke's instance values (its state-bucket secret name)
+  back out of `spoke.hcl`. The spoke **commits** that generated copy, because
+  Terragrunt's git filter plans inside worktrees where only tracked files exist,
+  and its CI runs the script with `--check` to fail on drift. Copied, never
   symlinked or included, because a leaf's state key is relative to `root.hcl`'s
   own directory (LIB-0001 invariant 4).
 - `.github/workflows/` — the reusable CI the spokes call, tagged
@@ -47,7 +49,7 @@ module index.
 
 ## This repo hosts nothing
 
-There is no site, no Terraform state, no live `root.hcl` (only the template a spoke materializes) and no secrets here. The
+There is no site, no Terraform state, no live `root.hcl` (only the template the spokes copy) and no secrets here. The
 practical consequence: **every deploy dispatch is cross-repo.** A module release
 dispatches `pigeon-dev-pages.yml` in `noisypigeon/pigeon.dev`; a theme release
 additionally dispatches `noisypigeon-com-pages.yml` in
