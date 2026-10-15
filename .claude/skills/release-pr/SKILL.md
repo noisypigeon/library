@@ -50,8 +50,9 @@ later — get the PR body right the first time.
      it anyway — an unlabeled PR is a signal something was skipped, not a
      deliberate patch decision.
    - A PR that doesn't touch any `terraform/<provider>/<module>/`
-     directory or `zola-site/templates/`, `static/`, or
-     `theme.toml` (e.g. workflow, root-doc, or
+     directory, `zola-site/templates/`, `static/`, or
+     `theme.toml`, `.github/workflows/*.yml` or `.github/scripts/`, or
+     `terragrunt/root-hcl/root.hcl` (e.g. root-doc, or
      `zola-site/README.md`/`CHANGELOG.md`-only changes) doesn't
      need a label at all — nothing will be tagged or released regardless. It
      still gets a one-line entry in the root `CHANGELOG.md` from

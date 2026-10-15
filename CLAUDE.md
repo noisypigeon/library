@@ -17,6 +17,13 @@ nothing that is deployed:
   site setting `[extra].theme_version` and running `resolve-theme.sh`.
   That script resolves everything relative to its **own** location rather than
   asking git, so it works wherever the consuming site fetched it to (ADR-0154).
+- `terragrunt/root-hcl/` — the spokes' `root.hcl` template, tagged
+  `terragrunt/root-hcl/vX.Y.Z` (LIB-0003). A spoke never commits a `root.hcl`:
+  `.github/scripts/resolve-root-hcl.sh` copies this one to the spoke's root at
+  the version its `spoke.hcl` pins, and the template reads the spoke's instance
+  values (its state-bucket secret name) back out of `spoke.hcl`. Copied, never
+  symlinked or included, because a leaf's state key is relative to `root.hcl`'s
+  own directory (LIB-0001 invariant 4).
 - `.github/workflows/` — the reusable CI the spokes call, tagged
   `workflows/vX.Y.Z`. Reusable workflows must live in `.github/workflows/`, so
   they sit beside this repo's own release automation rather than under a
@@ -30,16 +37,17 @@ nothing that is deployed:
   finds the clone it was fetched into rather than the site's repo, and
   `--content-root`, which only the caller knows.
 
-Both scripts live under `.github/scripts/` so the `workflows/vX.Y.Z` track
-covers them: a spoke pins one version and gets the reusable workflows and both
-scripts at that version, which is what invariant 2 asks for.
+These scripts, and `resolve-root-hcl.sh`, live under `.github/scripts/` so the
+`workflows/vX.Y.Z` track covers them: a spoke pins one version and gets the
+reusable workflows and every script at that version, which is what invariant 2
+asks for.
 
 See `README.md` for the consumption contract and `terraform/README.md` for the
 module index.
 
 ## This repo hosts nothing
 
-There is no site, no Terraform state, no `root.hcl` and no secrets here. The
+There is no site, no Terraform state, no live `root.hcl` (only the template a spoke materializes) and no secrets here. The
 practical consequence: **every deploy dispatch is cross-repo.** A module release
 dispatches `pigeon-dev-pages.yml` in `noisypigeon/pigeon.dev`; a theme release
 additionally dispatches `noisypigeon-com-pages.yml` in
@@ -81,9 +89,10 @@ the discipline, not just a convenience. The PR body becomes the changed unit's
 `release:*` label drives the version bump. There is no human reviewer and no
 branch protection.
 
-Three releasable units, each its own tag track: a Terraform module
-(`terraform/<provider>/<module>/vX.Y.Z`), the theme (`zola-site/vX.Y.Z`), and the
-reusable CI (`workflows/vX.Y.Z`). `template-release.yml` detects which changed,
+Four releasable units, each its own tag track: a Terraform module
+(`terraform/<provider>/<module>/vX.Y.Z`), the theme (`zola-site/vX.Y.Z`), the
+reusable CI (`workflows/vX.Y.Z`), and the `root.hcl` template
+(`terragrunt/root-hcl/vX.Y.Z`). `template-release.yml` detects which changed,
 bumps it, writes its `CHANGELOG.md` and the root rollup line, cuts the tag and
 the GitHub Release, then dispatches the affected spokes. **A spoke never writes
 a tag** — that follows from the hub owning every script, and from go-getter
@@ -92,7 +101,11 @@ needing a ref in the repo whose tree it resolves to.
 Detection is by path, and the predicates are narrow on purpose: a module
 release needs a changed `.tf` under `terraform/<provider>/<module>/`, and a
 theme release needs a change under `zola-site/templates/`, `zola-site/static/`
-or `zola-site/theme.toml`. A README- or CHANGELOG-only change releases nothing.
+or `zola-site/theme.toml`, a CI release a change to `.github/workflows/*.yml` or
+`.github/scripts/`, and a template release a change to
+`terragrunt/root-hcl/root.hcl`. A README- or CHANGELOG-only change releases
+nothing. `root-changelog.yml` duplicates all four predicates to stand down for a
+releasing PR — change one and you must change its twin (#301).
 
 Every merged PR also gets exactly one line in the root `CHANGELOG.md`, under a
 `## YYYY-MM-DD` section, newest first (DEV-0160). The
