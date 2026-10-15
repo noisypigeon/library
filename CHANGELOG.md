@@ -38,6 +38,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-15
 
+- [workflows] Let blog-changelog.yml take a site root via src_dir ([#13](https://github.com/noisypigeon/pigeon-lib/pull/13))
 - [workflows] Read release notes from the default branch, not the pinned tree ([#12](https://github.com/noisypigeon/pigeon-lib/pull/12))
 - [scaleway/project] Note why the ssh key uses count, not for_each ([#11](https://github.com/noisypigeon/pigeon-lib/pull/11))
 - [workflows] Stop the shared concurrency group dropping a release ([#10](https://github.com/noisypigeon/pigeon-lib/pull/10))

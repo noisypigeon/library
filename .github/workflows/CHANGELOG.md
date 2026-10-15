@@ -4,6 +4,30 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.1.0] - 2026-10-15
+
+### Let blog-changelog.yml take a site root via src_dir
+
+`blog-changelog.yml` gains an optional `src_dir` input: the path to the Zola site root itself, using the same vocabulary as `zola-site-pages.yml`. With `src_dir` set, the daily digest is written to `<src_dir>/content/changelog/`.
+
+Until now the digest path was hardcoded as `<site_dir>/src/content/changelog/`. That forced every caller to keep its site in a `src/` directory nested one level below some other directory. A spoke whose site root is `web/`, the shape DEV-0162 gave `pigeon.dev`, had no way to express that. `noisypigeon.com` is about to make the same move.
+
+### Compatibility
+
+The change is additive, so it is a minor bump:
+
+- `site_dir` is now optional, but it behaves exactly as before when a caller passes it. Existing callers need no changes.
+- Pass `site_dir` or `src_dir`, not both. A new validation step fails the job before checkout if a caller passes both or neither.
+- `src_dir` requires `changelog_path`. `site_dir` has an implicit `<site_dir>/CHANGELOG.md` default; a site root has no equivalent, so the job refuses to guess and fails instead.
+
+### Also in this PR
+
+The hub's `CLAUDE.md` and `README.md` now name `noisypigeon.com`'s ADR prefix as `COM-`, its new name. `NPC-` in older prose is an alias for it. The rename itself lands in `noisypigeon.com`.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#13](https://github.com/noisypigeon/pigeon-lib/pull/13)
+
 ## [1.0.7] - 2026-10-15
 
 ### Read release notes from the default branch, not the pinned tree
