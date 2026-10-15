@@ -44,6 +44,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-15
 
+- [adr] docs(lib-0004): record pigeon.dev's adoption and link the fast follows ([#26](https://github.com/noisypigeon/pigeon-lib/pull/26))
 - [workflows] Generate README tables for cloudflare/dns-record ([#25](https://github.com/noisypigeon/pigeon-lib/pull/25))
 - [cloudflare/dns-record] Add cloudflare/dns-record, a thin wrapper over cloudflare_dns_record ([#24](https://github.com/noisypigeon/pigeon-lib/pull/24))
 - [adr] docs(lib-0004): normalize the Terraform leaf layout ([#23](https://github.com/noisypigeon/pigeon-lib/pull/23))
