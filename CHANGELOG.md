@@ -44,6 +44,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-15
 
+- [adr] docs(lib-0001): amend where the implementation deviated ([#19](https://github.com/noisypigeon/pigeon-lib/pull/19))
 - [terragrunt/root-hcl] Mark the root.hcl template as generated and committed in spokes ([#18](https://github.com/noisypigeon/pigeon-lib/pull/18))
 - [workflows] Add a --check mode to resolve-root-hcl.sh ([#17](https://github.com/noisypigeon/pigeon-lib/pull/17))
 - [terragrunt/root-hcl] Add the spokes' Terragrunt root.hcl template ([#16](https://github.com/noisypigeon/pigeon-lib/pull/16))
