@@ -112,6 +112,15 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # timeout is raised from the action's 600000 ms default because that
+      # default is what orphans a deployment: if GitHub is still reporting
+      # updating_pages when it expires, the action self-cancels a deployment the
+      # Pages service still holds, and every later deployment then fails with
+      # "due to in progress deployment" until a server-side reaper clears it --
+      # a state no client-reachable API can fix (DEV-0162 records the incident).
+      # Waiting longer only costs idle runner time, and only in the bad case.
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          timeout: 1200000
