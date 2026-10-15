@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-13.
-- **Status**: Accepted.
+- **Status**: Accepted; amended 2026-10-15 (see `## Amendments`).
 
 ## Context
 
@@ -445,3 +445,96 @@ rests on. Each is reproducible today.
    changed paths are under `adr/`, which the precedence resolves to `adr` — and
    `template-release.yml` does not run, since no `.tf` and no theme asset
    changes. No `release:*` label is needed and no tag should be cut.
+
+## Amendments
+
+### 2026-10-15: where the implementation deviated
+
+Everything above is left as filed. Each entry below names the section it
+corrects and the record or PR that caused the deviation, checked against the
+live trees on this date. Where an entry and the text above disagree, the entry
+describes what is actually true.
+
+1. **ADR homes (§1, §2, invariant 5; Verification 7).**
+   - `LIB-` records live in `pigeon-lib/docs/adr/`, not `adr/pigeon-lib/`
+     (LIB-0002). Verification 7's `ls adr/pigeon-lib/` is stale.
+   - The spokes keep their records **flat in `adr/`**, not `docs/adr/`:
+     `pigeon.dev` since DEV-0161, and `noisypigeon.com` since COM-0002
+     (noisypigeon/noisypigeon.com#11).
+   - The `noisypigeon.com` domain is **`COM-`**, not `NPC-` (COM-0001). Existing
+     `NPC-NNNN` citations, including this record's, are aliases and are never
+     rewritten, the same treatment DEV-0160 gave `ADR-`.
+2. **The role table (§2).**
+   - The hub's roots are flat: `terraform/`, `zola-site/`, `terragrunt/root-hcl/`
+     and `.github/`. There is no `templates/` segment on directories or tags
+     (LIB-0002 §1, LIB-0003).
+   - **`pigeon.dev`** holds `web/` (DEV-0162), `adr/`, `terraform/`, `spoke.hcl`
+     and a **generated, committed** `root.hcl` (DEV-0163, LIB-0003). It holds no
+     `docs/adr/`.
+   - **`noisypigeon.com`** holds `web/`, including the blog's long-form
+     `web/CHANGELOG.md`, and `adr/` (COM-0001, COM-0002). There is no
+     `docs/blog/{posts,media}`; posts and media are `web/content/` and
+     `web/static/`. Its `terraform/` and `root.hcl` are still pending: step 4's
+     Terraform half.
+3. **Invariant 1 has exactly one exception: `fetch-lib.sh`** (DEV-0162).
+   - A spoke cannot fetch its own fetcher.
+   - Every other spoke workflow is now a thin caller, including the root
+     changelog writer, through the reusable `spoke-root-changelog.yml`
+     (pigeon-lib#14; DEV-0162, COM-0002).
+   - `zola-site-deploy.yml` was deleted, not moved (LIB-0002 §2).
+4. **Invariant 2's mechanism.** A spoke pins **two kinds** of version.
+   - `/.lib-version` names a `workflows/vX.Y.Z` tag. That is a third release
+     track this record did not foresee, versioning `.github/workflows/` and
+     `.github/scripts/` together (LIB-0002 §3). `fetch-lib.sh` materializes it
+     into `.lib-src/`.
+   - Per-asset pins sit beside it: `[extra].theme_version` for the theme, and
+     `root_hcl_version` in `spoke.hcl` for the `terragrunt/root-hcl/vX.Y.Z`
+     template, a fourth track (LIB-0003).
+5. **Invariant 4 and §6, as realized.**
+   - Secrets live at `terraform/secrets.enc`, with `.sops.yaml` rule
+     `^terraform/secrets\.enc$`.
+   - The template is materialized, not `include`d, by
+     `.github/scripts/resolve-root-hcl.sh`, as §6 said. It is also **committed**,
+     because Terragrunt's `[main...HEAD]` filter plans inside git worktrees that
+     hold only tracked files. CI runs the resolver with `--check` to catch drift
+     (LIB-0003 and its amendment).
+   - A spoke's `spoke.hcl` varies **one** value today, its state-bucket secret
+     name, not §3's six. The other differences belonged to the monorepo's shared
+     root, which no spoke inherits.
+   - The key arithmetic held exactly: DEV-0163 §2 tabulates four unchanged keys,
+     and the hoist planned `No changes.` on all four.
+6. **Rollout (§7).**
+   - Steps 1 and 2 shipped as one effort, because neither could land alone
+     (LIB-0002).
+   - Step 3 is done for `pigeon.dev` (DEV-0163, noisypigeon/pigeon.dev#25,
+     noisypigeon/noisypigeon#307).
+   - Step 4's content half is done (COM-0001, COM-0002). Its Terraform half is
+     not, and template `v1.0.1` already serves it unchanged.
+   - §7's "steps 2 and 3 must not be combined" held.
+7. **§8, for `pigeon.dev`: option 1.** `pigeon.dev/terraform/state/iam` stays in
+   `noisypigeon/noisypigeon`, on the shared root, `.env.enc` and shared bucket
+   (DEV-0163 §1). Consequently step 6 cannot leave `noisypigeon` content-only
+   while any spoke makes the same choice. The other two spokes' choices are
+   tracked as noisypigeon/noisypigeon#308.
+8. **Consequences, corrected.**
+   - "`web/` … silently breaks DEV-0160's root-changelog tag precedence" was
+     fixed when it happened: `^web/` is labelled `pigeon.dev` (DEV-0162).
+   - "Every spoke needs its own `.sops.yaml`" is now true of `pigeon.dev`
+     (DEV-0163).
+   - "Branch protection … deferred" was never true of `noisypigeon`, which has
+     had a ruleset requiring the `terragrunt/apply` status since ADR-0129.
+     `pigeon.dev` gained a copy of it with its Terraform (DEV-0163), partly
+     resolving noisypigeon/noisypigeon#295. `pigeon-lib` and `noisypigeon.com`
+     remain unprotected.
+   - The hub ended with two cross-repo dispatches, as LIB-0002 recorded, and with
+     **four** copies of the release predicates in two files, not three
+     (LIB-0003; noisypigeon/noisypigeon#301).
+9. **Out-of-scope items now tracked.**
+   - `state/iam` resolution: noisypigeon/noisypigeon#308.
+   - The `willowgraysen.com` → `noisypigeon.com` redirect documentation gap:
+     noisypigeon/noisypigeon#309.
+   - `module-docs.yml`'s hand-maintained list: noisypigeon/noisypigeon#302.
+   - The ADR scripts: noisypigeon/noisypigeon#293, as suggested.
+   - Found while verifying step 3, and new: the Terragrunt apply flow's
+     auto-merge has never worked, because the job token lacks
+     `contents: write`. Tracked as noisypigeon/noisypigeon#310.
