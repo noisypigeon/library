@@ -9,6 +9,12 @@
 # subcommand, the checkout ref, and the apply-only merge-gate/auto-merge step
 # are the only genuine differences, and all three are gated on `inputs.command`
 # below.
+#
+# secrets_files and prepare_cmd exist for spokes (LIB-0003). A spoke keeps its
+# secrets in terraform/secrets.enc rather than a root .env.enc, and its root.hcl
+# is materialized from pigeon-lib's template rather than committed, so it has
+# to run its fetcher and the resolver before terragrunt can find a root at
+# all. Both default to exactly what noisypigeon/noisypigeon did before.
 name: Terragrunt run
 
 on:
@@ -27,6 +33,16 @@ on:
         type: string
         required: false
         default: ${{ github.ref }}
+      secrets_files:
+        description: "Space-separated sops dotenv files (relative to the caller's repo root) whose decrypted values are masked in the log."
+        type: string
+        required: false
+        default: ".env.enc"
+      prepare_cmd:
+        description: "Optional command run from the caller's repo root before terragrunt -- e.g. fetching pigeon-lib and materializing root.hcl."
+        type: string
+        required: false
+        default: ""
     secrets:
       SOPS_AGE_KEY:
         required: true
@@ -68,11 +84,20 @@ jobs:
       - name: Mask decrypted secret values
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+          SECRETS_FILES: ${{ inputs.secrets_files }}
         run: |
-          while IFS='=' read -r key value; do
-            [[ -z "$key" || "$key" == \#* || "$key" == sops_* ]] && continue
-            echo "::add-mask::$value"
-          done < <(sops --decrypt --input-type dotenv --output-type dotenv .env.enc)
+          for file in $SECRETS_FILES; do
+            while IFS='=' read -r key value; do
+              [[ -z "$key" || "$key" == \#* || "$key" == sops_* ]] && continue
+              echo "::add-mask::$value"
+            done < <(sops --decrypt --input-type dotenv --output-type dotenv "$file")
+          done
+
+      - name: Prepare
+        if: inputs.prepare_cmd != ''
+        env:
+          PREPARE_CMD: ${{ inputs.prepare_cmd }}
+        run: bash -euo pipefail -c "$PREPARE_CMD"
 
       - name: Clear terragrunt cache
         run: find . -type d -name ".terragrunt-cache" -exec rm -rf {} +
@@ -238,4 +263,6 @@ jobs:
             }
 
       - name: Fail if ${{ inputs.command }} failed
-        run: exit "${{ steps.run.outputs.exit_code }}"
+        env:
+          EXIT_CODE: ${{ steps.run.outputs.exit_code }}
+        run: exit "${EXIT_CODE:-1}"
