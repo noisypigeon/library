@@ -4,6 +4,38 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.0] - 2026-10-15
+
+### Let a spoke run terragrunt CI against a materialized root.hcl
+
+This makes the reusable Terragrunt CI usable from a spoke, not only from `noisypigeon/noisypigeon`. It also adds the release machinery for a fourth track, `terragrunt/root-hcl/vX.Y.Z`, whose first template version follows in a separate PR (LIB-0003).
+
+### `terragrunt-run.yml`: two new optional inputs
+
+- **`secrets_files`** (default `.env.enc`): space-separated sops dotenv files whose decrypted values are masked in the log. A spoke keeps its secrets in `terraform/secrets.enc`; the old step hardcoded `.env.enc`.
+- **`prepare_cmd`** (default empty): a command run from the caller's repo root before Terragrunt. A spoke uses it to fetch `pigeon-lib` and materialize `root.hcl`.
+
+Both defaults do exactly what the workflow did before, so existing callers need no change. The final "fail if the run failed" step also reads its exit code through `env` now, which clears a long-standing `actionlint`/shellcheck error (SC2242).
+
+### `.github/scripts/resolve-root-hcl.sh` (new)
+
+Run it from a spoke's repo root. It reads `root_hcl_version` from `spoke.hcl` and writes `./root.hcl` from `terragrunt/root-hcl/root.hcl`:
+
+- A version such as `"1.0.0"` takes the file at tag `terragrunt/root-hcl/v1.0.0`.
+- `"main"` takes the working-tree copy.
+- An unknown tag, a missing `spoke.hcl`, or running it inside the library itself fails the run with an error.
+
+The script always copies and never symlinks. A leaf's state key is relative to `root.hcl`'s own directory, so `root.hcl` has to be a real file at the spoke's root. Like `resolve-theme.sh`, the script finds the library from its own location. It sits under `.github/scripts/` so the `workflows/` track versions it.
+
+### Release tracking for `terragrunt/root-hcl/`
+
+- **`template-release.yml`** cuts `terragrunt/root-hcl/vX.Y.Z` when `terragrunt/root-hcl/root.hcl` changes. The first version is `1.0.0`. It writes that unit's `CHANGELOG.md` and a `[terragrunt/root-hcl]` root line. There is no site to redeploy.
+- **The hub's `root-changelog.yml`** gets the matching stand-down arm in the same change, so a template release never gets two root lines. Its precedence also gains `terragrunt/` → `terragrunt`.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#15](https://github.com/noisypigeon/pigeon-lib/pull/15)
+
 ## [1.2.0] - 2026-10-15
 
 ### Add a reusable spoke-root-changelog.yml
