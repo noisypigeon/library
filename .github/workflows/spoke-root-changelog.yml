@@ -1,0 +1,149 @@
+# Reusable: writes DEV-0160's one root CHANGELOG.md line for a merged PR in a
+# spoke. Every spoke used to carry this job inline -- fetch the library, pick a
+# tag from the changed paths, run root-changelog.sh, push -- with only the tag
+# precedence differing, which is exactly the duplicated workflow body LIB-0001
+# invariant 1 says a spoke must not hold (noisypigeon/noisypigeon#306).
+#
+# Not this repo's own root-changelog.yml: the hub's has to stand down for PRs
+# that template-release.yml releases, and it runs the script from its own tree
+# rather than a fetched one. A spoke releases nothing, so it never stands down.
+#
+# The caller keeps what cannot live here: the pull_request trigger, the
+# merged-only gate, permissions and concurrency. github.* is the caller's
+# context, so the checkout, the PR fields and the push are all the caller's.
+name: Spoke root changelog
+
+on:
+  workflow_call:
+    inputs:
+      precedence:
+        description: |
+          Ordered `<ERE>=<tag>` lines, one per line, matched against the PR's
+          changed paths; the first line with any matching path picks the tag.
+          Split on the last `=`, so the pattern may contain one and the tag may
+          not. Example:
+            ^web/=blog
+            ^adr/=adr
+            ^\.github/=ci
+        type: string
+        required: true
+      fallback_tag:
+        description: "Tag for a PR no precedence line matches."
+        type: string
+        required: false
+        default: "repo"
+      fetch_script:
+        description: "Script (relative to the caller's repo root) that materializes pigeon-lib at the version the caller pins."
+        type: string
+        required: false
+        default: "fetch-lib.sh"
+      changelog_script:
+        description: "Path (relative to the caller's repo root) to root-changelog.sh, as left by fetch_script."
+        type: string
+        required: false
+        default: ".lib-src/.github/scripts/root-changelog.sh"
+      git_user_name:
+        type: string
+        required: false
+        default: "istx25"
+      git_user_email:
+        type: string
+        required: false
+        default: "6799989+istx25@users.noreply.github.com"
+    secrets:
+      BOT_GITHUB_TOKEN:
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  rollup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 0
+          token: ${{ secrets.BOT_GITHUB_TOKEN }}
+
+      - name: Derive the rollup tag
+        id: tag
+        env:
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          PRECEDENCE: ${{ inputs.precedence }}
+          FALLBACK_TAG: ${{ inputs.fallback_tag }}
+        run: |
+          CHANGED_FILES=$(git diff --name-only "${MERGE_SHA}~1" "$MERGE_SHA")
+
+          # One line per PR means one tag per PR: first match in the caller's
+          # fixed precedence wins, even for a PR spanning several areas.
+          TAG=""
+          while IFS= read -r line; do
+            [ -z "${line//[[:space:]]/}" ] && continue
+            case "$line" in
+              *=*) ;;
+              *) echo "::error::precedence line has no '=': $line" >&2; exit 1 ;;
+            esac
+            pattern="${line%=*}"
+            candidate="${line##*=}"
+            if [ -z "$pattern" ] || [ -z "$candidate" ]; then
+              echo "::error::precedence line needs both a pattern and a tag: $line" >&2
+              exit 1
+            fi
+            if echo "$CHANGED_FILES" | grep -qE -- "$pattern"; then
+              TAG="$candidate"
+              break
+            fi
+          done <<< "$PRECEDENCE"
+          TAG="${TAG:-$FALLBACK_TAG}"
+
+          echo "Rollup tag: ${TAG}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch pigeon-lib
+        env:
+          FETCH_SCRIPT: ${{ inputs.fetch_script }}
+        run: '"./$FETCH_SCRIPT"'
+
+      - name: Write the root changelog line
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          CHANGELOG_SCRIPT: ${{ inputs.changelog_script }}
+          GIT_USER_NAME: ${{ inputs.git_user_name }}
+          GIT_USER_EMAIL: ${{ inputs.git_user_email }}
+        run: |
+          git config user.name "$GIT_USER_NAME"
+          git config user.email "$GIT_USER_EMAIL"
+
+          "./$CHANGELOG_SCRIPT" \
+            --tag "$TAG" \
+            --title "$PR_TITLE" \
+            --number "$PR_NUMBER" \
+            --url "$PR_URL"
+
+          git add CHANGELOG.md
+          git commit -m "chore: root changelog entry for PR #${PR_NUMBER}"
+          # Retry rather than fail on a rejected push, as this repo's own
+          # root-changelog.yml does: a spoke's other main writers (a blog
+          # changelog, a deploy's bookkeeping) can legitimately race for main.
+          # A rebase conflict is a different problem and stays fatal.
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              echo "::error::rebase onto origin/main conflicted; refusing to guess"
+              exit 1
+            fi
+            if git push origin HEAD:main; then
+              echo "Pushed on attempt ${attempt}."
+              exit 0
+            fi
+            echo "Push rejected (attempt ${attempt}/5); another writer won the race."
+            sleep $((attempt * 5))
+          done
+          echo "::error::could not push to main after 5 attempts"
+          exit 1
