@@ -4,6 +4,25 @@ All notable changes to this template are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.1] - 2026-10-15
+
+### Mark the root.hcl template as generated and committed in spokes
+
+Only the template's header comment changes. The configuration it produces is identical to `v1.0.0`.
+
+The header used to say a spoke never commits `root.hcl`. Spokes now must commit it. Terragrunt's `[main...HEAD]` git filter plans inside git worktrees that contain only tracked files, so a gitignored copy made every leaf fail with `Could not find a root.hcl`. The header is what a spoke commits, so it now reads "GENERATED in a spoke -- do not edit there". It says how to change the template (change it in `pigeon-lib`, then bump `root_hcl_version`), and that CI runs `resolve-root-hcl.sh --check` against it. The `--check` mode shipped in `workflows/v1.3.1`.
+
+Also updated:
+
+- the template's `README.md`: consumption steps and the reasons for committing;
+- the hub's `CLAUDE.md`;
+- the root `CHANGELOG.md` header, which now lists the `terragrunt/root-hcl` and `terragrunt` tags;
+- [LIB-0003](docs/adr/LIB-0003-terragrunt-root-hcl-template-and-spoke-terragrunt-ci.md): a dated `## Amendments` section recording the dry run that failed and the one that passed. Its date is also corrected to 2026-10-15.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#18](https://github.com/noisypigeon/pigeon-lib/pull/18)
+
 ## [1.0.0] - 2026-10-15
 
 ### Add the spokes' Terragrunt root.hcl template
