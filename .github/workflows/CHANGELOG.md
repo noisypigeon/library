@@ -4,6 +4,20 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.2] - 2026-10-15
+
+### Generate README tables for cloudflare/dns-record
+
+Adds `terraform/cloudflare/dns-record` to `module-docs.yml`'s `working-dir` list, so its README gets the same generated input/output tables as the other modules.
+
+The list is still hand-maintained, and `grafana-dashboard`, `iam-api-key` and `iam-application` are still missing from it (noisypigeon/noisypigeon#302). This adds only the new module rather than widening the change.
+
+This touches `.github/workflows/`, so it cuts a `workflows/` patch release. No spoke needs to take it: `module-docs.yml` runs only in this repo.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#25](https://github.com/noisypigeon/pigeon-lib/pull/25)
+
 ## [1.3.1] - 2026-10-15
 
 ### Add a --check mode to resolve-root-hcl.sh
