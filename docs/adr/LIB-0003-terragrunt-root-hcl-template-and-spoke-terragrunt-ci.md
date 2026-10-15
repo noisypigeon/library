@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-15.
-- **Status**: Accepted; amended 2026-10-15 (see `## Amendments`).
+- **Status**: Accepted; amended 2026-10-15, twice (see `## Amendments`).
 
 ## Context
 
@@ -166,3 +166,33 @@ symlinked, for §2's other two reasons.
 
 The fix shipped as `workflows/v1.3.1` (the resolver) and
 `terragrunt/root-hcl/v1.0.1` (the header).
+
+### 2026-10-15: the providers extension point ships as `v1.1.0`
+
+`## Out of scope` deferred `willowgraysen.com`'s providers to that spoke's hoist.
+They are needed now, so `v1.1.0` adds two optional `spoke.hcl` locals, both off
+by default:
+
+- **`extra_required_providers`** is a map of `{ source, version }`, appended
+  line by line to the single `required_providers` block. An empty map adds
+  nothing, not even a blank line.
+- **`backblaze = true`** enables DEV-0148's latent mechanism, lifted from
+  `willowgraysen.com/root.hcl`:
+  - the `BACKBLAZE_APPLICATION_KEY*` locals;
+  - a per-leaf `backblaze_config.hcl` read;
+  - a conditional `b2` required-provider entry;
+  - `generate "provider_backblaze"`.
+
+  When it is unset, that generate block is `disable`d, so no file is written.
+
+Verified by `terragrunt render --format=json` against three baselines:
+
+- **All 14 of `willowgraysen.com`'s hoistable leaves,** under its monorepo root
+  versus this template with `backblaze = true` and a `grafana` entry. Each
+  differs in exactly one key, `generate.provider.contents`, and only in
+  whitespace: the original emitted a blank indented line where its Backblaze
+  entry would go. State keys are equal.
+- **`pigeon.dev`'s 4 leaves and `noisypigeon.com`'s 6,** under `v1.0.1` versus
+  `v1.1.0`. Each differs in exactly one key: an added `generate.provider_backblaze`
+  with `disable: true` and `if_disabled: skip`, which writes nothing. Neither
+  spoke needs to bump, but either can.

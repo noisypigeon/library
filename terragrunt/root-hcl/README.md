@@ -76,6 +76,29 @@ input, with `secrets_files: terraform/secrets.enc`.
   `Could not find a root.hcl`. Tracking it has a second benefit: the base ref's
   worktree has its own `root.hcl`, so a removed leaf can still plan its destroy.
 
+### Optional extensions (v1.1.0)
+
+Both are off unless `spoke.hcl` sets them, and a spoke that sets neither renders
+exactly as it did on `v1.0.x`.
+
+```hcl
+locals {
+  # ...
+  # Appended to the single required_providers block. A provider's own
+  # configuration, if it needs one, lives in the leaf that uses it.
+  extra_required_providers = {
+    grafana = { source = "grafana/grafana", version = "~> 4.0" }
+  }
+
+  # DEV-0148's latent Backblaze B2 provider. Still inert for any leaf that does
+  # not drop a sibling backblaze_config.hcl with `enabled = true`; those that do
+  # get the b2 provider, configured from BACKBLAZE_APPLICATION_KEY{,_ID}.
+  backblaze = true
+}
+```
+
+`willowgraysen.com` uses both (RUN-0001).
+
 ## Two pins, deliberately
 
 `/.lib-version` decides which *resolver* runs: `resolve-root-hcl.sh` is on the
