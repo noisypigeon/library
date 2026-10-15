@@ -44,6 +44,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-15
 
+- [adr] docs(lib-0001): record step 5's completion and the RUN- domain ([#22](https://github.com/noisypigeon/pigeon-lib/pull/22))
 - [terragrunt/root-hcl] Optional extra providers and Backblaze support in the root.hcl template ([#21](https://github.com/noisypigeon/pigeon-lib/pull/21))
 - [adr] docs(lib-0001): record step 4's completion in the amendments ([#20](https://github.com/noisypigeon/pigeon-lib/pull/20))
 - [adr] docs(lib-0001): amend where the implementation deviated ([#19](https://github.com/noisypigeon/pigeon-lib/pull/19))
