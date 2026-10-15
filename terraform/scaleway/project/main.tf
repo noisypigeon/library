@@ -1,3 +1,9 @@
+# This module moved here from noisypigeon/pigeon.dev's templates/terraform/ by
+# LIB-0002, and from noisypigeon/noisypigeon before that (ADR-0154). Consumers
+# do not see any of that: they pin
+# pigeon.dev/modules/scaleway/project/vX.Y.Z, which is a public interface
+# deliberately decoupled from wherever the source lives (ADR-0109/0110), and is
+# why three relocations have not broken a single `source =`.
 resource "scaleway_account_project" "project" {
   name            = var.name
   description     = var.description
