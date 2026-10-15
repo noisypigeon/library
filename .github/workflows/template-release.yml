@@ -12,8 +12,15 @@ on:
 permissions:
   contents: write
 
+# Its own group, not a shared main-writer one. GitHub keeps at most ONE
+# pending run per concurrency group and cancels any previously-pending run
+# when a third arrives -- so three workflows sharing a group means a .tf
+# merge (which triggers all three) silently loses one of them. That cost a
+# real module release: pigeon-lib#9 was cancelled while pending, between
+# root-changelog starting and module-docs arriving. Serialization against
+# the other main writers is handled by the push retry below instead.
 concurrency:
-  group: main-writer
+  group: main-writer-release
   cancel-in-progress: false
 
 jobs:
@@ -315,9 +322,25 @@ jobs:
         if: steps.modules.outputs.changed != '' || steps.zola_site.outputs.changed == 'true' || steps.workflows.outputs.changed == 'true'
         run: |
           git commit -m "chore: update changelog(s) for PR #${{ github.event.pull_request.number }}"
-          git fetch origin main
-          git rebase origin/main
-          git push origin HEAD:main
+          # Retry rather than fail on a rejected push: these writers no longer
+          # share a concurrency group, so two of them can legitimately race for
+          # main. A rebase conflict is a different problem and stays fatal.
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              echo "::error::rebase onto origin/main conflicted; refusing to guess"
+              exit 1
+            fi
+            if git push origin HEAD:main; then
+              echo "Pushed on attempt ${attempt}."
+              exit 0
+            fi
+            echo "Push rejected (attempt ${attempt}/5); another writer won the race."
+            sleep $((attempt * 5))
+          done
+          echo "::error::could not push to main after 5 attempts"
+          exit 1
 
       - name: Tag and release each changed module/theme/CI version
         if: steps.modules.outputs.changed != '' || steps.zola_site.outputs.changed == 'true' || steps.workflows.outputs.changed == 'true'

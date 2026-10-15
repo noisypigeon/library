@@ -10,8 +10,9 @@ on:
 permissions:
   contents: write
 
+# Own group -- see template-release.yml for why a shared one drops runs.
 concurrency:
-  group: main-writer
+  group: main-writer-docs
   cancel-in-progress: false
 
 jobs:

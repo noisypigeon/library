@@ -16,8 +16,9 @@ on:
 permissions:
   contents: write
 
+# Own group -- see template-release.yml for why a shared one drops runs.
 concurrency:
-  group: main-writer
+  group: main-writer-rollup
   cancel-in-progress: false
 
 jobs:
@@ -90,6 +91,22 @@ jobs:
 
           git add CHANGELOG.md
           git commit -m "chore: root changelog entry for PR #${PR_NUMBER}"
-          git fetch origin main
-          git rebase origin/main
-          git push origin HEAD:main
+          # Retry rather than fail on a rejected push: these writers no longer
+          # share a concurrency group, so two of them can legitimately race for
+          # main. A rebase conflict is a different problem and stays fatal.
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              echo "::error::rebase onto origin/main conflicted; refusing to guess"
+              exit 1
+            fi
+            if git push origin HEAD:main; then
+              echo "Pushed on attempt ${attempt}."
+              exit 0
+            fi
+            echo "Push rejected (attempt ${attempt}/5); another writer won the race."
+            sleep $((attempt * 5))
+          done
+          echo "::error::could not push to main after 5 attempts"
+          exit 1
