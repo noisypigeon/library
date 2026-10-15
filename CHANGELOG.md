@@ -36,6 +36,10 @@ ADR-0154 and ADR-0084 each made before it.
 
 <!-- entries below; newest first -->
 
+## 2026-10-15
+
+- [workflows] Raise the Pages deploy timeout to 20 minutes ([#7](https://github.com/noisypigeon/pigeon-lib/pull/7))
+
 ## 2026-10-14
 
 - [workflows] Follow pigeon.dev's DEV- prefix rename ([#6](https://github.com/noisypigeon/pigeon-lib/pull/6))

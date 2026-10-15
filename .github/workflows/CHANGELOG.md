@@ -4,6 +4,50 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.4] - 2026-10-15
+
+### Raise the Pages deploy timeout to 20 minutes
+
+`actions/deploy-pages` defaults to a **600000 ms** timeout. That default is what orphaned `pigeon.dev`'s Pages deployment yesterday and blocked four consecutive deploys.
+
+### What happened
+
+PR #17's merge created a deployment that reported `Current status: updating_pages` for **110 consecutive polls** — that was the only status it ever reached. At 10 minutes the action's own timeout fired:
+
+```
+16:26:13Z  Current status:
+16:26:13Z  ##[error]Timeout reached, aborting!
+16:26:14Z  Canceled deployment with ID e936dae…
+```
+
+It self-cancelled a deployment the Pages **service** still held. Every later deployment then failed with `due to in progress deployment. Please cancel e936dae… first` for ~45 minutes, until a server-side reaper released it.
+
+### Nothing could clear it from the client side
+
+Worth recording, because the recovery is non-obvious:
+
+- `GET /pages/deployments/<sha>` reported `{"status":"deployment_cancelled"}` while `POST /pages/deployments` kept 400ing about that same sha. **The two sides of the Pages API disagreed.**
+- `POST /pages/deployments/<sha>/cancel` returned **204** twice and was reflected in the read path — it was not a no-op — but did not release the creation lock.
+- `POST /deployments/<id>/statuses -f state=inactive` was accepted, no effect.
+- Four `deploy` reruns, including a fresh `workflow_dispatch` on a different build version, all failed identically.
+
+Everything on our side was ruled out: zero in-flight runs, no wait timer or required reviewer on the `github-pages` environment, all deployments terminal, cert approved and domain verified, and `noisypigeon.com` deployed 5/5 successfully in the same window — including two concurrent runs — so it was neither an outage nor a concurrency fault.
+
+### The change
+
+`timeout: 1200000` (20 minutes), with a comment explaining why the default is dangerous rather than just that it was raised.
+
+This **reduces the odds, it does not remove them** — a slow-enough deployment still self-cancels. So the incident is also being filed as a tracked issue, since the recovery path is "wait for a reaper" and that is worth writing down somewhere findable.
+
+Input name verified against the action's own echoed inputs (`timeout: 600000`, `error_count: 10`, `reporting_interval: 5000`) rather than assumed, since an unknown input would warn and change nothing. `actionlint` clean.
+
+### On merge
+
+Touches `.github/workflows/`, so `template-release.yml` cuts **`workflows/v1.0.4`**. `pigeon.dev` re-pins to it in the next PR, which retires its own automation and so touches `.github/` anyway. `noisypigeon.com` stays on `v1.0.2` — its deploys are healthy.
+
+
+[#7](https://github.com/noisypigeon/pigeon-lib/pull/7)
+
 ## [1.0.3] - 2026-10-14
 
 ### Follow pigeon.dev's DEV- prefix rename
