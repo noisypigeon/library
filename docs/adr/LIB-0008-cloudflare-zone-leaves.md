@@ -193,3 +193,8 @@ Permanent boundaries, with no issue:
      secrets. It planned and applied `No changes.` on 20/20 leaves.
    - The two emptied objects were deleted from the versioned Scaleway bucket.
      `willowgraysen.com` and `www` still return `301` to `https://noisypigeon.com/`.
+7. **pigeon.dev's zone** moved to noisypigeon.com by the same steps as item 6
+   (LIB-0009 Verification 6). `fastmail` moved with its state, and
+   `github-pages` was destroyed rather than moved. The redirect targets
+   `https://noisypigeon.garden`. `noisypigeon.garden` adopted the layout in its
+   own repo from its first leaf (garden#40).
