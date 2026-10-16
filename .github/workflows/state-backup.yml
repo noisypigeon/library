@@ -7,6 +7,15 @@
 # the B2 key it runs with can only list and write, so it couldn't delete even if
 # asked. A restore is a manual job for an admin key.
 #
+# B2 is reached through its S3-compatible API, not rclone's b2 backend: that
+# backend authenticates with B2's v1 API, which B2 now refuses ("not currently
+# supported on API version number 1"). The S3 endpoint is per account, so it is
+# read at run time from the key's own b2_authorize_account (v4). Without
+# readFiles the key can't answer the HeadObject rclone sends for a sub-path or
+# after an upload, so the copy runs bucket root to bucket root, filtered to
+# terraform/**, with --s3-no-head; --s3-no-check-bucket keeps rclone from
+# trying to create either bucket, which neither key may do.
+#
 # A spoke on state_backend = "cloudflare" calls this from terragrunt-apply.yml
 # (a job after apply) and from a scheduled caller, which picks up local applies.
 name: State backup
@@ -29,7 +38,7 @@ on:
         required: false
         default: "TERRAFORM_STATE_BACKUP_B2_BUCKET_NAME"
       backup_key_id_secret:
-        description: "Secrets key holding the B2 application key ID (listBuckets, listFiles, writeFiles only)."
+        description: "Secrets key holding the B2 application key ID (listBuckets, listFiles, writeFiles only); used through B2's S3-compatible API."
         type: string
         required: false
         default: "TERRAFORM_STATE_BACKUP_B2_KEY_ID"
@@ -92,28 +101,39 @@ jobs:
             fi
           done
 
+          b2_s3_endpoint=$(curl -fsS -u "${secrets[$BACKUP_KEY_ID_SECRET]}:${secrets[$BACKUP_KEY_SECRET]}" \
+            https://api.backblazeb2.com/b2api/v4/b2_authorize_account | jq -r '.apiInfo.storageApi.s3ApiUrl')
+          if [ -z "$b2_s3_endpoint" ] || [ "$b2_s3_endpoint" = null ]; then
+            echo "::error::Could not read the B2 S3 endpoint from b2_authorize_account"
+            exit 1
+          fi
+
           {
             echo "RCLONE_CONFIG_R2_TYPE=s3"
             echo "RCLONE_CONFIG_R2_PROVIDER=Cloudflare"
             echo "RCLONE_CONFIG_R2_ENDPOINT=https://${secrets[CLOUDFLARE_ACCOUNT_ID]}.eu.r2.cloudflarestorage.com"
             echo "RCLONE_CONFIG_R2_ACCESS_KEY_ID=${secrets[CLOUDFLARE_R2_ACCESS_KEY_ID]}"
             echo "RCLONE_CONFIG_R2_SECRET_ACCESS_KEY=${secrets[CLOUDFLARE_R2_SECRET_ACCESS_KEY]}"
-            echo "RCLONE_CONFIG_B2_TYPE=b2"
-            echo "RCLONE_CONFIG_B2_ACCOUNT=${secrets[$BACKUP_KEY_ID_SECRET]}"
-            echo "RCLONE_CONFIG_B2_KEY=${secrets[$BACKUP_KEY_SECRET]}"
+            echo "RCLONE_CONFIG_B2_TYPE=s3"
+            echo "RCLONE_CONFIG_B2_PROVIDER=Other"
+            echo "RCLONE_CONFIG_B2_ENDPOINT=$b2_s3_endpoint"
+            echo "RCLONE_CONFIG_B2_ACCESS_KEY_ID=${secrets[$BACKUP_KEY_ID_SECRET]}"
+            echo "RCLONE_CONFIG_B2_SECRET_ACCESS_KEY=${secrets[$BACKUP_KEY_SECRET]}"
             echo "STATE_BUCKET=${secrets[$STATE_BUCKET_SECRET]}"
             echo "BACKUP_BUCKET=${secrets[$BACKUP_BUCKET_SECRET]}"
+            echo "RCLONE_S3_NO_CHECK_BUCKET=true"
           } >> "$GITHUB_ENV"
 
-      # Size and modification time decide what's copied: R2's MD5 and B2's
-      # SHA-1 can't be compared, and a state write always moves the mtime.
+      # Size and modification time decide what's copied, from the listings
+      # alone: the B2 key can't read objects, and a state write always moves
+      # the mtime.
       - name: Copy state to B2
-        run: rclone copy "r2:$STATE_BUCKET/terraform" "b2:$BACKUP_BUCKET/terraform" --stats-one-line -v
+        run: rclone copy "r2:$STATE_BUCKET" "b2:$BACKUP_BUCKET" --include "terraform/**" --s3-no-head --stats-one-line -v
 
       - name: Check B2 holds every state file
         run: |
-          src=$(rclone lsf -R --files-only "r2:$STATE_BUCKET/terraform" | sort)
-          dst=$(rclone lsf -R --files-only "b2:$BACKUP_BUCKET/terraform" | sort)
+          src=$(rclone lsf -R --files-only --include "terraform/**" "r2:$STATE_BUCKET" | sort)
+          dst=$(rclone lsf -R --files-only --include "terraform/**" "b2:$BACKUP_BUCKET" | sort)
           missing=$(comm -23 <(echo "$src") <(echo "$dst"))
           echo "R2: $(echo "$src" | grep -c .) files, B2: $(echo "$dst" | grep -c .) files"
           if [ -n "$missing" ]; then
