@@ -4,6 +4,20 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.3] - 2026-10-16
+
+### Fix state-backup.yml: compare state files by checksum
+
+`state-backup.yml` failed once B2 already held the state files. rclone compared modification times, which it read by sending `HEAD` to each B2 object. When the times differed, it tried to rewrite the object's metadata. The backup key has no `readFiles`, so B2 refused both with `403 Forbidden`.
+
+The copy now runs with `--checksum`. R2 and B2's S3 API both list an MD5 ETag for each state file, so rclone decides what to copy from the two listings alone and never needs to read or rewrite an object. That's also an exact content check: a state file is copied when, and only when, its bytes changed.
+
+Checked against noisypigeon.com's buckets: the MD5s listed on both sides match for all nine state files, and a checksum copy transfers nothing and raises no errors.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#45](https://github.com/noisypigeon/pigeon-lib/pull/45)
+
 ## [1.5.2] - 2026-10-16
 
 ### Fix state-backup.yml: reach B2 through its S3-compatible API
