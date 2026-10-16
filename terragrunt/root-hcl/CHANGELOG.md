@@ -4,6 +4,42 @@ All notable changes to this template are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.2.0] - 2026-10-16
+
+### Zone leaves at terraform/cloudflare/<zone>/<module>/<instance>/, with their zone ID from the template (LIB-0008)
+
+A spoke's Cloudflare leaves that write to a zone can now say which zone in their path, and `root.hcl` hands them that zone's ID ([LIB-0008](https://github.com/noisypigeon/pigeon-lib/blob/main/docs/adr/LIB-0008-cloudflare-zone-leaves.md)).
+
+### The layout
+
+A leaf calling a zone-scoped Cloudflare module (`cloudflare/dns-record` or `cloudflare/ruleset`) lives at `terraform/cloudflare/<zone>/<module>/<instance>/`, for example `terraform/cloudflare/noisypigeon.com/dns-record/proton`. `<zone>` is the zone's apex domain.
+
+- The module's short URL doesn't change.
+- Account-level modules such as `cloudflare/bucket` keep `terraform/cloudflare/<module>/<instance>/`.
+- This is the one exception to LIB-0004's three segments, and LIB-0004 carries an amendment line saying so.
+
+### What the template adds
+
+A zone leaf now gets two locals:
+- `local.cloudflare_zone`, the zone's apex domain;
+- `local.cloudflare_zone_id`, read from `ENV_CF_ZONE_ID_<ZONE>` in `secrets.enc` (`noisypigeon.com` → `ENV_CF_ZONE_ID_NOISYPIGEON_COM`).
+
+Write `zone_id = local.cloudflare_zone_id` in the leaf. If the secret is missing, the run fails with a message naming the expected key, instead of planning records into the wrong zone.
+
+**Nothing changes until a leaf moves.** The existing `local.zone_id_<zone>` locals still render, and every non-zone leaf's generated files are byte-identical to v2.1.0's.
+
+### Moving a leaf on R2
+
+LIB-0008 §3 updates LIB-0004's state-move runbook for the R2 backend: copy the state object to the new key byte for byte, check serial and lineage, plan, then `state rm` the old key. `terraform state push` into an empty R2 key adopts a new lineage (COM-0004).
+
+The module READMEs now say which modules are zone-scoped (`dns-record`, `ruleset`) and which are account-level (`bucket`). noisypigeon.com adopts first. The redirector moves and noisypigeon.garden are tracked in noisypigeon/noisypigeon#320, #321 and #322.
+
+Verified by rendering all 32 leaves across the three spokes under v2.1.0 and this template: everything apart from `locals` hashed identically. A zone leaf rendered the right zone and ID, and a zone with no secret failed with the expected message.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#47](https://github.com/noisypigeon/pigeon-lib/pull/47)
+
 ## [2.1.0] - 2026-10-15
 
 ### State backend selectable in spoke.hcl: Scaleway or Cloudflare R2 (LIB-0007)
