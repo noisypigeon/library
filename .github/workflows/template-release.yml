@@ -528,7 +528,7 @@ jobs:
       # The hub hosts no site, so every deploy dispatch is cross-repo
       # (LIB-0002). noisypigeon/garden publishes the module redirect pages,
       # overview pages, theme-version pages and release posts, so it rebuilds
-      # on any release; noisypigeon.com only renders with the theme, so it
+      # on any release; noisypigeon/blog only renders with the theme, so it
       # rebuilds on a theme release only.
       #
       # Runs *after* the tags are pushed above: the spoke's generator reads
@@ -548,8 +548,8 @@ jobs:
       # Replaces a dispatch at zola-sites-deploy.yml in noisypigeon/noisypigeon,
       # which DEV-0159 removed from that repo -- so this step had been failing
       # on every theme release until LIB-0002 repointed it here.
-      - name: Trigger noisypigeon.com Pages deploy
+      - name: Trigger blog Pages deploy
         if: steps.zola_site.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
-        run: gh workflow run noisypigeon-com-pages.yml -R noisypigeon/noisypigeon.com --ref main
+        run: gh workflow run blog-pages.yml -R noisypigeon/blog --ref main

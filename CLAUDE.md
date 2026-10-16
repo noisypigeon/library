@@ -57,8 +57,8 @@ module index.
 There is no site, no Terraform state, no live `root.hcl` (only the template the spokes copy) and no secrets here. The
 practical consequence: **every deploy dispatch is cross-repo.** A module release
 dispatches `garden-pages.yml` in `noisypigeon/garden`; a theme release
-additionally dispatches `noisypigeon-com-pages.yml` in
-`noisypigeon/noisypigeon.com`. Both need `BOT_GITHUB_TOKEN` to carry
+additionally dispatches `blog-pages.yml` in
+`noisypigeon/blog`. Both need `BOT_GITHUB_TOKEN` to carry
 `actions: write` on the target, and both fail loudly if it does not — the
 symptom otherwise is a tagged, released version whose short URL 404s.
 
@@ -71,7 +71,7 @@ the repo whose site it deploys (DEV-0156 — a constraint, not a style choice).
 ADRs for this repo live at `docs/adr/LIB-NNNN-<slug>.md`, numbered from `0001`
 within that directory. `LIB-0001` defines the architecture; `LIB-0002` created
 this repo. Sibling domains live in their own repos, flat in each one's `adr/`:
-`DEV-` in `noisypigeon/garden`, `COM-` in `noisypigeon/noisypigeon.com`, and
+`DEV-` in `noisypigeon/garden`, `COM-` in `noisypigeon/blog`, and
 `RUN-` in `noisypigeon/willowgraysen`; `pigeon-cli` keeps its own unprefixed
 `docs/adr/`.
 

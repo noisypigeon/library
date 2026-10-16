@@ -74,6 +74,6 @@ Per-module and theme `CHANGELOG.md` files carry the full, versioned entries.
 
 This repo's ADRs live in [`docs/adr/`](docs/adr), as `LIB-NNNN-<slug>.md`.
 Sibling domains live with their own repos: `DEV-` records in
-`noisypigeon/garden`, `COM-` records in `noisypigeon/noisypigeon.com`
+`noisypigeon/garden`, `COM-` records in `noisypigeon/blog`
 (`NPC-` in older prose is an alias for `COM-`), and `RUN-` records in
 `noisypigeon/willowgraysen`.
