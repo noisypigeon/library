@@ -1,0 +1,123 @@
+# Reusable: copies a spoke's Terraform state objects from its Cloudflare R2
+# state bucket to a versioned Backblaze B2 bucket (LIB-0007 §4).
+#
+# R2 has no object versioning, so this copy is what lets a bad state write be
+# rolled back: B2 keeps every version of a file unless a lifecycle rule says
+# otherwise. It is `rclone copy`, never `sync` -- nothing is ever deleted, and
+# the B2 key it runs with can only list and write, so it couldn't delete even if
+# asked. A restore is a manual job for an admin key.
+#
+# A spoke on state_backend = "cloudflare" calls this from terragrunt-apply.yml
+# (a job after apply) and from a scheduled caller, which picks up local applies.
+name: State backup
+
+on:
+  workflow_call:
+    inputs:
+      secrets_files:
+        description: "Space-separated sops dotenv files (relative to the caller's repo root) to read secrets from; every value is masked."
+        type: string
+        required: false
+        default: "terraform/secrets.enc"
+      state_bucket_secret:
+        description: "Secrets key holding the R2 state bucket's name -- the spoke.hcl state_bucket_secret."
+        type: string
+        required: true
+      backup_bucket_secret:
+        description: "Secrets key holding the B2 backup bucket's name."
+        type: string
+        required: false
+        default: "TERRAFORM_STATE_BACKUP_B2_BUCKET_NAME"
+      backup_key_id_secret:
+        description: "Secrets key holding the B2 application key ID (listBuckets, listFiles, writeFiles only)."
+        type: string
+        required: false
+        default: "TERRAFORM_STATE_BACKUP_B2_KEY_ID"
+      backup_key_secret:
+        description: "Secrets key holding the B2 application key."
+        type: string
+        required: false
+        default: "TERRAFORM_STATE_BACKUP_B2_KEY"
+    secrets:
+      SOPS_AGE_KEY:
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: state-backup-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jdx/mise-action@v2
+
+      - name: Install rclone
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq rclone
+          rclone version | head -1
+
+      # Every value is masked before any is exported, and the only ones
+      # exported are the few this job needs, under rclone's env-var config
+      # names -- no config file is ever written.
+      - name: Load secrets
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+          SECRETS_FILES: ${{ inputs.secrets_files }}
+          STATE_BUCKET_SECRET: ${{ inputs.state_bucket_secret }}
+          BACKUP_BUCKET_SECRET: ${{ inputs.backup_bucket_secret }}
+          BACKUP_KEY_ID_SECRET: ${{ inputs.backup_key_id_secret }}
+          BACKUP_KEY_SECRET: ${{ inputs.backup_key_secret }}
+        run: |
+          declare -A secrets
+          for file in $SECRETS_FILES; do
+            while IFS='=' read -r key value; do
+              [[ -z "$key" || "$key" == \#* || "$key" == sops_* ]] && continue
+              echo "::add-mask::$value"
+              secrets["$key"]="$value"
+            done < <(sops --decrypt --input-type dotenv --output-type dotenv "$file")
+          done
+
+          for key in CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_R2_ACCESS_KEY_ID CLOUDFLARE_R2_SECRET_ACCESS_KEY \
+                     "$STATE_BUCKET_SECRET" "$BACKUP_BUCKET_SECRET" "$BACKUP_KEY_ID_SECRET" "$BACKUP_KEY_SECRET"; do
+            if [ -z "${secrets[$key]:-}" ]; then
+              echo "::error::$key is missing from $SECRETS_FILES"
+              exit 1
+            fi
+          done
+
+          {
+            echo "RCLONE_CONFIG_R2_TYPE=s3"
+            echo "RCLONE_CONFIG_R2_PROVIDER=Cloudflare"
+            echo "RCLONE_CONFIG_R2_ENDPOINT=https://${secrets[CLOUDFLARE_ACCOUNT_ID]}.eu.r2.cloudflarestorage.com"
+            echo "RCLONE_CONFIG_R2_ACCESS_KEY_ID=${secrets[CLOUDFLARE_R2_ACCESS_KEY_ID]}"
+            echo "RCLONE_CONFIG_R2_SECRET_ACCESS_KEY=${secrets[CLOUDFLARE_R2_SECRET_ACCESS_KEY]}"
+            echo "RCLONE_CONFIG_B2_TYPE=b2"
+            echo "RCLONE_CONFIG_B2_ACCOUNT=${secrets[$BACKUP_KEY_ID_SECRET]}"
+            echo "RCLONE_CONFIG_B2_KEY=${secrets[$BACKUP_KEY_SECRET]}"
+            echo "STATE_BUCKET=${secrets[$STATE_BUCKET_SECRET]}"
+            echo "BACKUP_BUCKET=${secrets[$BACKUP_BUCKET_SECRET]}"
+          } >> "$GITHUB_ENV"
+
+      # Size and modification time decide what's copied: R2's MD5 and B2's
+      # SHA-1 can't be compared, and a state write always moves the mtime.
+      - name: Copy state to B2
+        run: rclone copy "r2:$STATE_BUCKET/terraform" "b2:$BACKUP_BUCKET/terraform" --stats-one-line -v
+
+      - name: Check B2 holds every state file
+        run: |
+          src=$(rclone lsf -R --files-only "r2:$STATE_BUCKET/terraform" | sort)
+          dst=$(rclone lsf -R --files-only "b2:$BACKUP_BUCKET/terraform" | sort)
+          missing=$(comm -23 <(echo "$src") <(echo "$dst"))
+          echo "R2: $(echo "$src" | grep -c .) files, B2: $(echo "$dst" | grep -c .) files"
+          if [ -n "$missing" ]; then
+            echo "::error::Not in B2 after the copy:"
+            echo "$missing"
+            exit 1
+          fi
