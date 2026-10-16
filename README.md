@@ -76,4 +76,4 @@ This repo's ADRs live in [`docs/adr/`](docs/adr), as `LIB-NNNN-<slug>.md`.
 Sibling domains live with their own repos: `DEV-` records in
 `noisypigeon/pigeon.dev`, `COM-` records in `noisypigeon/noisypigeon.com`
 (`NPC-` in older prose is an alias for `COM-`), and `RUN-` records in
-`noisypigeon/willowgraysen.com`.
+`noisypigeon/willowgraysen`.

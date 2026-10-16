@@ -133,7 +133,7 @@ Genuinely deferred, each with an issue:
 - **noisypigeon.com owns willowgraysen.com's redirect** (noisypigeon/noisypigeon#320).
   Its `dns-record/redirect` and `ruleset/noisypigeon-com-redirect` leaves move
   into the noisypigeon.com repo under `terraform/cloudflare/willowgraysen.com/`.
-  That's a state move across repos and buckets.
+  That's a state move across repos and buckets. *Done:* COM-0006, Verification 6.
 - **pigeon.dev's redirect moves to the noisypigeon.com repo**
   (noisypigeon/noisypigeon#321). The constraint to respect:
   `pigeon.dev/modules/<provider>/<module>/vX.Y.Z` is a public module-source
@@ -176,3 +176,18 @@ Permanent boundaries, with no issue:
    with no creates or destroys. The apply was a no-op on all 11. The post-apply
    backup held 13 files in both R2 and B2. Afterwards, `main` planned
    `No changes.` on 7/7 leaves.
+6. **willowgraysen.com's redirect** (COM-0006, noisypigeon/noisypigeon.com#30,
+   noisypigeon/willowgraysen#12) was the first move between backends: §3
+   copied from the spoke's Scaleway bucket to noisypigeon.com's R2 bucket.
+   - The repo was renamed `noisypigeon/willowgraysen` first. It kept its ID,
+     ruleset and secrets, and no state key changed.
+   - Both state objects matched their sources by SHA-256, and in serial,
+     lineage and resource count (3 instances).
+   - noisypigeon.com gained `ENV_CF_ZONE_ID_WILLOWGRAYSEN_COM`. Its CI planned
+     `No changes.` on both new leaves, the apply was a no-op, and the
+     post-apply backup copied both new keys to B2.
+   - `state rm` then emptied the old keys (3 instances). willowgraysen#12
+     removed the leaves, the `cloudflare` provider and its three Cloudflare
+     secrets. It planned and applied `No changes.` on 20/20 leaves.
+   - The two emptied objects were deleted from the versioned Scaleway bucket.
+     `willowgraysen.com` and `www` still return `301` to `https://noisypigeon.com/`.
