@@ -1,6 +1,6 @@
 ---
 name: release-pr
-description: Use this skill when making a change to one of this repo's terraform/ Terraform modules or the zola-site/ theme and getting it merged to main. This is the pigeon-lib hub repo; consumers are the spoke repos (noisypigeon, garden, noisypigeon.com, willowgraysen) and are bumped in a separate PR there. Covers branching off main, committing, opening the pull request, applying the required release:* label, merging, and syncing local main afterward. Trigger on requests like "open a PR for this", "release this module change", "ship this to main", or "merge this terraform module or zola-site theme change".
+description: Use this skill when making a change to one of this repo's terraform/ Terraform modules or the zola-site/ theme and getting it merged to main. This is the pigeon-lib hub repo; consumers are the spoke repos (noisypigeon, garden, blog, willowgraysen) and are bumped in a separate PR there. Covers branching off main, committing, opening the pull request, applying the required release:* label, merging, and syncing local main afterward. Trigger on requests like "open a PR for this", "release this module change", "ship this to main", or "merge this terraform module or zola-site theme change".
 ---
 
 # Releasing a terraform/ or zola-site/ change
@@ -73,8 +73,8 @@ later — get the PR body right the first time.
    which regenerates this version's redirect page, overview entry and release
    post) and, on any resulting `.tf` changes, `module-docs.yml` (regenerates
    the module's `README.md` input/output table). A `zola-site` release
-   additionally dispatches `noisypigeon-com-pages.yml` in
-   `noisypigeon/noisypigeon.com`, the other site that renders with the theme.
+   additionally dispatches `blog-pages.yml` in
+   `noisypigeon/blog`, the other site that renders with the theme.
    None need triggering manually.
 
    Watch those dispatch steps. This repo hosts no site, so **every** deploy it
@@ -95,7 +95,7 @@ later — get the PR body right the first time.
 7. **Bump the consumer, if there is one.** Module consumers live in
    `noisypigeon/noisypigeon`, pinned by exact version in
    `*/terraform/**/*.tf` as `source = "https://noisypigeon.garden/terraform/<provider>/<module>/vX.Y.Z"`.
-   Theme consumers are the `garden` and `noisypigeon.com` site repos, each
+   Theme consumers are the `garden` and `blog` site repos, each
    pinning a version per LIB-0001 invariant 2. Either bump is a separate PR in
    that repo, and it can only be opened once this release's deploy has
    finished — the short URL has to resolve before `terragrunt init` can fetch
