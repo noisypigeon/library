@@ -4,6 +4,35 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.1] - 2026-10-15
+
+### Stop terragrunt-run.yml running a leaf twice
+
+`terragrunt-run.yml` could run the same leaf twice, at the same time, against the same state key. That's harmless when the leaf has nothing to change. For a new leaf, every resource got created twice and one copy was orphaned. That happened in noisypigeon/noisypigeon.com#19: two B2 buckets and two B2 keys, with only one of each in state.
+
+### Why it happened
+
+The run selects leaves with two kinds of filter, combined:
+
+- **`--filter '[main...HEAD]'`**, Terragrunt's git filter, runs every leaf it considers changed in a git worktree.
+- **An explicit `--filter ./<dir>`** for each directory holding a changed file. It's there for Terragrunt's gap with files a module reads through `file()` (gruntwork-io/terragrunt#6952), and it runs the leaf in the checkout.
+
+Terragrunt doesn't deduplicate the two. A leaf both filters matched (any new leaf, and most changed ones) was selected twice, and both copies ran.
+
+### The fix
+
+Before adding explicit filters, the step now asks Terragrunt which leaves the git filter already selects (`terragrunt find --filter '[main...HEAD]' --json`). It adds `--filter ./<dir>` only for directories missing from that list. A change the git filter misses, such as a dashboard JSON file, still gets its explicit filter.
+
+If that lookup fails, the run fails rather than going ahead without it.
+
+Checked against noisypigeon.com#19's branch: the two filters together had selected each new leaf twice; with this change, each of the nine leaves is selected exactly once. `actionlint` is clean.
+
+Spokes pick this up by bumping their `@workflows/…` pins.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#41](https://github.com/noisypigeon/pigeon-lib/pull/41)
+
 ## [1.5.0] - 2026-10-15
 
 ### Add state-backup.yml: copy R2 Terraform state to a versioned B2 bucket (LIB-0007)
