@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-15
 
+- [ci] Correct state-backup.yml's version to workflows/v1.5.0 in LIB-0007 and the changelog ([#42](https://github.com/noisypigeon/pigeon-lib/pull/42))
 - [workflows] Stop terragrunt-run.yml running a leaf twice ([#41](https://github.com/noisypigeon/pigeon-lib/pull/41))
 - [workflows] Add state-backup.yml: copy R2 Terraform state to a versioned B2 bucket (LIB-0007) ([#40](https://github.com/noisypigeon/pigeon-lib/pull/40))
 - [terragrunt/root-hcl] State backend selectable in spoke.hcl: Scaleway or Cloudflare R2 (LIB-0007) ([#39](https://github.com/noisypigeon/pigeon-lib/pull/39))
