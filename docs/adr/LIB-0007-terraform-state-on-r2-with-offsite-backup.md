@@ -88,7 +88,7 @@ its state objects to a Backblaze B2 bucket:
   `r2:<state bucket>/terraform` to `b2:<backup bucket>/terraform`. It runs after
   every CI apply and on a daily schedule, which catches local applies within a
   day. pigeon-lib ships it as the reusable `state-backup.yml` workflow
-  (`workflows/v1.4.0`).
+  (`workflows/v1.5.0`).
 - **B2 keeps every version.** A B2 bucket with no lifecycle rules retains all
   versions of a file, so each state write that reaches B2 is kept.
 - **The B2 key can list and write, nothing else.** `listFiles` and
@@ -147,5 +147,5 @@ habits. A spoke on Scaleway doesn't need it: its bucket versions in place.
    "spoke.hcl state_backend is bogus; known: scaleway, cloudflare".
 4. **The release.** This record's PR changes `terragrunt/root-hcl/root.hcl` and
    carries `release:minor`, so its merge should cut
-   `terragrunt/root-hcl/v2.1.0`. `state-backup.yml` ships in its own PR as
-   `workflows/v1.4.0`.
+   `terragrunt/root-hcl/v2.1.0`. `state-backup.yml` shipped in its own PR (#40) as
+   `workflows/v1.5.0`.
