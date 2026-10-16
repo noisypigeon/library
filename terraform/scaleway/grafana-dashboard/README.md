@@ -12,12 +12,39 @@ leaf, not this module).
 
 ```hcl
 module "grafana_dashboard" {
-  source = "https://pigeon.dev/modules/scaleway/grafana-dashboard/v0.1.0"
+  source = "https://pigeon.dev/modules/scaleway/grafana-dashboard/v0.2.0"
 
   folder_title = "pigeon-cli"
   dashboards = {
-    overview = { config_json = file("${path.module}/dashboards/overview.json") }
+    # A pinned version from pigeon-lib's grafana-dashboards track...
+    overview = { url = "https://raw.githubusercontent.com/noisypigeon/pigeon-lib/refs/tags/grafana-dashboards/pigeon-cli/v1.0.0/grafana-dashboards/pigeon-cli/overview.json" }
+    # ...or an inline JSON model, as in v0.1.0.
+    # local_one = { config_json = file("${path.module}/local.json") }
   }
+
+  # Optional (v0.2.0): Scaleway's Grafana provisions an IAM identity's role
+  # lazily on first API access, so ping it once, before anything is created.
+  first_access = {
+    grafana_url = data.scaleway_cockpit_grafana.grafana.grafana_url
+    trigger     = local.iam_application_id # re-ping when the identity changes
+  }
+  first_access_auth_token = local.grafana_auth_token
+}
+```
+
+Each dashboard gives exactly one of `config_json` or `url`. A `url` is fetched
+at plan time with `hashicorp/http`, and a non-200 response fails the plan
+rather than applying an error page as a dashboard. The `grafana` provider
+itself is configured by the leaf: in a spoke, by `terragrunt/root-hcl`'s latent
+Grafana provider (`grafana_config.hcl`).
+
+Moving a leaf's own `terraform_data` first-access hook into this module is an
+address change only:
+
+```hcl
+moved {
+  from = terraform_data.grafana_first_access
+  to   = module.grafana_dashboard.terraform_data.first_access[0]
 }
 ```
 
