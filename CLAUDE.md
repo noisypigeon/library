@@ -20,8 +20,9 @@ nothing that is deployed:
 - `terragrunt/root-hcl/` — the spokes' `root.hcl` template, tagged
   `terragrunt/root-hcl/vX.Y.Z` (LIB-0003). `.github/scripts/resolve-root-hcl.sh`
   copies it to a spoke's root at the version the spoke's `spoke.hcl` pins, and
-  the template reads the spoke's instance values (its state-bucket secret name)
-  back out of `spoke.hcl`. The spoke **commits** that generated copy, because
+  the template reads the spoke's instance values (its state-bucket secret name,
+  and the `providers` map that turns each provider on, LIB-0005) back out of
+  `spoke.hcl`. The spoke **commits** that generated copy, because
   Terragrunt's git filter plans inside worktrees where only tracked files exist,
   and its CI runs the script with `--check` to fail on drift. Copied, never
   symlinked or included, because a leaf's state key is relative to `root.hcl`'s

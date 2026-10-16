@@ -17,30 +17,60 @@
 # (pigeon.dev/, noisypigeon.com/, willowgraysen.com/), which differed only in
 # what spoke.hcl now supplies. Everything a spoke varies comes from spoke.hcl;
 # everything else is one copy here.
+#
+# Since v2.0.0 (LIB-0005) that includes which providers a leaf gets: spoke.hcl's
+# required `providers` map enables and configures each one, optionally scoped
+# to leaf path prefixes. There are no per-leaf *_config.hcl files.
 
 locals {
   # The spoke's instance values. Missing spoke.hcl is a hard error, which is
   # what we want: guessing a state bucket is how a plan lands in the wrong one.
   spoke = read_terragrunt_config("${get_parent_terragrunt_dir()}/spoke.hcl")
 
-  # Optional spoke.hcl extensions (LIB-0003 amendments: v1.1.0, v1.2.0). All
-  # default to off, and off renders byte-identically to v1.0.1.
+  # The providers this spoke uses, and how (LIB-0005). Required: a spoke.hcl
+  # without it is a hard error, like a missing state_bucket_secret.
   #
+  #   providers = {
+  #     cloudflare = {}
+  #     scaleway   = { region = "fr-par", zone = "fr-par-1" }
+  #     backblaze  = { leaves = ["terraform/backblaze/"] }
+  #     grafana    = { leaves = ["terraform/grafana/"] }
+  #   }
+  #
+  # A provider absent from the map is off for every leaf. `leaves`, if given,
+  # is a list of path prefixes (relative to this file, ending in "/") and the
+  # provider is on only for leaves under one of them; omitted, it is on for
+  # every leaf.
+  providers         = local.spoke.locals.providers
+  known_providers   = ["cloudflare", "scaleway", "backblaze", "grafana"]
+  unknown_providers = setsubtract(keys(local.providers), local.known_providers)
+  provider_prefixes = flatten([for name, cfg in local.providers : try(cfg.leaves, [])])
+
+  leaf = "${path_relative_to_include()}/"
+  provider_on = {
+    for name in local.known_providers : name => contains(keys(local.providers), name) && (
+      length(try(local.providers[name].leaves, [])) == 0 ||
+      anytrue([for prefix in try(local.providers[name].leaves, []) : startswith(local.leaf, prefix)])
+    )
+  }
+
+  cloudflare_enabled = local.provider_on.cloudflare
+  scaleway_enabled   = local.provider_on.scaleway
+  backblaze_enabled  = local.provider_on.backblaze
+  grafana_enabled    = local.provider_on.grafana
+
+  # Misconfigurations fail the run rather than silently dropping a provider.
+  # Terragrunt has no assert, so each guard reads a file whose name is the
+  # message when its condition fails.
+  guard_legacy_flags = anytrue([for k in ["backblaze", "grafana"] : contains(keys(local.spoke.locals), k)]) ? file("spoke.hcl sets backblaze/grafana: root.hcl v2 reads providers only (LIB-0005); move them into the providers map and delete any *_config.hcl") : true
+  guard_unknown      = length(local.unknown_providers) > 0 ? file("spoke.hcl providers has unknown keys ${join(", ", local.unknown_providers)}; known: ${join(", ", local.known_providers)}") : true
+  guard_prefixes     = alltrue([for p in local.provider_prefixes : endswith(p, "/")]) ? true : file("spoke.hcl providers: every leaves prefix must end in a slash, or it matches sibling paths too")
+  guard_grafana      = local.grafana_enabled && !local.scaleway_enabled ? file("providers.grafana is on for ${path_relative_to_include()} but providers.scaleway is not; its data source needs the Scaleway provider") : true
+
   # extra_required_providers: { <name> = { source = "...", version = "..." } },
-  # appended to the one required_providers block. A provider's configuration,
-  # if it needs any, lives in the leaf that uses it.
+  # appended to the one required_providers block (LIB-0003 v1.1.0). A
+  # provider's configuration, if it needs any, lives in the leaf that uses it.
   extra_required_providers = lookup(local.spoke.locals, "extra_required_providers", {})
-
-  # backblaze: turns on DEV-0148's latent Backblaze B2 provider. Even then it
-  # stays inert for any leaf that does not drop a sibling backblaze_config.hcl
-  # setting `enabled = true`.
-  backblaze_supported = lookup(local.spoke.locals, "backblaze", false)
-
-  # grafana: turns on a latent Scaleway Cockpit Grafana provider (v1.2.0). It
-  # stays inert for any leaf without a sibling grafana_config.hcl setting
-  # `enabled = true`. An enabled leaf must define local.grafana_auth_token -- the
-  # Cockpit API key secret the provider authenticates with (ADR-0135).
-  grafana_supported = lookup(local.spoke.locals, "grafana", false)
 
   # Name of the secrets.enc key (or environment variable) holding the spoke's
   # own Terraform state bucket name, e.g. PIGEON_DEV_TERRAFORM_STATE_BUCKET_NAME.
@@ -81,24 +111,24 @@ locals {
   path_segments = split("/", path_relative_to_include())
   is_valid_leaf = length(local.path_segments) >= 1 && local.path_segments[0] == "terraform"
 
-  # Per-leaf Scaleway region/zone override (ADR-0098) -- every leaf defaults to
-  # fr-par unless it drops a sibling scaleway_config.hcl.
-  workload_dir             = dirname(find_in_parent_folders("root.hcl"))
-  workload_definition_path = "${local.workload_dir}/${path_relative_to_include()}/scaleway_config.hcl"
-  workload_definition      = read_terragrunt_config(local.workload_definition_path, { locals = {} })
-  scaleway_region          = lookup(local.workload_definition.locals, "scaleway_region", "fr-par")
-  scaleway_zone            = lookup(local.workload_definition.locals, "scaleway_zone", "fr-par-1")
+  # Scaleway region/zone for the provider. The state backend below is always
+  # fr-par regardless.
+  scaleway_region = try(local.providers.scaleway.region, "fr-par")
+  scaleway_zone   = try(local.providers.scaleway.zone, "fr-par-1")
 
-  # Per-leaf Backblaze opt-in (DEV-0148), the same read_terragrunt_config
-  # default-fallback mechanism as scaleway_config.hcl, only consulted when the
-  # spoke supports Backblaze at all.
-  backblaze_config_path = "${local.workload_dir}/${path_relative_to_include()}/backblaze_config.hcl"
-  backblaze_config      = read_terragrunt_config(local.backblaze_config_path, { locals = {} })
-  backblaze_enabled     = local.backblaze_supported && lookup(local.backblaze_config.locals, "enabled", false)
+  cloudflare_required_providers_entry = <<EOF
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 5"
+    }
+EOF
 
-  grafana_config_path = "${local.workload_dir}/${path_relative_to_include()}/grafana_config.hcl"
-  grafana_config      = read_terragrunt_config(local.grafana_config_path, { locals = {} })
-  grafana_enabled     = local.grafana_supported && lookup(local.grafana_config.locals, "enabled", false)
+  scaleway_required_providers_entry = <<EOF
+    scaleway = {
+      source  = "scaleway/scaleway"
+      version = "~> 2.0"
+    }
+EOF
 
   grafana_required_providers_entry = <<EOF
     grafana = {
@@ -138,14 +168,22 @@ provider "b2" {
 }
 EOF
 
-  # Everything appended to required_providers, one complete line at a time, so
-  # an empty extension adds nothing -- not even a blank line. Terraform allows
-  # only one required_providers block per module, across all generated files.
-  required_providers_extension = join("", concat(
+  # Every required_providers entry this leaf gets, one complete entry at a
+  # time, so a disabled provider adds nothing -- not even a blank line.
+  # Terraform allows only one required_providers block per module, across all
+  # generated files.
+  required_providers_entries = join("", concat(
+    local.cloudflare_enabled ? [local.cloudflare_required_providers_entry] : [],
+    local.scaleway_enabled ? [local.scaleway_required_providers_entry] : [],
     [for name, p in local.extra_required_providers : "    ${name} = {\n      source  = \"${p.source}\"\n      version = \"${p.version}\"\n    }\n"],
     local.backblaze_enabled ? [local.backblaze_required_providers_entry] : [],
     local.grafana_enabled ? [local.grafana_required_providers_entry] : [],
   ))
+
+  # What a generated file holds when its provider is off for this leaf. Written
+  # rather than disabled, so it overwrites whatever an earlier version left in
+  # the leaf's .terragrunt-cache.
+  provider_off = "# Not enabled for this leaf -- see spoke.hcl's providers map (LIB-0005).\n"
 
   # Injected secrets/sensitive values: any secrets.enc key prefixed ENV_SW_ or
   # ENV_CF_ is exposed as a local named after the rest of the key (ADR-0006).
@@ -170,7 +208,7 @@ exclude {
 generate "env_scaleway_secrets" {
   path      = "env_scaleway_secrets_generated.tf"
   if_exists = "overwrite"
-  contents  = <<EOF
+  contents  = !local.scaleway_enabled ? local.provider_off : <<EOF
   locals {
   ${join("\n", [for k, v in local.env_scaleway_secrets : "  ${k} = \"${v}\""])}
   }
@@ -180,7 +218,7 @@ generate "env_scaleway_secrets" {
 generate "cloudflare_ids" {
   path      = "cloudflare_ids_generated.tf"
   if_exists = "overwrite"
-  contents  = <<EOF
+  contents  = !local.cloudflare_enabled ? local.provider_off : <<EOF
 locals {
   cloudflare_account_id              = "${local.cloudflare_account_id}"
   ${join("\n", [for k, v in local.env_cloudflare_secrets : "  ${k} = \"${v}\""])}
@@ -188,27 +226,32 @@ locals {
 EOF
 }
 
+# The one required_providers block, for every provider this leaf gets.
 generate "provider" {
   path      = "provider_generated.tf"
   if_exists = "overwrite"
   contents  = <<EOF
 terraform {
   required_providers {
-    cloudflare = {
-      source  = "cloudflare/cloudflare"
-      version = "~> 5"
-    }
-    scaleway = {
-      source  = "scaleway/scaleway"
-      version = "~> 2.0"
-    }
-${local.required_providers_extension}  }
+${local.required_providers_entries}  }
+}
+EOF
 }
 
+generate "provider_cloudflare" {
+  path      = "provider_cloudflare_generated.tf"
+  if_exists = "overwrite"
+  contents  = !local.cloudflare_enabled ? local.provider_off : <<EOF
 provider "cloudflare" {
   api_token = "${local.cloudflare_api_token}"
 }
+EOF
+}
 
+generate "provider_scaleway" {
+  path      = "provider_scaleway_generated.tf"
+  if_exists = "overwrite"
+  contents  = !local.scaleway_enabled ? local.provider_off : <<EOF
 provider "scaleway" {
   access_key      = "${local.scaleway_access_key}"
   secret_key      = "${local.scaleway_secret_key}"
@@ -219,28 +262,23 @@ provider "scaleway" {
 EOF
 }
 
-# Only generated for a spoke that supports Backblaze. Within such a spoke, a
-# leaf that has not opted in gets a comment-only file, as DEV-0148 designed.
 generate "provider_backblaze" {
   path      = "provider_backblaze_generated.tf"
   if_exists = "overwrite"
-  disable   = !local.backblaze_supported
-  contents  = local.backblaze_enabled ? local.backblaze_provider_block : "# Backblaze not enabled for this leaf -- see backblaze_config.hcl.\n"
+  contents  = local.backblaze_enabled ? local.backblaze_provider_block : local.provider_off
 }
 
-# Only generated for a spoke that supports Grafana. Within such a spoke, a leaf
-# that has not opted in gets a comment-only file.
+# An enabled leaf must define local.grafana_auth_token (ADR-0135).
 generate "provider_grafana" {
   path      = "provider_grafana_generated.tf"
   if_exists = "overwrite"
-  disable   = !local.grafana_supported
-  contents  = local.grafana_enabled ? local.grafana_provider_block : "# Grafana not enabled for this leaf -- see grafana_config.hcl.\n"
+  contents  = local.grafana_enabled ? local.grafana_provider_block : local.provider_off
 }
 
 generate "scaleway_ids" {
   path      = "scaleway_ids_generated.tf"
   if_exists = "overwrite"
-  contents  = <<EOF
+  contents  = !local.scaleway_enabled ? local.provider_off : <<EOF
 locals {
   scaleway_organization_id = "${local.scaleway_organization_id}"
   scaleway_project_id      = "${local.scaleway_project_id}"
