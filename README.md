@@ -19,6 +19,7 @@ here. The full argument is
 | [`terraform/`](terraform) | 13 Terraform modules (Scaleway, Backblaze) | `terraform/<provider>/<module>/vX.Y.Z` |
 | [`zola-site/`](zola-site) | a reusable Zola theme | `zola-site/vX.Y.Z` |
 | [`terragrunt/root-hcl/`](terragrunt/root-hcl) | the spokes' Terragrunt `root.hcl` template | `terragrunt/root-hcl/vX.Y.Z` |
+| `grafana-dashboards/<set>/` | versioned Grafana dashboard JSON, fetched by tag URL | `grafana-dashboards/<set>/vX.Y.Z` |
 | `.github/workflows/` | the reusable CI the spokes call | `workflows/vX.Y.Z` |
 
 Plus two scripts a consuming site runs at build time:

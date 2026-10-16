@@ -26,6 +26,11 @@ nothing that is deployed:
   and its CI runs the script with `--check` to fail on drift. Copied, never
   symlinked or included, because a leaf's state key is relative to `root.hcl`'s
   own directory (LIB-0001 invariant 4).
+- `grafana-dashboards/<set>/` — versioned Grafana dashboard JSON, tagged
+  `grafana-dashboards/<set>/vX.Y.Z` per set. Consumers fetch a dashboard by its
+  tag's raw URL (`raw.githubusercontent.com/noisypigeon/pigeon-lib/refs/tags/<tag>/<path>`),
+  which is what `scaleway/grafana-dashboard`'s `url` input does, so the same
+  pinned file can feed both Terraform and anything else that ships it.
 - `.github/workflows/` — the reusable CI the spokes call, tagged
   `workflows/vX.Y.Z`. Reusable workflows must live in `.github/workflows/`, so
   they sit beside this repo's own release automation rather than under a
@@ -92,10 +97,11 @@ the discipline, not just a convenience. The PR body becomes the changed unit's
 `release:*` label drives the version bump. There is no human reviewer and no
 branch protection.
 
-Four releasable units, each its own tag track: a Terraform module
+Five releasable units, each its own tag track: a Terraform module
 (`terraform/<provider>/<module>/vX.Y.Z`), the theme (`zola-site/vX.Y.Z`), the
-reusable CI (`workflows/vX.Y.Z`), and the `root.hcl` template
-(`terragrunt/root-hcl/vX.Y.Z`). `template-release.yml` detects which changed,
+reusable CI (`workflows/vX.Y.Z`), the `root.hcl` template
+(`terragrunt/root-hcl/vX.Y.Z`), and a Grafana dashboard set
+(`grafana-dashboards/<set>/vX.Y.Z`, first version `1.0.0`). `template-release.yml` detects which changed,
 bumps it, writes its `CHANGELOG.md` and the root rollup line, cuts the tag and
 the GitHub Release, then dispatches the affected spokes. **A spoke never writes
 a tag** — that follows from the hub owning every script, and from go-getter
@@ -106,8 +112,9 @@ release needs a changed `.tf` under `terraform/<provider>/<module>/`, and a
 theme release needs a change under `zola-site/templates/`, `zola-site/static/`
 or `zola-site/theme.toml`, a CI release a change to `.github/workflows/*.yml` or
 `.github/scripts/`, and a template release a change to
-`terragrunt/root-hcl/root.hcl`. A README- or CHANGELOG-only change releases
-nothing. `root-changelog.yml` duplicates all four predicates to stand down for a
+`terragrunt/root-hcl/root.hcl`, and a dashboard release a changed
+`grafana-dashboards/<set>/*.json`. A README- or CHANGELOG-only change releases
+nothing. `root-changelog.yml` duplicates all five predicates to stand down for a
 releasing PR — change one and you must change its twin (#301).
 
 Every merged PR also gets exactly one line in the root `CHANGELOG.md`, under a
