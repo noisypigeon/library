@@ -4,6 +4,10 @@ All notable changes to this module are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+Versions 0.1.0 and 0.2.0 below were released as `scaleway/grafana-dashboard`
+(tags `terraform/scaleway/grafana-dashboard/vX.Y.Z`). The module moved to
+`grafana/dashboard` and restarted its tag track at 0.1.0.
+
 ## [0.2.0] - 2026-10-15
 
 ### grafana-dashboard: dashboards by URL, and an optional first-access hook

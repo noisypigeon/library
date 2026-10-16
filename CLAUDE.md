@@ -4,7 +4,7 @@ This is `pigeon-lib`, the **hub** of the hub-and-spoke architecture LIB-0001
 defines. It holds everything in this family that is reusable and versioned, and
 nothing that is deployed:
 
-- `terraform/<provider>/<module>/` — 13 Terraform modules (Scaleway, Backblaze),
+- `terraform/<provider>/<module>/` — Terraform modules (Scaleway, Cloudflare, Backblaze, Grafana),
   tagged `terraform/<provider>/<module>/vX.Y.Z`, each self-contained (own
   `versions.tf`, `README.md`, `CHANGELOG.md`). Consumed via short
   `pigeon.dev/modules/<provider>/<module>/vX.Y.Z` URLs that resolve through
@@ -29,7 +29,7 @@ nothing that is deployed:
 - `grafana-dashboards/<set>/` — versioned Grafana dashboard JSON, tagged
   `grafana-dashboards/<set>/vX.Y.Z` per set. Consumers fetch a dashboard by its
   tag's raw URL (`raw.githubusercontent.com/noisypigeon/pigeon-lib/refs/tags/<tag>/<path>`),
-  which is what `scaleway/grafana-dashboard`'s `url` input does, so the same
+  which is what `grafana/dashboard`'s `url` input does, so the same
   pinned file can feed both Terraform and anything else that ships it.
 - `.github/workflows/` — the reusable CI the spokes call, tagged
   `workflows/vX.Y.Z`. Reusable workflows must live in `.github/workflows/`, so

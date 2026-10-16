@@ -16,7 +16,7 @@ here. The full argument is
 
 | Path | What | Tagged |
 | --- | --- | --- |
-| [`terraform/`](terraform) | 13 Terraform modules (Scaleway, Backblaze) | `terraform/<provider>/<module>/vX.Y.Z` |
+| [`terraform/`](terraform) | Terraform modules (Scaleway, Cloudflare, Backblaze, Grafana) | `terraform/<provider>/<module>/vX.Y.Z` |
 | [`zola-site/`](zola-site) | a reusable Zola theme | `zola-site/vX.Y.Z` |
 | [`terragrunt/root-hcl/`](terragrunt/root-hcl) | the spokes' Terragrunt `root.hcl` template | `terragrunt/root-hcl/vX.Y.Z` |
 | `grafana-dashboards/<set>/` | versioned Grafana dashboard JSON, fetched by tag URL | `grafana-dashboards/<set>/vX.Y.Z` |
