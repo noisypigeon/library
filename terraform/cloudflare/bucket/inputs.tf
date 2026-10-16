@@ -34,35 +34,14 @@ variable "account_id" {
   description = "Cloudflare account ID the bucket belongs to (in a spoke leaf, local.cloudflare_account_id)"
 }
 
-variable "location" {
-  type        = string
-  description = "Location hint for the bucket (apac, eeur, enam, weur, wnam, oc). Null leaves it to Cloudflare"
-  default     = null
-
-  validation {
-    condition     = var.location == null || contains(["apac", "eeur", "enam", "weur", "wnam", "oc"], var.location)
-    error_message = "location must be one of apac, eeur, enam, weur, wnam, oc, or null."
-  }
-}
-
-variable "jurisdiction" {
-  type        = string
-  description = "Jurisdiction the bucket's data is restricted to (default, eu, fedramp, us). Null leaves it unset"
-  default     = null
-
-  validation {
-    condition     = var.jurisdiction == null || contains(["default", "eu", "fedramp", "us"], var.jurisdiction)
-    error_message = "jurisdiction must be one of default, eu, fedramp, us, or null."
-  }
-}
-
 variable "storage_class" {
   type        = string
-  description = "Default storage class for new objects (Standard, InfrequentAccess). Null leaves it unset"
-  default     = null
+  description = "Default storage class for new objects (Standard, InfrequentAccess)"
+  default     = "Standard"
+  nullable    = false
 
   validation {
-    condition     = var.storage_class == null || contains(["Standard", "InfrequentAccess"], var.storage_class)
-    error_message = "storage_class must be \"Standard\" or \"InfrequentAccess\", or null."
+    condition     = contains(["Standard", "InfrequentAccess"], var.storage_class)
+    error_message = "storage_class must be \"Standard\" or \"InfrequentAccess\"."
   }
 }
