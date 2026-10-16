@@ -7,12 +7,12 @@ nothing that is deployed:
 - `terraform/<provider>/<module>/` — Terraform modules (Scaleway, Cloudflare, Backblaze, Grafana),
   tagged `terraform/<provider>/<module>/vX.Y.Z`, each self-contained (own
   `versions.tf`, `README.md`, `CHANGELOG.md`). Consumed via short
-  `pigeon.dev/modules/<provider>/<module>/vX.Y.Z` URLs that resolve through
-  go-getter's HTTP discovery protocol to a `git::` source against this repo.
-  **The public URL path is `modules/…`, not `terraform/…`** — that namespace is a
-  stable public interface, deliberately decoupled from internal layout
-  (ADR-0109/0110), which is what let LIB-0002 flatten this repo's roots without
-  touching a single consumer `source =` line.
+  `noisypigeon.garden/terraform/<provider>/<module>/vX.Y.Z` URLs that resolve
+  through go-getter's HTTP discovery protocol to a `git::` source against this
+  repo. **That URL is a stable public interface of its own** (LIB-0009): its
+  `terraform/` matches this repo's prefix by choice, and moving the internal
+  layout never changes it. The old `pigeon.dev/modules/…` URLs are retired and
+  no longer resolve.
 - `zola-site/` — a reusable Zola theme, tagged `zola-site/vX.Y.Z`, consumed by a
   site setting `[extra].theme_version` and running `resolve-theme.sh`.
   That script resolves everything relative to its **own** location rather than
@@ -38,7 +38,7 @@ nothing that is deployed:
   templates convention (DEV-0155).
 - `.github/scripts/root-changelog.sh` — the one implementation of DEV-0160's
   root-changelog contract, used by this repo and fetched by the spokes.
-- `.github/scripts/generate-module-redirects.sh` — generates the `pigeon.dev` site's module
+- `.github/scripts/generate-module-redirects.sh` — generates the `noisypigeon.garden` site's module
   redirect pages, overview pages, theme-version pages and release posts from
   this repo's tags, READMEs and CHANGELOGs. Runs in a *consuming* site's build,
   so it reads two roots: `LIB_ROOT`, derived from `${BASH_SOURCE[0]}` so it

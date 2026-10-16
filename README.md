@@ -6,7 +6,7 @@ releases and deploys them.
 
 This repo is the **hub**. It holds what other repos reuse and nothing that is
 deployed — no site, no Terraform state, no secrets. The repos that consume it
-(`pigeon.dev`, `noisypigeon.com`, `willowgraysen.com`, and what is left of
+(`garden`, `noisypigeon.com`, `willowgraysen`, and what is left of
 `noisypigeon`) are spokes: content plus the
 infrastructure that serves it, each pinning a version of what it takes from
 here. The full argument is
@@ -26,7 +26,7 @@ Plus two scripts a consuming site runs at build time:
 [`zola-site/resolve-theme.sh`](zola-site/resolve-theme.sh) (materializes the
 theme version a site pins) and
 [`.github/scripts/generate-module-redirects.sh`](.github/scripts/generate-module-redirects.sh) (generates
-`pigeon.dev`'s module pages and release posts from this repo's tags and
+`noisypigeon.garden`'s module pages and release posts from this repo's tags and
 changelogs). Both resolve their own location rather than asking git, so they
 work wherever a site fetched them to.
 
@@ -36,7 +36,7 @@ Pin the short URL, not this repo:
 
 ```hcl
 module "state_bucket" {
-  source = "https://pigeon.dev/modules/scaleway/object-bucket/v4.2.0"
+  source = "https://noisypigeon.garden/terraform/scaleway/object-bucket/v4.2.0"
   ...
 }
 ```

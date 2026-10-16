@@ -17,7 +17,7 @@ track at v0.1.0, with the same inputs, outputs and resource addresses as
 
 ```hcl
 module "grafana_dashboard" {
-  source = "https://pigeon.dev/modules/grafana/dashboard/v0.1.0"
+  source = "https://noisypigeon.garden/terraform/grafana/dashboard/v0.1.0"
 
   folder_title = "pigeon-cli"
   dashboards = {
