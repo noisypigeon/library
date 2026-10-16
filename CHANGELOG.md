@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-16
 
+- [adr] LIB-0008: record noisypigeon.com's adoption ([#48](https://github.com/noisypigeon/pigeon-lib/pull/48))
 - [terragrunt/root-hcl] Zone leaves at terraform/cloudflare/<zone>/<module>/<instance>/, with their zone ID from the template (LIB-0008) ([#47](https://github.com/noisypigeon/pigeon-lib/pull/47))
 - [adr] Add a runbook for restoring Terraform state from B2, and bring LIB-0007 up to date ([#46](https://github.com/noisypigeon/pigeon-lib/pull/46))
 - [workflows] Fix state-backup.yml: compare state files by checksum ([#45](https://github.com/noisypigeon/pigeon-lib/pull/45))
