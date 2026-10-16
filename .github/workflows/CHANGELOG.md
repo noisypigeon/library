@@ -4,6 +4,21 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.6.0] - 2026-10-16
+
+### Publish module redirect pages under terraform/ instead of modules/
+
+`generate-module-redirects.sh` now writes each module's per-version redirect page at `terraform/<provider>/<module>/vX.Y.Z` instead of `modules/<provider>/<module>/vX.Y.Z`. Its overview pages and their version links now live in `content/terraform/`. That's [LIB-0009](https://github.com/noisypigeon/pigeon-lib/blob/main/docs/adr/LIB-0009-terraform-short-urls-move-to-noisypigeon-garden.md) §3, the generator half of moving the short URLs to `https://noisypigeon.garden/terraform/…`.
+
+**A site that takes this version must rename `content/modules/` to `content/terraform/`**, along with its `_index.md` and any `.gitignore` globs for the generated pages. The generator wipes and rewrites `content/terraform/` and no longer touches `content/modules/`.
+
+The `git::` targets, theme-version pages and release posts are unchanged. Nothing renders this until `noisypigeon/garden` bumps its pin at the cutover.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#52](https://github.com/noisypigeon/pigeon-lib/pull/52)
+
 ## [1.5.4] - 2026-10-16
 
 ### Dispatch the site deploy to noisypigeon/garden
