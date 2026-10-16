@@ -23,13 +23,15 @@ Entry format is `- [<tag>] <PR title> ([#N](pr-url))`, where `<tag>` is one of:
 - `zola-site` — a released theme version
 - `workflows` — a released version of the reusable CI
 - `terragrunt/root-hcl` — a released version of the spokes' `root.hcl` template
+- `grafana-dashboards/<set>` — a released version of a Grafana dashboard set
 - `terraform` — a `terraform/` change that releases nothing (e.g. a README)
 - `terragrunt` — a `terragrunt/` change that releases nothing
+- `grafana-dashboards` — a `grafana-dashboards/` change that releases nothing (e.g. a README)
 - `adr` — decision records under `docs/adr/`
 - `ci` — `.github/` workflows and scripts
 - `repo` — anything else (root docs, `.mise.toml`, tooling)
 
-The first four are written by `template-release.yml` as part of tagging a
+The first five are written by `template-release.yml` as part of tagging a
 release; the rest by `root-changelog.yml`, which runs on every merged PR and
 stands down when `template-release.yml` owns the entry. Both go through
 `.github/scripts/root-changelog.sh`, which inserts below the marker at the end
