@@ -3,8 +3,12 @@
 A thin wrapper around a single `cloudflare_ruleset`. It adds no behaviour: the
 `rules` list goes to the provider exactly as given, and `description` left
 `null` stays unset. It exists so that a leaf managing a ruleset calls a
-pigeon-lib module and can live at `terraform/cloudflare/ruleset/<instance>/`
-(LIB-0004).
+pigeon-lib module (LIB-0004).
+
+It's **zone-scoped**: a leaf calling it lives at
+`terraform/cloudflare/<zone>/ruleset/<instance>/`, where `<zone>` is the zone's
+apex domain. `terragrunt/root-hcl` v2.2.0 then gives the leaf
+`local.cloudflare_zone_id` for that zone (LIB-0008).
 
 ## Usage
 
@@ -12,7 +16,7 @@ pigeon-lib module and can live at `terraform/cloudflare/ruleset/<instance>/`
 module "ruleset" {
   source = "https://pigeon.dev/modules/cloudflare/ruleset/v0.1.0"
 
-  zone_id = local.zone_id
+  zone_id = local.cloudflare_zone_id
   name    = "example.com to example.org redirect"
   kind    = "zone"
   phase   = "http_request_dynamic_redirect"

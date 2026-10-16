@@ -3,6 +3,9 @@
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-15.
 - **Status**: Accepted.
+- **Amended 2026-10-16**: LIB-0008 makes one exception to §1's "exactly three segments":
+  a leaf calling a zone-scoped Cloudflare module lives at
+  `terraform/cloudflare/<zone>/<module>/<instance>/`. §4's future enforcement must accept it.
 
 ## Context
 
