@@ -4,7 +4,7 @@
 # "redirect" page carrying a <meta name="terraform-get"> tag so
 # `terraform init` can resolve a short noisypigeon.garden module source URL to
 # the tagged git:: source. The public URL is "terraform/<provider>/<module>/vX.Y.Z"
-# (LIB-0009, which retired DEV-0110's "modules/..." and the pigeon.dev host).
+# (LIB-0009).
 # It matches the tag prefix by choice, not by derivation: it is a public
 # interface of its own, so moving the repo's internal layout never changes it.
 #

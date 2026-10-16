@@ -3,6 +3,11 @@
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-16.
 - **Status**: Accepted.
+- **Amended 2026-10-16**: §5 step 6 and §6 named the wrong redirect target.
+  `pigeon.dev` redirects to `https://noisypigeon.com`, because it was the
+  blog's home before noisypigeon.com and it's an alias of the identity, like
+  `willowgraysen.com`. Only the site and the module short URLs moved to the
+  garden (noisypigeon/noisypigeon.com#33).
 
 ## Context
 
