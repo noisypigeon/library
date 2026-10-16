@@ -2,10 +2,11 @@
 # Generates one Zola content page per
 # terraform/<provider>/<module>/vX.Y.Z git tag. Each page is a static
 # "redirect" page carrying a <meta name="terraform-get"> tag so
-# `terraform init` can resolve a short pigeon.dev module source URL to the
-# tagged git:: source. The public URL always uses "modules/..." regardless of
-# the prefix the tag actually lives under, so the public namespace stays
-# stable even as the repo's internal layout moves (DEV-0109, DEV-0110).
+# `terraform init` can resolve a short noisypigeon.garden module source URL to
+# the tagged git:: source. The public URL is "terraform/<provider>/<module>/vX.Y.Z"
+# (LIB-0009, which retired DEV-0110's "modules/..." and the pigeon.dev host).
+# It matches the tag prefix by choice, not by derivation: it is a public
+# interface of its own, so moving the repo's internal layout never changes it.
 #
 # Every module tag lives in THIS repo (pigeon-lib), under the terraform
 # prefix -- DEV-0160 step 0 retired the last cross-repo mapping arm and
@@ -36,7 +37,7 @@
 # which since LIB-0002 is a fetched clone, not the site's own repo.
 #
 # Regenerate-all semantics: every run wipes and rewrites every generated page
-# under content/modules/, content/theme-versions/ and content/releases/
+# under content/terraform/, content/theme-versions/ and content/releases/
 # (except each directory's hand-authored _index.md) from the current set of
 # tags and changelogs. Safe to run repeatedly; fully idempotent.
 set -euo pipefail
@@ -67,7 +68,7 @@ if [ ! -d "$LIB_ROOT/terraform" ]; then
   exit 1
 fi
 
-CONTENT_DIR="$CONTENT_ROOT/modules"
+CONTENT_DIR="$CONTENT_ROOT/terraform"
 THEME_CONTENT_DIR="$CONTENT_ROOT/theme-versions"
 RELEASES_CONTENT_DIR="$CONTENT_ROOT/releases"
 
@@ -97,16 +98,16 @@ while IFS= read -r tag; do
   slug="${provider}-${module}-v${version}"
   full_tag="${prefix}/${provider}/${module}/v${version}"
   repo="$TAG_REPO"
-  # The public URL stays "modules/..." forever, independent of the prefix the
-  # tag actually lives under (DEV-0110) — this is the whole point.
-  url_path="modules/${provider}/${module}/v${version}"
+  # The public URL is a fixed interface (LIB-0009 §1), written out here rather
+  # than built from ${prefix}, so a change of tag prefix can never move it.
+  url_path="terraform/${provider}/${module}/v${version}"
   git_source="git::https://github.com/${repo}.git//${prefix}/${provider}/${module}?ref=${full_tag}"
   github_url="https://github.com/${repo}/releases/tag/${full_tag}"
 
   cat > "$CONTENT_DIR/${slug}.md" <<EOF
 +++
 title = "${provider}/${module} v${version}"
-description = "Terraform module source redirect for modules/${provider}/${module} v${version}."
+description = "Terraform module source redirect for terraform/${provider}/${module} v${version}."
 path = "${url_path}"
 template = "module-redirect.html"
 in_search_index = false
@@ -198,7 +199,7 @@ while IFS= read -r pair; do
     while IFS= read -r v; do
       [ -z "$v" ] && continue
       [ "$first" -eq 0 ] && printf ', '
-      printf '{ version = "%s", path = "modules/%s/%s/v%s" }' "$v" "$provider" "$module" "$v"
+      printf '{ version = "%s", path = "terraform/%s/%s/v%s" }' "$v" "$provider" "$module" "$v"
       first=0
     done <<<"$versions"
     printf ']\n'
