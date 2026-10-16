@@ -57,4 +57,22 @@ moved {
 ```
 
 <!-- BEGIN_TF_DOCS -->
+## Inputs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| <a name="input_comment"></a> [comment](#input\_comment) | Free-text comment stored on the record | `string` | `null` | no |
+| <a name="input_content"></a> [content](#input\_content) | Record content (a TXT value includes its own surrounding quotes) | `string` | n/a | yes |
+| <a name="input_name"></a> [name](#input\_name) | Record name, relative to the zone ("@" for the apex) | `string` | n/a | yes |
+| <a name="input_priority"></a> [priority](#input\_priority) | Record priority (MX, SRV, URI). Null for types that have none | `number` | `null` | no |
+| <a name="input_proxied"></a> [proxied](#input\_proxied) | Whether Cloudflare proxies the record. Null leaves it unset, which is not the same as false in plan output | `bool` | `null` | no |
+| <a name="input_ttl"></a> [ttl](#input\_ttl) | TTL in seconds; 1 means automatic | `number` | `1` | no |
+| <a name="input_type"></a> [type](#input\_type) | Record type, e.g. A, AAAA, CNAME, MX, TXT | `string` | n/a | yes |
+| <a name="input_zone_id"></a> [zone\_id](#input\_zone\_id) | Cloudflare zone ID the record belongs to | `string` | n/a | yes |
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| <a name="output_id"></a> [id](#output\_id) | DNS record ID |
 <!-- END_TF_DOCS -->
