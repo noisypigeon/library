@@ -73,7 +73,7 @@ ADRs for this repo live at `docs/adr/LIB-NNNN-<slug>.md`, numbered from `0001`
 within that directory. `LIB-0001` defines the architecture; `LIB-0002` created
 this repo. Sibling domains live in their own repos, flat in each one's `adr/`:
 `DEV-` in `noisypigeon/pigeon.dev`, `COM-` in `noisypigeon/noisypigeon.com`, and
-`RUN-` in `noisypigeon/willowgraysen.com`; `pigeon-cli` keeps its own unprefixed
+`RUN-` in `noisypigeon/willowgraysen`; `pigeon-cli` keeps its own unprefixed
 `docs/adr/`.
 
 Filing one, by hand:
