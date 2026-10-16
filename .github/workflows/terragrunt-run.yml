@@ -109,7 +109,7 @@ jobs:
           TG_TF_PATH: terraform
           COMMAND: ${{ inputs.command }}
         run: |
-          set +e
+          set -euo pipefail
 
           # terragrunt's own --filter-affected only tracks changes to a unit's
           # terragrunt.hcl / HCL-level reads, not files a .tf module reads via
@@ -119,7 +119,16 @@ jobs:
           # explicit --filter per leaf directory containing any changed file,
           # computed by walking up to the nearest terragrunt.hcl -- multiple
           # --filter flags combine with OR logic.
+          #
+          # But only for a directory the git filter didn't already select. The
+          # git filter runs its units in a worktree, an explicit --filter runs
+          # the same unit in the checkout, and terragrunt does not deduplicate
+          # the two: a unit matched by both runs twice, concurrently, against
+          # one state key. For a new leaf that created every resource twice and
+          # orphaned one copy (noisypigeon/noisypigeon.com#19). If the lookup
+          # fails, fail the run rather than risk the duplicate.
           FILTER_ARGS=(--filter '[main...HEAD]')
+          git_units=$(terragrunt --no-color find "${FILTER_ARGS[@]}" --json | jq -r '.[].path')
           dirs=""
           while IFS= read -r f; do
             [ -z "$f" ] && continue
@@ -128,6 +137,7 @@ jobs:
               dir=$(dirname "$dir")
             done
             [ -f "$dir/terragrunt.hcl" ] || continue
+            grep -qxF "$dir" <<<"$git_units" && continue
             case " $dirs " in
               *" $dir "*) continue ;;
             esac
@@ -135,6 +145,7 @@ jobs:
             FILTER_ARGS+=(--filter "./$dir")
           done < <(git diff --name-only main...HEAD)
 
+          set +e
           terragrunt --no-color run --all "${FILTER_ARGS[@]}" --filter-allow-destroy --non-interactive -- "$COMMAND" > output.txt 2>&1
           echo "exit_code=$?" >> "$GITHUB_OUTPUT"
           set -e
