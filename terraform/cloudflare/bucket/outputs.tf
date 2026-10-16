@@ -9,6 +9,6 @@ output "name" {
 }
 
 output "endpoint" {
-  description = "Bucket S3 API endpoint URL (the eu and fedramp jurisdictions have their own)"
-  value       = contains(["eu", "fedramp"], coalesce(var.jurisdiction, "default")) ? "https://${var.account_id}.${var.jurisdiction}.r2.cloudflarestorage.com" : "https://${var.account_id}.r2.cloudflarestorage.com"
+  description = "Bucket S3 API endpoint URL (EU jurisdiction)"
+  value       = "https://${var.account_id}.eu.r2.cloudflarestorage.com"
 }
