@@ -4,6 +4,45 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.0] - 2026-10-15
+
+### Add state-backup.yml: copy R2 Terraform state to a versioned B2 bucket (LIB-0007)
+
+A new reusable workflow, `state-backup.yml`. It copies a spoke's Terraform state objects from its Cloudflare R2 state bucket to a Backblaze B2 bucket that keeps every version. R2 has no object versioning, so this copy is what lets a bad state write be rolled back ([LIB-0007](https://github.com/noisypigeon/pigeon-lib/blob/main/docs/adr/LIB-0007-terraform-state-on-r2-with-offsite-backup.md) §4).
+
+### What it does
+
+1. Decrypts the spoke's `secrets.enc` and masks every value before exporting the few it needs. It never writes a config file.
+2. Runs `rclone copy r2:<state bucket>/terraform b2:<backup bucket>/terraform`. It's `copy`, never `sync`, so nothing is deleted.
+3. Fails if any state file in R2 is missing from B2 afterwards.
+
+### What it needs in `secrets.enc`
+
+- `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_R2_ACCESS_KEY_ID` and `CLOUDFLARE_R2_SECRET_ACCESS_KEY`, the same keys `root.hcl` v2.1.0 uses for the R2 backend.
+- The state bucket's name, under the key passed as `state_bucket_secret` (the spoke's `spoke.hcl` value).
+- `TERRAFORM_STATE_BACKUP_B2_BUCKET_NAME`, `TERRAFORM_STATE_BACKUP_B2_KEY_ID` and `TERRAFORM_STATE_BACKUP_B2_KEY`. Each name can be overridden with an input.
+
+Give the B2 key only `listBuckets`, `listFiles` and `writeFiles`, scoped to the backup bucket. Then this job can add versions but never read or delete them. A restore uses an admin key, by hand.
+
+### Calling it
+
+```yaml
+jobs:
+  backup:
+    uses: noisypigeon/pigeon-lib/.github/workflows/state-backup.yml@workflows/v1.4.0
+    with:
+      state_bucket_secret: NOISYPIGEON_COM_R2_TERRAFORM_STATE_BUCKET_NAME
+    secrets: inherit
+```
+
+Call it as a job after `apply` in `terragrunt-apply.yml`, and from a daily scheduled caller so that local applies are picked up too.
+
+Checked with `actionlint`. Its first real run will be noisypigeon.com's move to R2.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#40](https://github.com/noisypigeon/pigeon-lib/pull/40)
+
 ## [1.4.1] - 2026-10-15
 
 ### Regenerate README tables for every module, not a hard-coded list

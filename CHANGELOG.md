@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-15
 
+- [workflows] Add state-backup.yml: copy R2 Terraform state to a versioned B2 bucket (LIB-0007) ([#40](https://github.com/noisypigeon/pigeon-lib/pull/40))
 - [terragrunt/root-hcl] State backend selectable in spoke.hcl: Scaleway or Cloudflare R2 (LIB-0007) ([#39](https://github.com/noisypigeon/pigeon-lib/pull/39))
 - [workflows] Regenerate README tables for every module, not a hard-coded list ([#38](https://github.com/noisypigeon/pigeon-lib/pull/38))
 - [cloudflare/bucket] Make cloudflare/bucket EU-only, with Standard storage by default (LIB-0006) ([#37](https://github.com/noisypigeon/pigeon-lib/pull/37))
