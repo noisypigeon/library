@@ -4,6 +4,19 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.6.2] - 2026-10-16
+
+### Dispatch the blog deploy to noisypigeon/blog
+
+The blog repo was renamed from `noisypigeon/noisypigeon.com` to `noisypigeon/blog`, and its Pages caller is now `blog-pages.yml` (noisypigeon/blog#36, [COM-0007](https://github.com/noisypigeon/blog/blob/main/adr/COM-0007-rename-the-repo-to-blog.md)). After a theme release, `template-release.yml` now runs `gh workflow run blog-pages.yml -R noisypigeon/blog`. It no longer relies on GitHub's rename redirect for a workflow-dispatch POST, or on a file name that no longer exists.
+
+Nothing else in the reusable workflows changes. `CLAUDE.md`, `README.md` and the `release-pr` skill name the new repo and workflow.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#56](https://github.com/noisypigeon/pigeon-lib/pull/56)
+
 ## [1.6.1] - 2026-10-16
 
 ### Drop pigeon.dev from comments and docs
