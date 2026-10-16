@@ -35,7 +35,7 @@ locals {
 }
 
 module "dns_record" {
-  source   = "https://pigeon.dev/modules/cloudflare/dns-record/v0.1.0"
+  source   = "https://noisypigeon.garden/terraform/cloudflare/dns-record/v0.1.0"
   for_each = local.records
 
   zone_id  = local.cloudflare_zone_id

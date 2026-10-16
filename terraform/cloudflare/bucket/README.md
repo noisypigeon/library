@@ -19,7 +19,7 @@ segment (LIB-0008).
 
 ```hcl
 module "bucket" {
-  source = "https://pigeon.dev/modules/cloudflare/bucket/v1.0.0"
+  source = "https://noisypigeon.garden/terraform/cloudflare/bucket/v1.0.0"
 
   account_id  = local.cloudflare_account_id
   name_prefix = "example-com"

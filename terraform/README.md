@@ -44,17 +44,17 @@ Releases are tagged with per-module, path-scoped semantic versions matching wher
 
 **Only the current era's tags live here, and only they resolve.** The first three eras' tags remain in `noisypigeon/noisypigeon` and the fourth in `noisypigeon/pigeon.dev`; none are deleted — ADR-0154 made that a permanent boundary — but none are served either. DEV-0160 step 0 retired the last mapping arm once `scaleway/project/v1.0.0`, its only remaining consumer, was repinned. Every version a consumer can resolve today is a `terraform/*` tag in this repo, because LIB-0002 re-cut all 53 of them here.
 
-**The public `pigeon.dev/modules/<provider>/<module>/vX.Y.Z` short-URL namespace (see "Consuming" below, [ADR-0109](https://github.com/noisypigeon/noisypigeon/blob/main/docs/adr/0109-short-module-source-urls-via-blog-redirect.md)) stays `modules/...` forever, regardless of which era a given version's tag actually lives under or where this directory itself moves in the future.** It is a stable public interface, deliberately decoupled from the repo's internal layout.
+**The public `noisypigeon.garden/terraform/<provider>/<module>/vX.Y.Z` short-URL namespace (see "Consuming" below, [LIB-0009](../docs/adr/LIB-0009-terraform-short-urls-move-to-noisypigeon-garden.md)) is published for every current-era tag, whatever version, and doesn't move when this directory does.** It is a stable public interface, deliberately decoupled from the repo's internal layout. It replaced `pigeon.dev/modules/...` ([ADR-0109](https://github.com/noisypigeon/noisypigeon/blob/main/docs/adr/0109-short-module-source-urls-via-blog-redirect.md)), which no longer resolves.
 
 ## Consuming
 
 The recommended way to consume a tagged module — from any repo in this
-family that runs Terraform, or an external one — is the short `pigeon.dev`
+family that runs Terraform, or an external one — is the short `noisypigeon.garden`
 URL for that module and version:
 
 ```hcl
 module "state_bucket" {
-  source = "https://pigeon.dev/modules/scaleway/object-bucket/v4.2.0"
+  source = "https://noisypigeon.garden/terraform/scaleway/object-bucket/v4.2.0"
   ...
 }
 ```
@@ -76,9 +76,9 @@ Both forms are equivalent, but note the `git::` form has to name the right
 repo *and* the right tag prefix for the era that version was released in —
 which is exactly what the short URL exists to hide. The redirect page behind
 it is generated for every module version tag by
-`generate-module-redirects.sh` in this repo, run by the `pigeon.dev` site at
+`generate-module-redirects.sh` in this repo, run by the `noisypigeon.garden` site at
 build time against the library version that site pins (ADR-0109, ADR-0136,
-LIB-0002).
+LIB-0002, LIB-0009).
 
 For local iteration against an unreleased module change (no network fetch, no
 tag required), clone this repo as a sibling directory and reference it by path:

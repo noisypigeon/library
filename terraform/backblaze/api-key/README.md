@@ -6,7 +6,7 @@ A thin wrapper around `b2_application_key`. Takes a required `capabilities` set 
 
 ```hcl
 module "backup_key" {
-  source       = "https://pigeon.dev/modules/backblaze/api-key/v0.1.0"
+  source       = "https://noisypigeon.garden/terraform/backblaze/api-key/v0.1.0"
   key_name     = "backup-writer"
   capabilities = ["listFiles", "readFiles", "writeFiles"]
   bucket_ids   = [module.backup_bucket.bucket_id]

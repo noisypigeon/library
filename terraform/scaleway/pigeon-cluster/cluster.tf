@@ -107,7 +107,7 @@ locals {
 # sibling job in the same cluster. Pinned to released tags per ADR-0121.
 module "job_application" {
   for_each = local.jobs_by_name
-  source   = "https://pigeon.dev/modules/scaleway/iam-application/v0.1.0"
+  source   = "https://noisypigeon.garden/terraform/scaleway/iam-application/v0.1.0"
   name     = "${var.cluster_config.name_prefix}-${each.key}"
 }
 
@@ -124,7 +124,7 @@ locals {
 
 module "job_policy" {
   for_each = { for k, v in local.job_permission_sets : k => v if length(v) > 0 }
-  source   = "https://pigeon.dev/modules/scaleway/iam-policy/v4.0.0"
+  source   = "https://noisypigeon.garden/terraform/scaleway/iam-policy/v4.0.0"
   # ADR-0153: this used to need a distinct "-work-" segment, because
   # compute-instance's own internal self-delete policy named itself
   # "${name_prefix}-${name_suffix}-iam-policy" and Scaleway rejects duplicate
@@ -139,7 +139,7 @@ module "job_policy" {
 
 module "job_api_key" {
   for_each = local.jobs_by_name
-  source   = "https://pigeon.dev/modules/scaleway/iam-api-key/v0.2.0"
+  source   = "https://noisypigeon.garden/terraform/scaleway/iam-api-key/v0.2.0"
 
   application_id     = module.job_application[each.key].id
   description        = "${var.cluster_config.name_prefix}-${each.key} API key"
@@ -153,7 +153,7 @@ module "job_api_key" {
 # hand the job's own keyring credential the right to delete instances.
 module "job_self_delete_policy" {
   for_each = local.jobs_by_name
-  source   = "https://pigeon.dev/modules/scaleway/iam-policy/v4.0.0"
+  source   = "https://noisypigeon.garden/terraform/scaleway/iam-policy/v4.0.0"
   name     = "${var.cluster_config.name_prefix}-${each.key}-self-delete-iam-policy"
 
   application_id          = module.job_application[each.key].id
@@ -163,7 +163,7 @@ module "job_self_delete_policy" {
 
 module "job_self_delete_key" {
   for_each = local.jobs_by_name
-  source   = "https://pigeon.dev/modules/scaleway/iam-api-key/v0.2.0"
+  source   = "https://noisypigeon.garden/terraform/scaleway/iam-api-key/v0.2.0"
 
   application_id     = module.job_application[each.key].id
   description        = "${var.cluster_config.name_prefix}-${each.key} self-delete key"
@@ -192,7 +192,7 @@ locals {
 # it wants a volume, so it isn't.
 module "job_block_volume" {
   for_each = local.jobs_with_volume
-  source   = "https://pigeon.dev/modules/scaleway/block-volume/v4.0.0"
+  source   = "https://noisypigeon.garden/terraform/scaleway/block-volume/v4.0.0"
 
   name_prefix = var.cluster_config.name_prefix
   name_suffix = each.key
@@ -206,7 +206,7 @@ module "job_block_volume" {
 # rather than a new version of the module that owns the live server.
 module "job_config" {
   for_each = local.jobs_by_name
-  source   = "https://pigeon.dev/modules/scaleway/compute-instance-config/v0.1.0"
+  source   = "https://noisypigeon.garden/terraform/scaleway/compute-instance-config/v0.1.0"
 
   keyring            = values(local.effective_keyring[each.key])
   cockpit            = var.cluster_config.cockpit
@@ -242,7 +242,7 @@ resource "scaleway_instance_ip" "job_ipv4" {
 
 module "job" {
   for_each    = local.jobs_by_name
-  source      = "https://pigeon.dev/modules/scaleway/compute-instance/v7.0.0"
+  source      = "https://noisypigeon.garden/terraform/scaleway/compute-instance/v7.0.0"
   name_prefix = var.cluster_config.name_prefix
   name_suffix = each.key
 
@@ -278,12 +278,12 @@ resource "scaleway_instance_private_nic" "job" {
 # what it got before, when it passed no instance_config at all.
 module "bastion_config" {
   count  = var.cluster_config.enable_bastion ? 1 : 0
-  source = "https://pigeon.dev/modules/scaleway/compute-instance-config/v0.1.0"
+  source = "https://noisypigeon.garden/terraform/scaleway/compute-instance-config/v0.1.0"
 }
 
 module "bastion" {
   count       = var.cluster_config.enable_bastion ? 1 : 0
-  source      = "https://pigeon.dev/modules/scaleway/compute-instance/v7.0.0"
+  source      = "https://noisypigeon.garden/terraform/scaleway/compute-instance/v7.0.0"
   name_prefix = var.cluster_config.name_prefix
   name_suffix = "bastion"
 

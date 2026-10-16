@@ -80,7 +80,7 @@ later — get the PR body right the first time.
    Watch those dispatch steps. This repo hosts no site, so **every** deploy it
    triggers reaches another repo, and each fails if `BOT_GITHUB_TOKEN` loses
    `actions: write` there — the symptom being a tagged, released version whose
-   short `pigeon.dev/modules/...` URL 404s, not an obviously broken release.
+   short `noisypigeon.garden/terraform/...` URL 404s, not an obviously broken release.
 
 6. **Sync local `main`.** "Run on main" here means syncing your local clone
    after the automation has landed its own commits — not re-running any
@@ -94,8 +94,8 @@ later — get the PR body right the first time.
 
 7. **Bump the consumer, if there is one.** Module consumers live in
    `noisypigeon/noisypigeon`, pinned by exact version in
-   `*/terraform/**/*.tf` as `source = "https://pigeon.dev/modules/<provider>/<module>/vX.Y.Z"`.
-   Theme consumers are the `pigeon.dev` and `noisypigeon.com` site repos, each
+   `*/terraform/**/*.tf` as `source = "https://noisypigeon.garden/terraform/<provider>/<module>/vX.Y.Z"`.
+   Theme consumers are the `garden` and `noisypigeon.com` site repos, each
    pinning a version per LIB-0001 invariant 2. Either bump is a separate PR in
    that repo, and it can only be opened once this release's deploy has
    finished — the short URL has to resolve before `terragrunt init` can fetch

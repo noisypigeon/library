@@ -14,7 +14,7 @@ apex domain. `terragrunt/root-hcl` v2.2.0 then gives the leaf
 
 ```hcl
 module "ruleset" {
-  source = "https://pigeon.dev/modules/cloudflare/ruleset/v0.1.0"
+  source = "https://noisypigeon.garden/terraform/cloudflare/ruleset/v0.1.0"
 
   zone_id = local.cloudflare_zone_id
   name    = "example.com to example.org redirect"
