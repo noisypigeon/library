@@ -4,6 +4,18 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.4] - 2026-10-16
+
+### Dispatch the site deploy to noisypigeon/garden
+
+The site repo was renamed from `noisypigeon/pigeon.dev` to `noisypigeon/garden`, and its Pages caller is now `garden-pages.yml` (noisypigeon/garden#39). That's [LIB-0009](https://github.com/noisypigeon/pigeon-lib/blob/main/docs/adr/LIB-0009-terraform-short-urls-move-to-noisypigeon-garden.md) §4. `template-release.yml` now runs `gh workflow run garden-pages.yml -R noisypigeon/garden` after every module or theme release. It no longer relies on GitHub's rename redirect for a workflow-dispatch POST, or on a file name that no longer exists.
+
+Nothing else in the reusable workflows changes. `CLAUDE.md`, `README.md` and the `release-pr` skill name the new repo and workflow.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#51](https://github.com/noisypigeon/pigeon-lib/pull/51)
+
 ## [1.5.3] - 2026-10-16
 
 ### Fix state-backup.yml: compare state files by checksum

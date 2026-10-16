@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-16
 
+- [workflows] Dispatch the site deploy to noisypigeon/garden ([#51](https://github.com/noisypigeon/pigeon-lib/pull/51))
 - [adr] docs(adr): LIB-0009 moves Terraform short URLs to noisypigeon.garden ([#50](https://github.com/noisypigeon/pigeon-lib/pull/50))
 - [adr] docs(adr): LIB-0008 records willowgraysen.com's move ([#49](https://github.com/noisypigeon/pigeon-lib/pull/49))
 - [adr] LIB-0008: record noisypigeon.com's adoption ([#48](https://github.com/noisypigeon/pigeon-lib/pull/48))
