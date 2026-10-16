@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-15
 
+- [terragrunt/root-hcl] Providers enabled and configured in spoke.hcl (LIB-0005) ([#36](https://github.com/noisypigeon/pigeon-lib/pull/36))
 - [grafana/dashboard] Move scaleway/grafana-dashboard to grafana/dashboard ([#35](https://github.com/noisypigeon/pigeon-lib/pull/35))
 - [cloudflare/bucket] Add cloudflare/bucket, a thin R2 bucket wrapper ([#34](https://github.com/noisypigeon/pigeon-lib/pull/34))
 - [adr] Record willowgraysen.com's LIB-0004 adoption and the first leaf splits ([#33](https://github.com/noisypigeon/pigeon-lib/pull/33))

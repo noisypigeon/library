@@ -4,6 +4,63 @@ All notable changes to this template are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.0.0] - 2026-10-15
+
+### Providers enabled and configured in spoke.hcl (LIB-0005)
+
+`terragrunt/root-hcl` v2.0.0 makes a spoke's `spoke.hcl` the one place that turns providers on and configures them. Recorded in [LIB-0005](https://github.com/noisypigeon/pigeon-lib/blob/main/docs/adr/LIB-0005-providers-configured-in-spoke-hcl.md).
+
+### The `providers` map
+
+```hcl
+providers = {
+  cloudflare = {}
+  scaleway   = { region = "fr-par", zone = "fr-par-1" }
+  backblaze  = { leaves = ["terraform/backblaze/bucket/"] }
+  grafana    = { leaves = ["terraform/grafana/dashboard/"] }
+}
+```
+
+- **Required.** A provider not in the map is off for every leaf.
+- **`leaves` is optional.** It takes path prefixes, each ending in `/`, and limits the provider to leaves under them. Under LIB-0004's layout that's usually `terraform/<provider>/<module>/`.
+- **Scaleway's `region`/`zone`** move here from the old per-leaf `scaleway_config.hcl`. The defaults are unchanged.
+- **Grafana keeps its contract.** An enabled leaf defines `local.grafana_auth_token`. It needs Scaleway on for the same leaf.
+
+### Breaking changes
+
+- **`backblaze = true` and `grafana = true` in `spoke.hcl` are now an error.**
+- **`scaleway_config.hcl`, `backblaze_config.hcl` and `grafana_config.hcl` are no longer read.**
+- **Each provider gets its own `provider_<name>_generated.tf`.** The one `required_providers` block stays in `provider_generated.tf` and lists only the providers the leaf gets. A provider that's off for a leaf leaves a one-line comment file, so it overwrites any stale v1 file in `.terragrunt-cache`.
+
+The template also fails loudly on:
+
+- an unknown provider key;
+- a prefix without its trailing slash;
+- Grafana without Scaleway.
+
+The state backend and state keys don't change.
+
+### Migrating a spoke
+
+1. Add `providers`, with `cloudflare = {}` and `scaleway = {}` for v1's defaults.
+2. Turn any `backblaze`/`grafana` bool into an entry whose `leaves` covers the leaves that had a `*_config.hcl`.
+3. Delete those files.
+4. Bump `root_hcl_version` to `"2.0.0"` and regenerate `root.hcl`.
+
+### Verified against all three spokes
+
+All 30 leaves (`pigeon.dev` 4, `noisypigeon.com` 6, `willowgraysen.com` 20) were checked with exactly that migration applied temporarily:
+
+- **Renders:** identical to their current `root.hcl` (v1.0.1, v1.0.1, v1.2.0) in every key and in every non-comment generated line, state keys included.
+- **Plans:** `No changes.` on every leaf.
+
+Each new guard was also checked: it fails the render with its own message.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#36](https://github.com/noisypigeon/pigeon-lib/pull/36)
+
 ## [1.2.0] - 2026-10-15
 
 ### A latent Scaleway Cockpit Grafana provider in the root.hcl template
