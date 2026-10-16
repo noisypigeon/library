@@ -235,3 +235,36 @@ All checked on 2026-10-15, as `pigeon.dev` adopted the layout.
      `No changes.`
    - Before rewiring a leaf, list its state's provider addresses. Any
      `registry.opentofu.org` entry needs the same fix first.
+8. **`willowgraysen.com`, the third adopter, and the first splits.** Its 14
+   leaves became 20 in four PRs after a drift fix and the hub releases they
+   needed: `cloudflare/ruleset` v0.1.0, `scaleway/grafana-dashboard` v0.2.0
+   (dashboards by URL and the first-access hook), `terragrunt/root-hcl` v1.2.0
+   (a latent Grafana provider), and the `grafana-dashboards/pigeon-cli/v1.0.0`
+   track the dashboard JSON now lives on.
+   - **Audit.** Four leaves carried `registry.opentofu.org` provider addresses
+     (note 7) and were fixed first. The cluster leaf's state was empty, so it
+     moved as files only.
+   - **Rewires (noisypigeon/willowgraysen.com#5, #6).** `redirect/dns` moved onto
+     `cloudflare/dns-record` and `cloudflare/ruleset` (3 moves), and the Grafana
+     leaf moved onto template v1.2.0 and the dashboard module's hook (1 move).
+     Both applied 0/0/0, and the redirect still answers 301.
+   - **Rename (noisypigeon/willowgraysen.com#7).** The §3 runbook moved the ten
+     straight leaves with state, and every gate passed.
+   - **Splits (noisypigeon/willowgraysen.com#8).** The three multi-module leaves
+     became nine, one per module call, with the call names kept so no address
+     changed. Each old state was split locally with `terraform state mv
+     -state-out` into one file per new leaf, and the leftover file had to hold
+     no managed resource. Each piece was pushed only to an empty key, and the
+     old key was emptied only after every piece planned `No changes.` The 3, 4
+     and 2 targets passed every gate, and the apply was 0/0/0 on every unit.
+   - **After the merge.** `main` plans `No changes.` on all twenty leaves.
+
+   All three spokes now conform, so §4's contract and its enforcement are next.
+9. **A third runbook note: a split leaf's dependents need its outputs in
+   state.** The split leaves pass values through Terragrunt `dependency`
+   blocks, the family's first, and those read the upstream leaf's outputs from
+   its state. `state mv` carries resources, not root outputs, so a freshly
+   pushed upstream leaf has none, and a dependent fails to plan
+   ("no outputs"). The fix is state-only: run a refresh-only plan on the
+   upstream leaf, refuse it on any drift, then apply it so the outputs are
+   recorded. Do this before planning the dependents, in dependency order.
