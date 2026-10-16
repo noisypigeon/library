@@ -124,11 +124,12 @@ jobs:
             echo "RCLONE_S3_NO_CHECK_BUCKET=true"
           } >> "$GITHUB_ENV"
 
-      # Size and modification time decide what's copied, from the listings
-      # alone: the B2 key can't read objects, and a state write always moves
-      # the mtime.
+      # MD5s decide what's copied, read from the listings alone: R2 and B2's
+      # S3 API both list an MD5 ETag for a single-part object. Comparing
+      # modification times instead makes rclone HEAD each B2 object and then
+      # rewrite its metadata, which a key without readFiles can't do.
       - name: Copy state to B2
-        run: rclone copy "r2:$STATE_BUCKET" "b2:$BACKUP_BUCKET" --include "terraform/**" --s3-no-head --stats-one-line -v
+        run: rclone copy "r2:$STATE_BUCKET" "b2:$BACKUP_BUCKET" --include "terraform/**" --checksum --s3-no-head --stats-one-line -v
 
       - name: Check B2 holds every state file
         run: |
