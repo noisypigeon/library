@@ -4,6 +4,28 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.4.0] - 2026-10-15
+
+### Add a grafana-dashboards/<set>/vX.Y.Z release track
+
+A fifth release unit: versioned Grafana dashboard JSON at `grafana-dashboards/<set>/*.json`, tagged `grafana-dashboards/<set>/vX.Y.Z`, one track per set.
+
+A dashboard is something more than one consumer loads. `willowgraysen.com`'s Grafana leaf applies it with Terraform, and `pigeon-cli`'s local observability stack ships its own copy. A tagged file gives both a pinned version to fetch by URL, `raw.githubusercontent.com/noisypigeon/pigeon-lib/refs/tags/<tag>/<path>`, instead of each keeping a duplicate. This PR adds only the release machinery. The first set arrives in the next PR, and linking `pigeon-cli` to it is out of scope for now.
+
+### Release tracking
+
+- **`template-release.yml`** detects changed `grafana-dashboards/<set>/*.json` and cuts one tag per changed set.
+  - The first version is `1.0.0`. After that, the PR's `release:*` label sets the bump, as for modules.
+  - Each set gets its own `CHANGELOG.md` and a `[grafana-dashboards/<set>]` root line.
+  - A README-only change releases nothing.
+- **`root-changelog.yml`** gets the matching stand-down arm, so a dashboard release never gets two root lines, and a `grafana-dashboards` tag for non-releasing changes. That makes five duplicated predicates (noisypigeon/noisypigeon#301).
+
+The hub's `CLAUDE.md`, `README.md`, the root `CHANGELOG.md` header and the `release-pr` skill now list the fifth unit.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#28](https://github.com/noisypigeon/pigeon-lib/pull/28)
+
 ## [1.3.2] - 2026-10-15
 
 ### Generate README tables for cloudflare/dns-record

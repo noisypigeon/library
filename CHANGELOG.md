@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-15
 
+- [workflows] Add a grafana-dashboards/<set>/vX.Y.Z release track ([#28](https://github.com/noisypigeon/pigeon-lib/pull/28))
 - [adr] docs(lib-0004): record noisypigeon.com's adoption ([#27](https://github.com/noisypigeon/pigeon-lib/pull/27))
 - [adr] docs(lib-0004): record pigeon.dev's adoption and link the fast follows ([#26](https://github.com/noisypigeon/pigeon-lib/pull/26))
 - [workflows] Generate README tables for cloudflare/dns-record ([#25](https://github.com/noisypigeon/pigeon-lib/pull/25))
