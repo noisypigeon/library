@@ -24,6 +24,9 @@
 #
 # Since v2.1.0 (LIB-0007) spoke.hcl may also set `state_backend` to keep state
 # in Cloudflare R2 instead of Scaleway Object Storage.
+#
+# Since v2.2.0 (LIB-0008) a zone leaf -- terraform/cloudflare/<zone>/<module>/
+# <instance>/ -- gets its zone as local.cloudflare_zone and local.cloudflare_zone_id.
 
 locals {
   # The spoke's instance values. Missing spoke.hcl is a hard error, which is
@@ -126,6 +129,27 @@ locals {
   # root is included from outside <spoke>/terraform/ is excluded.
   path_segments = split("/", path_relative_to_include())
   is_valid_leaf = length(local.path_segments) >= 1 && local.path_segments[0] == "terraform"
+
+  # A zone leaf (LIB-0008) is terraform/cloudflare/<zone>/<module>/<instance>/,
+  # where <zone> is the zone's apex domain. A domain always has a dot and a
+  # module name never does, which is what tells the two apart. try() because
+  # HCL's && doesn't short-circuit, so a short path must not index out of range.
+  is_zone_leaf = (
+    length(local.path_segments) >= 5 &&
+    try(local.path_segments[1], "") == "cloudflare" &&
+    length(regexall("\\.", try(local.path_segments[2], ""))) > 0
+  )
+  cloudflare_zone = local.is_zone_leaf ? local.path_segments[2] : ""
+
+  # The zone's ID comes from ENV_CF_ZONE_ID_<ZONE>, the zone uppercased with
+  # "." and "-" turned into "_" (noisypigeon.com -> ENV_CF_ZONE_ID_NOISYPIGEON_COM).
+  cloudflare_zone_id_key = "ENV_CF_ZONE_ID_${upper(replace(replace(local.cloudflare_zone, ".", "_"), "-", "_"))}"
+  cloudflare_zone_id     = local.is_zone_leaf ? get_env(local.cloudflare_zone_id_key, lookup(local.secrets, local.cloudflare_zone_id_key, "")) : ""
+  guard_zone             = local.is_zone_leaf && local.cloudflare_zone_id == "" ? file("${path_relative_to_include()} is a zone leaf for ${local.cloudflare_zone} but ${local.cloudflare_zone_id_key} is not set in secrets.enc or the environment (LIB-0008)") : true
+
+  # Appended to cloudflare_ids_generated.tf for a zone leaf only, so every other
+  # leaf's file is byte-identical to v2.1.0's.
+  cloudflare_zone_locals = local.is_zone_leaf ? "\n  cloudflare_zone    = \"${local.cloudflare_zone}\"\n  cloudflare_zone_id = \"${local.cloudflare_zone_id}\"" : ""
 
   # Scaleway region/zone for the provider. The state backend below is always
   # fr-par regardless.
@@ -279,7 +303,7 @@ generate "cloudflare_ids" {
   contents  = !local.cloudflare_enabled ? local.provider_off : <<EOF
 locals {
   cloudflare_account_id              = "${local.cloudflare_account_id}"
-  ${join("\n", [for k, v in local.env_cloudflare_secrets : "  ${k} = \"${v}\""])}
+  ${join("\n", [for k, v in local.env_cloudflare_secrets : "  ${k} = \"${v}\""])}${local.cloudflare_zone_locals}
 }
 EOF
 }
