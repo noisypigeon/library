@@ -69,7 +69,7 @@ later — get the PR body right the first time.
    ```
    Merging triggers `template-release.yml` automatically (tags the changed
    module(s), updates their `CHANGELOG.md` and the root one, cuts a GitHub
-   Release, then dispatches `pigeon-dev-pages.yml` in `noisypigeon/pigeon.dev`,
+   Release, then dispatches `garden-pages.yml` in `noisypigeon/garden`,
    which regenerates this version's redirect page, overview entry and release
    post) and, on any resulting `.tf` changes, `module-docs.yml` (regenerates
    the module's `README.md` input/output table). A `zola-site` release

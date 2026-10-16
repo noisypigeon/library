@@ -526,10 +526,10 @@ jobs:
           done
 
       # The hub hosts no site, so every deploy dispatch is cross-repo
-      # (LIB-0002). pigeon.dev publishes the module redirect pages, overview
-      # pages, theme-version pages and release posts, so it rebuilds on any
-      # release; noisypigeon.com only renders with the theme, so it rebuilds
-      # on a theme release only.
+      # (LIB-0002). noisypigeon/garden publishes the module redirect pages,
+      # overview pages, theme-version pages and release posts, so it rebuilds
+      # on any release; noisypigeon.com only renders with the theme, so it
+      # rebuilds on a theme release only.
       #
       # Runs *after* the tags are pushed above: the spoke's generator reads
       # this repo's tag list, so dispatching first would race the tag into
@@ -539,11 +539,11 @@ jobs:
       # it doesn't, these steps fail loudly -- which is the point. A missed
       # dispatch leaves a version tagged and released here whose short URL
       # 404s on the site.
-      - name: Trigger pigeon.dev Pages deploy
+      - name: Trigger garden Pages deploy
         if: steps.versions.outputs.tags != '' || steps.zola_site.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
-        run: gh workflow run pigeon-dev-pages.yml -R noisypigeon/pigeon.dev --ref main
+        run: gh workflow run garden-pages.yml -R noisypigeon/garden --ref main
 
       # Replaces a dispatch at zola-sites-deploy.yml in noisypigeon/noisypigeon,
       # which DEV-0159 removed from that repo -- so this step had been failing
