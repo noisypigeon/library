@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-15
 
+- [scaleway/grafana-dashboard] grafana-dashboard: dashboards by URL, and an optional first-access hook ([#31](https://github.com/noisypigeon/pigeon-lib/pull/31))
 - [cloudflare/ruleset] Add cloudflare/ruleset, a thin wrapper over cloudflare_ruleset ([#30](https://github.com/noisypigeon/pigeon-lib/pull/30))
 - [grafana-dashboards/pigeon-cli] Add the pigeon-cli Grafana dashboard set ([#29](https://github.com/noisypigeon/pigeon-lib/pull/29))
 - [workflows] Add a grafana-dashboards/<set>/vX.Y.Z release track ([#28](https://github.com/noisypigeon/pigeon-lib/pull/28))
