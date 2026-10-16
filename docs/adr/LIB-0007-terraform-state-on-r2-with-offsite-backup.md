@@ -3,6 +3,9 @@
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-15.
 - **Status**: Accepted.
+- **Amended 2026-10-16**: §4 now describes the copy as it ships since
+  `workflows/v1.5.2` and `v1.5.3` (#44, #45), over B2's S3-compatible API. It
+  also links the restore runbook, and Out of scope links its issues.
 
 ## Context
 
@@ -84,17 +87,27 @@ on for a leaf (LIB-0005 §6). The account ID is the existing
 R2 is the only backend Terraform reads or writes. A spoke on R2 also copies
 its state objects to a Backblaze B2 bucket:
 
-- **The copy is `rclone copy`,** never `sync`, from
-  `r2:<state bucket>/terraform` to `b2:<backup bucket>/terraform`. It runs after
-  every CI apply and on a daily schedule, which catches local applies within a
-  day. pigeon-lib ships it as the reusable `state-backup.yml` workflow
-  (`workflows/v1.5.0`).
+- **The copy is `rclone copy`,** never `sync`, of every `terraform/**` object
+  from the R2 state bucket to the B2 backup bucket. It runs after every CI
+  apply and on a daily schedule, which catches local applies within a day.
+  pigeon-lib ships it as the reusable `state-backup.yml` workflow (since
+  `workflows/v1.5.0`; as described here since `v1.5.3`).
+- **It reaches B2 through B2's S3-compatible API.** It doesn't use rclone's
+  `b2` backend, which authenticates with B2's API v1, and B2 refuses that. The
+  account's S3 endpoint is read at run time from the key's own
+  `b2_authorize_account` (v4).
+- **It decides what to copy by MD5,** read from the two bucket listings
+  (`--checksum`). With `--s3-no-head`, rclone never reads or rewrites a B2
+  object, which the backup key couldn't do anyway.
 - **B2 keeps every version.** A B2 bucket with no lifecycle rules retains all
   versions of a file, so each state write that reaches B2 is kept.
-- **The B2 key can list and write, nothing else.** `listFiles` and
-  `writeFiles`, scoped to the backup bucket, with no expiry. A compromised or
-  buggy copy job can add versions but can't read, hide or delete any.
-  Restoring uses a separate admin key, by hand.
+- **The B2 key can list and write, nothing else.** `listBuckets`, `listFiles`
+  and `writeFiles`, scoped to the backup bucket, with no expiry. A compromised
+  or buggy copy job can add versions but can't read, hide or delete any.
+- **A restore uses a separate admin key, by hand,** through B2's native API v4.
+  The admin key may be the account's master key, which B2's S3 API refuses. The
+  steps are in
+  [`docs/runbooks/restore-terraform-state-from-b2.md`](../runbooks/restore-terraform-state-from-b2.md).
 - **The cost is storage only.** R2 egress and B2 ingress are both free, so B2
   bills for the bytes it keeps, and for downloads only on a restore.
 
@@ -123,11 +136,13 @@ habits. A spoke on Scaleway doesn't need it: its bucket versions in place.
   answer.
 - **Mixing backends within one spoke.** Permanent, for the reason in §1.
 - **State locking** (`use_lockfile` on R2). R2's conditional writes make it
-  possible. It's genuinely deferred, and it would apply to both backends.
+  possible. It's genuinely deferred, and it would apply to both backends
+  (noisypigeon/noisypigeon#315).
 - **Moving `pigeon.dev` and `willowgraysen.com` to R2.** Each is that spoke's
-  own decision and PR. Deferred.
+  own decision and PR. Deferred (noisypigeon/noisypigeon#316).
 - **Retiring a spoke's Scaleway state bucket** after its move. The old objects
-  stay as a frozen, versioned rollback copy until a later decision. Deferred.
+  stay as a frozen, versioned rollback copy until a later decision. Deferred
+  (noisypigeon.com's: noisypigeon/noisypigeon#317).
 
 ## Verification
 
