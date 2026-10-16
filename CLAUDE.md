@@ -90,6 +90,13 @@ Filing one, by hand:
 - Genuinely-deferred `## Out of scope` items get a GitHub issue against
   `noisypigeon/noisypigeon` (ADR-0031); permanent design boundaries do not.
 
+## Runbooks
+
+Operational procedures live at `docs/runbooks/<slug>.md`: step-by-step, for
+any spoke, citing the ADR they serve. Today there's one,
+`restore-terraform-state-from-b2.md` (LIB-0007 §4). It puts one leaf's state
+back into R2 from the B2 backup, through B2's native API with an admin key.
+
 ## Dev cycle
 
 Every change ships through a labelled PR — see the `release-pr` skill, which is
