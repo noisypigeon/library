@@ -4,6 +4,33 @@ All notable changes to this template are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.2.0] - 2026-10-15
+
+### A latent Scaleway Cockpit Grafana provider in the root.hcl template
+
+`terragrunt/root-hcl` gains a latent Grafana provider, shaped like the Backblaze one. A leaf that manages Grafana dashboards then needs no provider block or data source of its own, and can be a single module call, as [LIB-0004](https://github.com/noisypigeon/pigeon-lib/blob/main/docs/adr/LIB-0004-normalized-terraform-leaf-layout.md) requires.
+
+### How a leaf opts in
+
+1. `grafana = true` in the spoke's `spoke.hcl`.
+2. A sibling `grafana_config.hcl` with `enabled = true` in each leaf that uses it.
+
+### What an enabled leaf gets
+
+- **`grafana/grafana ~> 4.0`** in its `required_providers`.
+- **A generated `data "scaleway_cockpit_grafana" "grafana"`** for the project's Grafana URL.
+- **A generated `provider "grafana"`**, authenticated with **`local.grafana_auth_token`**. The leaf must define that local: the IAM API key secret, usually passed in from another leaf's output.
+
+A leaf in a Grafana-enabled spoke that hasn't opted in gets a comment-only file. A spoke without `grafana = true` gets nothing.
+
+### Verified
+
+I rendered every leaf of all three spokes (24 leaves) under its current `root.hcl` and under this template. The only differences are added generate entries with `disable: true`, which write no file. State keys are unchanged everywhere. LIB-0003 records this as its third amendment.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#32](https://github.com/noisypigeon/pigeon-lib/pull/32)
+
 ## [1.1.0] - 2026-10-15
 
 ### Optional extra providers and Backblaze support in the root.hcl template
