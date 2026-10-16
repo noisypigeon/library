@@ -46,6 +46,9 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-16
 
+- [workflows] Drop pigeon.dev from comments and docs ([#55](https://github.com/noisypigeon/pigeon-lib/pull/55))
+- [terragrunt/root-hcl] Drop pigeon.dev from comments and docs ([#55](https://github.com/noisypigeon/pigeon-lib/pull/55))
+- [scaleway/project] Drop pigeon.dev from comments and docs ([#55](https://github.com/noisypigeon/pigeon-lib/pull/55))
 - [adr] docs(adr): LIB-0009 and LIB-0008 record the noisypigeon.garden move ([#54](https://github.com/noisypigeon/pigeon-lib/pull/54))
 - [scaleway/project] Use noisypigeon.garden/terraform/ short URLs ([#53](https://github.com/noisypigeon/pigeon-lib/pull/53))
 - [scaleway/pigeon-cluster] Use noisypigeon.garden/terraform/ short URLs ([#53](https://github.com/noisypigeon/pigeon-lib/pull/53))
