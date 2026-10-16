@@ -140,9 +140,11 @@ Genuinely deferred, each with an issue:
   interface (ADR-0109/0110). Any redirect has to keep go-getter discovery
   working, by preserving the path and serving the `terraform-get` meta at the
   target. Otherwise every consumer's `source =` breaks.
+  *Superseded by LIB-0009:* every consumer moves to the new host first, and
+  `pigeon.dev` short URLs are retired rather than preserved.
 - **noisypigeon.garden becomes pigeon.dev's new home**
   (noisypigeon/noisypigeon#322): the site, the module short-URL host, and its
-  zone as zone leaves.
+  zone as zone leaves. *Decided by LIB-0009.*
 
 Permanent boundaries, with no issue:
 
