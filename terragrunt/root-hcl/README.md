@@ -12,8 +12,8 @@ For every leaf under a spoke's `terraform/`:
 
 - decrypts the spoke's `terraform/secrets.enc` in memory with sops/age (no
   plaintext on disk) and exposes `ENV_SW_*`/`ENV_CF_*` keys as locals;
-- generates the Cloudflare and Scaleway providers, honouring a leaf's optional
-  `scaleway_config.hcl` region/zone override (default `fr-par`/`fr-par-1`);
+- generates the providers `spoke.hcl`'s `providers` map turns on for that leaf
+  (Cloudflare, Scaleway, Backblaze B2, Scaleway Cockpit Grafana; LIB-0005);
 - excludes anything not under `terraform/`;
 - keeps state in the spoke's own Scaleway bucket, at
   `terraform/<leaf>/terraform.tfstate`.
@@ -29,10 +29,16 @@ A spoke commits a `spoke.hcl` at its repo root:
 ```hcl
 locals {
   # Template version to materialize: "X.Y.Z", or "main" for the working tree.
-  root_hcl_version = "1.0.0"
+  root_hcl_version = "2.0.0"
 
   # secrets.enc key (or environment variable) naming the spoke's state bucket.
   state_bucket_secret = "PIGEON_DEV_TERRAFORM_STATE_BUCKET_NAME"
+
+  # Which providers this spoke's leaves get (v2.0.0, LIB-0005). See below.
+  providers = {
+    cloudflare = {}
+    scaleway   = {}
+  }
 }
 ```
 
@@ -76,48 +82,60 @@ input, with `secrets_files: terraform/secrets.enc`.
   `Could not find a root.hcl`. Tracking it has a second benefit: the base ref's
   worktree has its own `root.hcl`, so a removed leaf can still plan its destroy.
 
-### Optional extensions (v1.1.0)
+### Providers (v2.0.0)
 
-Both are off unless `spoke.hcl` sets them, and a spoke that sets neither renders
-exactly as it did on `v1.0.x`.
+`providers` is required. Each key turns a provider on; a provider that isn't in
+the map is off for every leaf:
 
 ```hcl
-locals {
-  # ...
-  # Appended to the single required_providers block. A provider's own
-  # configuration, if it needs one, lives in the leaf that uses it.
-  extra_required_providers = {
-    grafana = { source = "grafana/grafana", version = "~> 4.0" }
-  }
-
-  # DEV-0148's latent Backblaze B2 provider. Still inert for any leaf that does
-  # not drop a sibling backblaze_config.hcl with `enabled = true`; those that do
-  # get the b2 provider, configured from BACKBLAZE_APPLICATION_KEY{,_ID}.
-  backblaze = true
+providers = {
+  cloudflare = {}
+  scaleway   = { region = "fr-par", zone = "fr-par-1" } # the defaults
+  backblaze  = { leaves = ["terraform/backblaze/"] }
+  grafana    = { leaves = ["terraform/grafana/dashboard/"] }
 }
 ```
 
-`willowgraysen.com` uses both (RUN-0001).
+- **`leaves`** is an optional list of path prefixes, relative to the spoke's
+  root and ending in `/`. With it, the provider is on only for leaves under one
+  of them; without it, for every leaf. Under LIB-0004's
+  `terraform/<provider>/<module>/<instance>/` layout, a prefix is usually
+  `terraform/<provider>/` or `terraform/<provider>/<module>/`.
+- **`cloudflare`** generates `provider "cloudflare"` from `CLOUDFLARE_TOKEN`, and
+  `local.cloudflare_account_id` plus the `ENV_CF_*` locals.
+- **`scaleway`** generates `provider "scaleway"` at `region`/`zone`, plus
+  `local.scaleway_project_id` and friends and the `ENV_SW_*` locals. The state
+  backend is always `fr-par`, whatever this says.
+- **`backblaze`** generates `provider "b2"` from
+  `BACKBLAZE_APPLICATION_KEY{,_ID}` (DEV-0148).
+- **`grafana`** generates a `data "scaleway_cockpit_grafana" "grafana"` and a
+  `provider "grafana"` that authenticates with **`local.grafana_auth_token`**,
+  which the leaf must define (an IAM API key secret, usually a Terragrunt
+  `dependency` output). It needs `scaleway` on for the same leaf.
 
-### Latent Grafana provider (v1.2.0)
+Every leaf's single `required_providers` block lists exactly the providers it
+gets. Each provider has its own `provider_<name>_generated.tf`; when that
+provider is off for the leaf, the file holds one comment line.
 
-`grafana = true` in `spoke.hcl` lets a leaf opt into a Scaleway Cockpit Grafana
-provider with a sibling `grafana_config.hcl`:
+The template fails the run, rather than silently dropping a provider, on an
+unknown key, a prefix without its trailing `/`, Grafana without Scaleway, or a
+leftover v1 `backblaze`/`grafana` bool.
 
-```hcl
-# grafana_config.hcl
-locals {
-  enabled = true
-}
-```
+`extra_required_providers` (v1.1.0) still appends `{ source, version }` entries
+to `required_providers`, for a provider the leaf configures itself.
 
-An opted-in leaf gets `grafana/grafana ~> 4.0` in `required_providers`, plus a
-generated `data "scaleway_cockpit_grafana" "grafana"` and `provider "grafana"`
-that authenticates with **`local.grafana_auth_token`**, which the leaf must
-define (an IAM API key secret, usually a Terragrunt `dependency` output). A leaf
-that hasn't opted in gets a comment-only file; a spoke without `grafana = true`
-gets nothing. Prefer this over an `extra_required_providers` entry for Grafana:
-it confines both the requirement and the provider to the leaves that use them.
+### Migrating from v1
+
+v1 turned Backblaze and Grafana on with a bool in `spoke.hcl` and a sibling
+`backblaze_config.hcl`/`grafana_config.hcl` in each leaf, and overrode Scaleway's
+region with `scaleway_config.hcl`. v2 reads none of them. In one PR:
+
+1. Add `providers`, with `cloudflare = {}` and `scaleway = {}` for v1's defaults.
+2. For `backblaze = true` or `grafana = true`, delete the bool and add the
+   provider with `leaves` covering the leaves that had a `*_config.hcl`.
+3. Delete every `*_config.hcl` under `terraform/`.
+4. Bump `root_hcl_version` to `"2.0.0"`, rerun `resolve-root-hcl.sh`, and check
+   that every leaf plans `No changes.`
 
 ## Two pins, deliberately
 

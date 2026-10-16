@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-15.
-- **Status**: Accepted; amended 2026-10-15, three times (see `## Amendments`).
+- **Status**: Accepted; amended 2026-10-15, three times (see `## Amendments`). The per-leaf `*_config.hcl` opt-ins its amendments added are superseded by LIB-0005.
 
 ## Context
 
