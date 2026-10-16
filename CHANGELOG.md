@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-16
 
+- [adr] Add a runbook for restoring Terraform state from B2, and bring LIB-0007 up to date ([#46](https://github.com/noisypigeon/pigeon-lib/pull/46))
 - [workflows] Fix state-backup.yml: compare state files by checksum ([#45](https://github.com/noisypigeon/pigeon-lib/pull/45))
 - [workflows] Fix state-backup.yml: reach B2 through its S3-compatible API ([#44](https://github.com/noisypigeon/pigeon-lib/pull/44))
 
