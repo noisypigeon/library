@@ -141,13 +141,8 @@ is what makes the rename's paths true.
 
 ## Out of scope
 
-- **`noisypigeon.com`'s adoption.** Genuinely deferred, a fast follow, tracked
-  as noisypigeon/noisypigeon#313.
-  - Its four raw-DNS leaves would become `cloudflare/dns-record/<instance>`, for
-    example `github-pages`, `bluesky`, `google-search` and `proton`.
-  - `project` and `state/bucket` would become `scaleway/project/<instance>` and
-    `scaleway/object-bucket/terraform-state`.
-  - The instance names are that spoke's to choose.
+- **`noisypigeon.com`'s adoption.** Deferred as a fast follow, and since done
+  (noisypigeon/noisypigeon#313, now closed). See Verification 6.
 - **`willowgraysen.com`'s adoption.** Genuinely deferred, a fast follow, and
   the first spoke with splits. Tracked as noisypigeon/noisypigeon#314. Shallowly:
   - **`terraform/scaleway/pigeon-cluster/`.** `pigeon-cluster` is a composite
@@ -214,3 +209,29 @@ All checked on 2026-10-15, as `pigeon.dev` adopted the layout.
    "Changes to Outputs" against its emptied key, even after `state rm`. That's
    expected, and harmless: those are output removals, not resource changes. The
    gate is "no resource add/change/destroy", not "the words No changes".
+6. **`noisypigeon.com`, the second adopter.** It used the same two PRs.
+   - **Rewire (noisypigeon/noisypigeon.com#16).** The four DNS leaves moved onto
+     `cloudflare/dns-record` v0.1.0 with 13 `moved` blocks (2, 1, 1 and 9). The
+     plan and apply showed 13 moves and 0 add/change/destroy.
+   - **Rename (noisypigeon/noisypigeon.com#17).** The §3 runbook moved 2, 1, 1,
+     9, 1 and 2 resources. Every gate passed, and all twelve old and new units
+     applied 0/0/0.
+   - **After the merge.** `main` plans `No changes.` on all six leaves:
+     - `terraform/cloudflare/dns-record/{github-pages,bluesky,google-search,proton}/terraform.tfstate`
+     - `terraform/scaleway/project/com/terraform.tfstate`
+     - `terraform/scaleway/object-bucket/terraform-state/terraform.tfstate`
+
+   Two of the three spokes now conform. `willowgraysen.com`
+   (noisypigeon/noisypigeon#314) is the last before §4's contract.
+7. **A second runbook note: check the provider addresses before adding `moved`
+   blocks.** `noisypigeon.com`'s `blog/dns` state recorded its records under
+   `registry.opentofu.org/cloudflare/cloudflare`, left by an apply that ran
+   OpenTofu because `TG_TF_PATH` wasn't set. The config resolves
+   `registry.terraform.io/...`, so every `moved` block in that leaf became a
+   cross-provider move, which the Cloudflare provider refuses
+   (`Unable to Move Resource State`).
+   - The fix is state-only, made with a backup: `terragrunt state replace-provider`
+     from the OpenTofu address to the Terraform one, after which `main` planned
+     `No changes.`
+   - Before rewiring a leaf, list its state's provider addresses. Any
+     `registry.opentofu.org` entry needs the same fix first.
