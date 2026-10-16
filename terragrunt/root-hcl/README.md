@@ -99,6 +99,26 @@ locals {
 
 `willowgraysen.com` uses both (RUN-0001).
 
+### Latent Grafana provider (v1.2.0)
+
+`grafana = true` in `spoke.hcl` lets a leaf opt into a Scaleway Cockpit Grafana
+provider with a sibling `grafana_config.hcl`:
+
+```hcl
+# grafana_config.hcl
+locals {
+  enabled = true
+}
+```
+
+An opted-in leaf gets `grafana/grafana ~> 4.0` in `required_providers`, plus a
+generated `data "scaleway_cockpit_grafana" "grafana"` and `provider "grafana"`
+that authenticates with **`local.grafana_auth_token`**, which the leaf must
+define (an IAM API key secret, usually a Terragrunt `dependency` output). A leaf
+that hasn't opted in gets a comment-only file; a spoke without `grafana = true`
+gets nothing. Prefer this over an `extra_required_providers` entry for Grafana:
+it confines both the requirement and the provider to the leaves that use them.
+
 ## Two pins, deliberately
 
 `/.lib-version` decides which *resolver* runs: `resolve-root-hcl.sh` is on the
