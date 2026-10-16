@@ -164,6 +164,15 @@ Permanent boundaries, with no issue:
 3. **The guard.** A copy at `terraform/cloudflare/example.org/dns-record/x`
    failed the render with "is a zone leaf for example.org but
    ENV_CF_ZONE_ID_EXAMPLE_ORG is not set in secrets.enc or the environment".
-4. **The release.** This record's PR changes `terragrunt/root-hcl/root.hcl` and
-   carries `release:minor`, so its merge should cut `terragrunt/root-hcl/v2.2.0`.
-   noisypigeon.com's adoption is recorded here once it lands.
+4. **The release.** #47 cut `terragrunt/root-hcl/v2.2.0`. Its README-only
+   module changes released no module.
+5. **noisypigeon.com's adoption** (noisypigeon/noisypigeon.com#29), by §3:
+   - the four state objects were copied to their new R2 keys, and each matched
+     its old key in serial, lineage and resource count;
+   - the branch planned `No changes.` on 7/7 leaves;
+   - `state rm` then emptied the old keys (13 instances).
+
+   CI planned `No changes.` on the four new paths and on the four removed ones,
+   with no creates or destroys. The apply was a no-op on all 11. The post-apply
+   backup held 13 files in both R2 and B2. Afterwards, `main` planned
+   `No changes.` on 7/7 leaves.
