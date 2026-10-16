@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-15
 
+- [adr] Record willowgraysen.com's LIB-0004 adoption and the first leaf splits ([#33](https://github.com/noisypigeon/pigeon-lib/pull/33))
 - [terragrunt/root-hcl] A latent Scaleway Cockpit Grafana provider in the root.hcl template ([#32](https://github.com/noisypigeon/pigeon-lib/pull/32))
 - [scaleway/grafana-dashboard] grafana-dashboard: dashboards by URL, and an optional first-access hook ([#31](https://github.com/noisypigeon/pigeon-lib/pull/31))
 - [cloudflare/ruleset] Add cloudflare/ruleset, a thin wrapper over cloudflare_ruleset ([#30](https://github.com/noisypigeon/pigeon-lib/pull/30))
