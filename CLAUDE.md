@@ -11,8 +11,7 @@ nothing that is deployed:
   through go-getter's HTTP discovery protocol to a `git::` source against this
   repo. **That URL is a stable public interface of its own** (LIB-0009): its
   `terraform/` matches this repo's prefix by choice, and moving the internal
-  layout never changes it. The old `pigeon.dev/modules/…` URLs are retired and
-  no longer resolve.
+  layout never changes it.
 - `zola-site/` — a reusable Zola theme, tagged `zola-site/vX.Y.Z`, consumed by a
   site setting `[extra].theme_version` and running `resolve-theme.sh`.
   That script resolves everything relative to its **own** location rather than

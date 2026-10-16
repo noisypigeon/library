@@ -1,10 +1,8 @@
 # `terragrunt/root-hcl`
 
 The Terragrunt `root.hcl` every spoke in this family shares, versioned as
-`terragrunt/root-hcl/vX.Y.Z` (LIB-0001 §6, LIB-0003). Before it existed, the
-three per-domain roots in `noisypigeon/noisypigeon` were near-copies of one another.
-`pigeon.dev`'s and `noisypigeon.com`'s differed only in the name of their
-state-bucket secret.
+`terragrunt/root-hcl/vX.Y.Z` (LIB-0001 §6, LIB-0003). Everything a spoke varies
+lives in its `spoke.hcl`; everything else is this one template.
 
 ## What it does
 
@@ -32,7 +30,7 @@ locals {
   root_hcl_version = "2.0.0"
 
   # secrets.enc key (or environment variable) naming the spoke's state bucket.
-  state_bucket_secret = "PIGEON_DEV_TERRAFORM_STATE_BUCKET_NAME"
+  state_bucket_secret = "NOISYPIGEON_COM_R2_TERRAFORM_STATE_BUCKET_NAME"
 
   # Which providers this spoke's leaves get (v2.0.0, LIB-0005). See below.
   providers = {

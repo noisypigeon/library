@@ -11,7 +11,7 @@ original repo. Moved from `terraform/modules/` to top-level `modules/` by
 [ADR-0093](https://github.com/noisypigeon/noisypigeon/blob/main/docs/adr/0093-move-scaleway-modules-to-top-level-modules.md),
 then to `templates/terraform/` by
 [ADR-0110](https://github.com/noisypigeon/noisypigeon/blob/main/docs/adr/0110-move-modules-to-templates-terraform.md),
-then into `noisypigeon/pigeon.dev` — paths unchanged — by
+then into `noisypigeon/garden` — paths unchanged — by
 [ADR-0154](https://github.com/noisypigeon/noisypigeon/blob/main/docs/adr/0154-hoist-templates-to-pigeon-dev-repo.md),
 and finally into this repo as top-level `terraform/` by LIB-0002, which
 dropped the `templates/` segment ADR-0154 had kept only to limit its own
@@ -40,11 +40,11 @@ This directory holds only module source — it has no root provider/backend conf
 
 ## Versioning
 
-Releases are tagged with per-module, path-scoped semantic versions matching wherever this directory lived at release time. Four tag-prefix eras exist: an original, even shorter pre-ADR-0037 form; `terraform/modules/<provider>/<module>/vX.Y.Z` (ADR-0037 era); `modules/<provider>/<module>/vX.Y.Z` (ADR-0093 era); `templates/terraform/<provider>/<module>/vX.Y.Z` (ADR-0110 era, carried into `noisypigeon/pigeon.dev` unchanged by ADR-0154); and `terraform/<provider>/<module>/vX.Y.Z` (LIB-0002 era, and current — the flatten re-cut all 53 tags under this shape in this repo). Old tags are never renamed or deleted: each is an immutable snapshot of a whole repo at one commit, so a tag from an earlier era still resolves correctly even after this directory later moved.
+Releases are tagged with per-module, path-scoped semantic versions matching wherever this directory lived at release time. Four tag-prefix eras exist: an original, even shorter pre-ADR-0037 form; `terraform/modules/<provider>/<module>/vX.Y.Z` (ADR-0037 era); `modules/<provider>/<module>/vX.Y.Z` (ADR-0093 era); `templates/terraform/<provider>/<module>/vX.Y.Z` (ADR-0110 era, carried into `noisypigeon/garden` unchanged by ADR-0154); and `terraform/<provider>/<module>/vX.Y.Z` (LIB-0002 era, and current — the flatten re-cut all 53 tags under this shape in this repo). Old tags are never renamed or deleted: each is an immutable snapshot of a whole repo at one commit, so a tag from an earlier era still resolves correctly even after this directory later moved.
 
-**Only the current era's tags live here, and only they resolve.** The first three eras' tags remain in `noisypigeon/noisypigeon` and the fourth in `noisypigeon/pigeon.dev`; none are deleted — ADR-0154 made that a permanent boundary — but none are served either. DEV-0160 step 0 retired the last mapping arm once `scaleway/project/v1.0.0`, its only remaining consumer, was repinned. Every version a consumer can resolve today is a `terraform/*` tag in this repo, because LIB-0002 re-cut all 53 of them here.
+**Only the current era's tags live here, and only they resolve.** The first three eras' tags remain in `noisypigeon/noisypigeon` and the fourth in `noisypigeon/garden`; none are deleted — ADR-0154 made that a permanent boundary — but none are served either. DEV-0160 step 0 retired the last mapping arm once `scaleway/project/v1.0.0`, its only remaining consumer, was repinned. Every version a consumer can resolve today is a `terraform/*` tag in this repo, because LIB-0002 re-cut all 53 of them here.
 
-**The public `noisypigeon.garden/terraform/<provider>/<module>/vX.Y.Z` short-URL namespace (see "Consuming" below, [LIB-0009](../docs/adr/LIB-0009-terraform-short-urls-move-to-noisypigeon-garden.md)) is published for every current-era tag, whatever version, and doesn't move when this directory does.** It is a stable public interface, deliberately decoupled from the repo's internal layout. It replaced `pigeon.dev/modules/...` ([ADR-0109](https://github.com/noisypigeon/noisypigeon/blob/main/docs/adr/0109-short-module-source-urls-via-blog-redirect.md)), which no longer resolves.
+**The public `noisypigeon.garden/terraform/<provider>/<module>/vX.Y.Z` short-URL namespace (see "Consuming" below, [LIB-0009](../docs/adr/LIB-0009-terraform-short-urls-move-to-noisypigeon-garden.md)) is published for every current-era tag, whatever version, and doesn't move when this directory does.** It is a stable public interface, deliberately decoupled from the repo's internal layout.
 
 ## Consuming
 

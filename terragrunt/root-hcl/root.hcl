@@ -13,10 +13,8 @@
 # Terragrunt's [main...HEAD] filter plans inside git worktrees, where only
 # tracked files exist.
 #
-# Generalized from the three per-domain root.hcl files in noisypigeon/noisypigeon
-# (pigeon.dev/, noisypigeon.com/, willowgraysen.com/), which differed only in
-# what spoke.hcl now supplies. Everything a spoke varies comes from spoke.hcl;
-# everything else is one copy here.
+# Everything a spoke varies comes from spoke.hcl; everything else is one copy
+# here.
 #
 # Since v2.0.0 (LIB-0005) that includes which providers a leaf gets: spoke.hcl's
 # required `providers` map enables and configures each one, optionally scoped
@@ -80,7 +78,7 @@ locals {
   extra_required_providers = lookup(local.spoke.locals, "extra_required_providers", {})
 
   # Name of the secrets.enc key (or environment variable) holding the spoke's
-  # own Terraform state bucket name, e.g. PIGEON_DEV_TERRAFORM_STATE_BUCKET_NAME.
+  # own Terraform state bucket name, e.g. NOISYPIGEON_COM_R2_TERRAFORM_STATE_BUCKET_NAME.
   state_bucket_secret = local.spoke.locals.state_bucket_secret
 
   # Where that bucket lives (LIB-0007): "scaleway" (the default) or
