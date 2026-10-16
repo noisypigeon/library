@@ -46,6 +46,8 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-16
 
+- [scaleway/project] Use noisypigeon.garden/terraform/ short URLs ([#53](https://github.com/noisypigeon/pigeon-lib/pull/53))
+- [scaleway/pigeon-cluster] Use noisypigeon.garden/terraform/ short URLs ([#53](https://github.com/noisypigeon/pigeon-lib/pull/53))
 - [workflows] Publish module redirect pages under terraform/ instead of modules/ ([#52](https://github.com/noisypigeon/pigeon-lib/pull/52))
 - [workflows] Dispatch the site deploy to noisypigeon/garden ([#51](https://github.com/noisypigeon/pigeon-lib/pull/51))
 - [adr] docs(adr): LIB-0009 moves Terraform short URLs to noisypigeon.garden ([#50](https://github.com/noisypigeon/pigeon-lib/pull/50))
