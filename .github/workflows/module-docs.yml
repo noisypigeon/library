@@ -27,7 +27,10 @@ jobs:
       - name: Generate module docs
         uses: terraform-docs/gh-actions@v1.4.1
         with:
-          working-dir: terraform/scaleway/project,terraform/scaleway/object-bucket,terraform/scaleway/iam-policy,terraform/scaleway/compute-instance,terraform/scaleway/compute-instance-config,terraform/scaleway/block-volume,terraform/scaleway/cockpit-observability,terraform/scaleway/pigeon-cluster,terraform/backblaze/bucket,terraform/backblaze/api-key,terraform/cloudflare/dns-record
+          # Every directory under terraform/ holding a .tf, found at run time,
+          # so a new module can't silently miss regeneration the way a
+          # hard-coded working-dir list did.
+          find-dir: terraform
           output-file: README.md
           output-method: inject
           output-format: markdown table

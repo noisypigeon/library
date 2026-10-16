@@ -35,7 +35,7 @@ reachable through the default endpoint.
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-| ---- | ----------- | ---- | ------- | :------: |
+|------|-------------|------|---------|:--------:|
 | <a name="input_account_id"></a> [account\_id](#input\_account\_id) | Cloudflare account ID the bucket belongs to (in a spoke leaf, local.cloudflare\_account\_id) | `string` | n/a | yes |
 | <a name="input_exact_name"></a> [exact\_name](#input\_exact\_name) | Exact bucket name, bypassing the name\_prefix/random-suffix/name\_suffix scheme entirely — for buckets whose name must match something external | `string` | `null` | no |
 | <a name="input_name_prefix"></a> [name\_prefix](#input\_name\_prefix) | Bucket name prefix (ignored if exact\_name is set) | `string` | `null` | no |
@@ -45,7 +45,7 @@ reachable through the default endpoint.
 ## Outputs
 
 | Name | Description |
-| ---- | ----------- |
+|------|-------------|
 | <a name="output_endpoint"></a> [endpoint](#output\_endpoint) | Bucket S3 API endpoint URL (EU jurisdiction) |
 | <a name="output_id"></a> [id](#output\_id) | Bucket ID |
 | <a name="output_name"></a> [name](#output\_name) | Computed bucket name |

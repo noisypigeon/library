@@ -43,4 +43,20 @@ moved {
 ```
 
 <!-- BEGIN_TF_DOCS -->
+## Inputs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| <a name="input_description"></a> [description](#input\_description) | Ruleset description. Null leaves it unset | `string` | `null` | no |
+| <a name="input_kind"></a> [kind](#input\_kind) | Ruleset kind, e.g. "zone" | `string` | n/a | yes |
+| <a name="input_name"></a> [name](#input\_name) | Ruleset name | `string` | n/a | yes |
+| <a name="input_phase"></a> [phase](#input\_phase) | Ruleset phase, e.g. "http\_request\_dynamic\_redirect" | `string` | n/a | yes |
+| <a name="input_rules"></a> [rules](#input\_rules) | The ruleset's rules, passed to the provider exactly as given (the cloudflare\_ruleset rules schema) | `any` | n/a | yes |
+| <a name="input_zone_id"></a> [zone\_id](#input\_zone\_id) | Cloudflare zone ID the ruleset belongs to | `string` | n/a | yes |
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| <a name="output_id"></a> [id](#output\_id) | Ruleset ID |
 <!-- END_TF_DOCS -->
