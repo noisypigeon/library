@@ -58,7 +58,7 @@ Give the B2 key only `listBuckets`, `listFiles` and `writeFiles`, scoped to the 
 ```yaml
 jobs:
   backup:
-    uses: noisypigeon/pigeon-lib/.github/workflows/state-backup.yml@workflows/v1.4.0
+    uses: noisypigeon/pigeon-lib/.github/workflows/state-backup.yml@workflows/v1.5.0
     with:
       state_bucket_secret: NOISYPIGEON_COM_R2_TERRAFORM_STATE_BUCKET_NAME
     secrets: inherit
