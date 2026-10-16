@@ -4,6 +4,24 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.2] - 2026-10-16
+
+### Fix state-backup.yml: reach B2 through its S3-compatible API
+
+`state-backup.yml` failed on its first real run with `failed to authorize account: This request is not currently supported on API version number 1`. rclone's `b2` backend authenticates with B2's v1 API, which B2 now refuses. The current rclone release, 1.72.1, does the same.
+
+The workflow now reaches B2 through its S3-compatible API:
+
+- **The endpoint is found at run time.** B2's S3 endpoint is per account (for example `https://s3.ca-east-006.backblazeb2.com`), so the job reads it from the backup key's own v4 `b2_authorize_account`. No new secret is needed.
+- **It works with a key that can't read.** Without `readFiles`, the key can't answer the `HeadObject` that rclone sends for a sub-path or after an upload. So the copy runs bucket root to bucket root, filtered to `terraform/**`, with `--s3-no-head`. `--s3-no-check-bucket` stops rclone from trying to create either bucket.
+- **The key and its capabilities are unchanged:** `listBuckets`, `listFiles` and `writeFiles`, with no read or delete. B2 keeps a new version for every write that arrives over the S3 API, just as it does over its native API.
+
+These are the exact settings that made noisypigeon.com's first backup. That run copied all nine state files from R2 to B2; a second run copied nothing.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#44](https://github.com/noisypigeon/pigeon-lib/pull/44)
+
 ## [1.5.1] - 2026-10-15
 
 ### Stop terragrunt-run.yml running a leaf twice
