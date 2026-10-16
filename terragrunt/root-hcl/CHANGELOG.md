@@ -4,6 +4,42 @@ All notable changes to this template are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.1.0] - 2026-10-15
+
+### State backend selectable in spoke.hcl: Scaleway or Cloudflare R2 (LIB-0007)
+
+`root.hcl` can now keep a spoke's Terraform state in Cloudflare R2 as well as in Scaleway Object Storage. [LIB-0007](https://github.com/noisypigeon/pigeon-lib/blob/main/docs/adr/LIB-0007-terraform-state-on-r2-with-offsite-backup.md) records why and how.
+
+### `state_backend` in `spoke.hcl`
+
+```hcl
+locals {
+  root_hcl_version    = "2.1.0"
+  state_bucket_secret = "NOISYPIGEON_COM_R2_TERRAFORM_STATE_BUCKET_NAME"
+  state_backend       = "cloudflare"   # or "scaleway", the default
+}
+```
+
+- **Leave it out and nothing changes.** `"scaleway"` is the default, and a spoke that doesn't set it renders exactly what v2.0.0 rendered.
+- **`"cloudflare"`** points the S3 backend at the account's EU-jurisdiction R2 endpoint, `https://<account_id>.eu.r2.cloudflarestorage.com` (LIB-0006), with `region = "auto"`, path-style addressing and `skip_s3_checksum`. It also tells Terragrunt not to enable versioning on, or otherwise update, the bucket: R2 has no object versioning.
+- **Any other value fails the run** with a message naming the known ones.
+
+The state key is `terraform/<leaf>/terraform.tfstate` on either backend. Moving a spoke between them copies objects; it changes no keys.
+
+### R2 credentials
+
+Cloudflare has no Terraform resource for R2's S3 keys. Create an R2 API token with *Object Read & Write*, scoped to the state bucket, in the dashboard. Store its keys in the spoke's `secrets.enc` as `CLOUDFLARE_R2_ACCESS_KEY_ID` and `CLOUDFLARE_R2_SECRET_ACCESS_KEY`. The account ID is the existing `CLOUDFLARE_ACCOUNT_ID`.
+
+### Offsite backup
+
+Because R2 can't version, LIB-0007 also pairs an R2 state bucket with a versioned Backblaze B2 copy, made by the reusable `state-backup.yml` workflow. That ships in its own PR as `workflows/v1.4.0`.
+
+Verified by rendering every `pigeon.dev` leaf under v2.0.0 and under this template. With no `state_backend`, everything apart from `locals` hashed identically. The `"cloudflare"` render and the guard were checked too.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#39](https://github.com/noisypigeon/pigeon-lib/pull/39)
+
 ## [2.0.0] - 2026-10-15
 
 ### Providers enabled and configured in spoke.hcl (LIB-0005)

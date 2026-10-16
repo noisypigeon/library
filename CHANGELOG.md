@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-15
 
+- [terragrunt/root-hcl] State backend selectable in spoke.hcl: Scaleway or Cloudflare R2 (LIB-0007) ([#39](https://github.com/noisypigeon/pigeon-lib/pull/39))
 - [workflows] Regenerate README tables for every module, not a hard-coded list ([#38](https://github.com/noisypigeon/pigeon-lib/pull/38))
 - [cloudflare/bucket] Make cloudflare/bucket EU-only, with Standard storage by default (LIB-0006) ([#37](https://github.com/noisypigeon/pigeon-lib/pull/37))
 - [terragrunt/root-hcl] Providers enabled and configured in spoke.hcl (LIB-0005) ([#36](https://github.com/noisypigeon/pigeon-lib/pull/36))
