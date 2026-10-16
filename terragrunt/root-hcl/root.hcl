@@ -21,6 +21,9 @@
 # Since v2.0.0 (LIB-0005) that includes which providers a leaf gets: spoke.hcl's
 # required `providers` map enables and configures each one, optionally scoped
 # to leaf path prefixes. There are no per-leaf *_config.hcl files.
+#
+# Since v2.1.0 (LIB-0007) spoke.hcl may also set `state_backend` to keep state
+# in Cloudflare R2 instead of Scaleway Object Storage.
 
 locals {
   # The spoke's instance values. Missing spoke.hcl is a hard error, which is
@@ -65,6 +68,7 @@ locals {
   guard_legacy_flags = anytrue([for k in ["backblaze", "grafana"] : contains(keys(local.spoke.locals), k)]) ? file("spoke.hcl sets backblaze/grafana: root.hcl v2 reads providers only (LIB-0005); move them into the providers map and delete any *_config.hcl") : true
   guard_unknown      = length(local.unknown_providers) > 0 ? file("spoke.hcl providers has unknown keys ${join(", ", local.unknown_providers)}; known: ${join(", ", local.known_providers)}") : true
   guard_prefixes     = alltrue([for p in local.provider_prefixes : endswith(p, "/")]) ? true : file("spoke.hcl providers: every leaves prefix must end in a slash, or it matches sibling paths too")
+  guard_backend      = contains(local.known_state_backend, local.state_backend) ? true : file("spoke.hcl state_backend is ${local.state_backend}; known: ${join(", ", local.known_state_backend)}")
   guard_grafana      = local.grafana_enabled && !local.scaleway_enabled ? file("providers.grafana is on for ${path_relative_to_include()} but providers.scaleway is not; its data source needs the Scaleway provider") : true
 
   # extra_required_providers: { <name> = { source = "...", version = "..." } },
@@ -75,6 +79,12 @@ locals {
   # Name of the secrets.enc key (or environment variable) holding the spoke's
   # own Terraform state bucket name, e.g. PIGEON_DEV_TERRAFORM_STATE_BUCKET_NAME.
   state_bucket_secret = local.spoke.locals.state_bucket_secret
+
+  # Where that bucket lives (LIB-0007): "scaleway" (the default) or
+  # "cloudflare", an EU-jurisdiction R2 bucket (LIB-0006). One backend per
+  # spoke -- Terraform allows exactly one per leaf.
+  state_backend       = lookup(local.spoke.locals, "state_backend", "scaleway")
+  known_state_backend = ["scaleway", "cloudflare"]
 
   # Secrets: decrypted in-memory from the spoke's terraform/secrets.enc via
   # sops/age (ADR-0123, ADR-0131). No plaintext copy ever touches disk, and
@@ -102,6 +112,12 @@ locals {
   scaleway_secret_key      = get_env("SCALEWAY_SECRET_KEY", lookup(local.secrets, "SCALEWAY_SECRET_KEY", ""))
   scaleway_organization_id = get_env("SCALEWAY_ORGANIZATION_ID", lookup(local.secrets, "SCALEWAY_ORGANIZATION_ID", ""))
   scaleway_project_id      = get_env("SCALEWAY_PROJECT_ID", lookup(local.secrets, "SCALEWAY_PROJECT_ID", ""))
+
+  # R2's S3-compatible keys, for the state backend only (LIB-0007). Cloudflare
+  # has no Terraform resource for them, so they are created by hand in the
+  # dashboard. Read whether or not the cloudflare provider is on for the leaf.
+  cloudflare_r2_access_key_id     = get_env("CLOUDFLARE_R2_ACCESS_KEY_ID", lookup(local.secrets, "CLOUDFLARE_R2_ACCESS_KEY_ID", ""))
+  cloudflare_r2_secret_access_key = get_env("CLOUDFLARE_R2_SECRET_ACCESS_KEY", lookup(local.secrets, "CLOUDFLARE_R2_SECRET_ACCESS_KEY", ""))
 
   backblaze_application_key_id = get_env("BACKBLAZE_APPLICATION_KEY_ID", lookup(local.secrets, "BACKBLAZE_APPLICATION_KEY_ID", ""))
   backblaze_application_key    = get_env("BACKBLAZE_APPLICATION_KEY", lookup(local.secrets, "BACKBLAZE_APPLICATION_KEY", ""))
@@ -198,6 +214,48 @@ EOF
   }
 
   terraform_state_bucket_name = get_env(local.state_bucket_secret, lookup(local.secrets, local.state_bucket_secret, ""))
+
+  # The key is the same whichever backend holds it (LIB-0001 invariant 4), so
+  # moving a spoke between backends moves objects, never keys.
+  state_key = "${path_relative_to_include()}/terraform.tfstate"
+
+  scaleway_state_config = {
+    endpoints = {
+      s3 = "https://s3.fr-par.scw.cloud"
+    }
+    region                      = "fr-par"
+    bucket                      = local.terraform_state_bucket_name
+    key                         = local.state_key
+    skip_credentials_validation = true
+    skip_metadata_api_check     = true
+    skip_region_validation      = true
+    skip_requesting_account_id  = true
+
+    access_key = local.scaleway_access_key
+    secret_key = local.scaleway_secret_key
+  }
+
+  # R2 has no bucket versioning (LIB-0007), so Terragrunt must not try to
+  # enable it or otherwise update the bucket; the offsite B2 copy stands in.
+  cloudflare_state_config = {
+    endpoints = {
+      s3 = "https://${local.cloudflare_account_id}.eu.r2.cloudflarestorage.com"
+    }
+    region                      = "auto"
+    bucket                      = local.terraform_state_bucket_name
+    key                         = local.state_key
+    use_path_style              = true
+    skip_credentials_validation = true
+    skip_metadata_api_check     = true
+    skip_region_validation      = true
+    skip_requesting_account_id  = true
+    skip_s3_checksum            = true
+    skip_bucket_versioning      = true
+    disable_bucket_update       = true
+
+    access_key = local.cloudflare_r2_access_key_id
+    secret_key = local.cloudflare_r2_secret_access_key
+  }
 }
 
 exclude {
@@ -287,7 +345,8 @@ locals {
 EOF
 }
 
-# The spoke's own dedicated Terraform state bucket (ADR-0130/0132/0133). Always
+# The spoke's own dedicated Terraform state bucket (ADR-0130/0132/0133), on the
+# backend spoke.hcl's state_backend picks (LIB-0007). The Scaleway one is always
 # fr-par, regardless of any leaf's scaleway_region/scaleway_zone above. The key
 # carries no prefix: with this file at the spoke's root and leaves under
 # terraform/, it is terraform/<leaf>/terraform.tfstate -- byte-identical to what
@@ -295,21 +354,12 @@ EOF
 remote_state {
   backend = "s3"
 
+  # Indexed rather than a conditional: the two configs have different keys,
+  # which HCL's ?: refuses.
   config = {
-    endpoints = {
-      s3 = "https://s3.fr-par.scw.cloud"
-    }
-    region                      = "fr-par"
-    bucket                      = local.terraform_state_bucket_name
-    key                         = "${path_relative_to_include()}/terraform.tfstate"
-    skip_credentials_validation = true
-    skip_metadata_api_check     = true
-    skip_region_validation      = true
-    skip_requesting_account_id  = true
-
-    access_key = local.scaleway_access_key
-    secret_key = local.scaleway_secret_key
-  }
+    scaleway   = local.scaleway_state_config
+    cloudflare = local.cloudflare_state_config
+  }[local.state_backend]
 
   generate = {
     path      = "backend.tf"
