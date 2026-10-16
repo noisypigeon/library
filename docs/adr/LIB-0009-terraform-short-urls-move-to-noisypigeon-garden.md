@@ -137,4 +137,43 @@ Permanent boundaries, with no issue:
 
 ## Verification
 
-Recorded as each phase of §5 lands.
+By §5's steps:
+
+1. **Rename.** `noisypigeon/garden` kept the repository's ID, its ruleset,
+   both Actions secrets and its Pages settings. garden#39 renamed the workflow,
+   and #51 repointed the dispatch, cutting `workflows/v1.5.4`. A manual
+   `garden-pages.yml` dispatch then deployed cleanly.
+2. **Zone leaves** (garden#40). Both moved state objects matched their old keys
+   by SHA-256, and in serial, lineage and resource count (8 instances). The
+   moved leaves planned `No changes.` After `state rm` emptied the old keys,
+   the apply created the 2 `noisypigeon.garden` CNAMEs and made no change
+   to the other 7 leaves.
+3. **Generator** (#52, `workflows/v1.6.0`). A run against a scratch content root
+   wrote every redirect page under `terraform/`, and every overview's version
+   links pointed there.
+4. **Cutover** (garden#41). With the custom domain moved and the certificate
+   approved:
+   - `https://noisypigeon.garden/terraform/cloudflare/dns-record/v0.1.0/?terraform-get=1`
+     served the `terraform-get` meta for pigeon-lib's `git::` source;
+   - `terraform init` resolved the module through it;
+   - the same `pigeon.dev/modules/…` URL returned 404.
+5. **Consumers.**
+   - #53 cut `scaleway/pigeon-cluster/v3.0.1` and `scaleway/project/v2.0.2`.
+     `pigeon-cluster` initialized all ten nested sources from
+     `noisypigeon.garden` and validated, and the release's dispatch to
+     `garden-pages.yml` succeeded.
+   - Each spoke planned and applied `No changes.`: noisypigeon/noisypigeon.com#31
+     (9 leaves), noisypigeon/willowgraysen#13 (18 leaves), garden#42 (6 leaves)
+     and noisypigeon/noisypigeon#323 (1 leaf).
+6. **pigeon.dev's zone.**
+   - `fastmail`'s state was copied from garden's R2 bucket to noisypigeon.com's
+     and matched in hash, serial, lineage and count (6 instances). garden's key
+     was then emptied.
+   - garden#43 destroyed only the 2 github-pages CNAMEs.
+   - noisypigeon/noisypigeon.com#32 planned `No changes.` on `fastmail` and
+     created the 2 placeholders and the ruleset.
+   - Afterwards, `pigeon.dev`, `www.pigeon.dev` and `pigeon.dev/modules/…`
+     all returned `301` to `https://noisypigeon.garden/`. `pigeon.dev`'s
+     Fastmail MX and DKIM records still resolved.
+   - garden's four emptied state objects were deleted from R2. Earlier
+     versions of each remain in its B2 backup.
