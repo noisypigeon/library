@@ -23,8 +23,8 @@ locals {
   # what we want: guessing a state bucket is how a plan lands in the wrong one.
   spoke = read_terragrunt_config("${get_parent_terragrunt_dir()}/spoke.hcl")
 
-  # Optional spoke.hcl extensions (LIB-0003 amendment, v1.1.0). Both default to
-  # off, and off renders byte-identically to v1.0.1.
+  # Optional spoke.hcl extensions (LIB-0003 amendments: v1.1.0, v1.2.0). All
+  # default to off, and off renders byte-identically to v1.0.1.
   #
   # extra_required_providers: { <name> = { source = "...", version = "..." } },
   # appended to the one required_providers block. A provider's configuration,
@@ -35,6 +35,12 @@ locals {
   # stays inert for any leaf that does not drop a sibling backblaze_config.hcl
   # setting `enabled = true`.
   backblaze_supported = lookup(local.spoke.locals, "backblaze", false)
+
+  # grafana: turns on a latent Scaleway Cockpit Grafana provider (v1.2.0). It
+  # stays inert for any leaf without a sibling grafana_config.hcl setting
+  # `enabled = true`. An enabled leaf must define local.grafana_auth_token -- the
+  # Cockpit API key secret the provider authenticates with (ADR-0135).
+  grafana_supported = lookup(local.spoke.locals, "grafana", false)
 
   # Name of the secrets.enc key (or environment variable) holding the spoke's
   # own Terraform state bucket name, e.g. PIGEON_DEV_TERRAFORM_STATE_BUCKET_NAME.
@@ -90,6 +96,34 @@ locals {
   backblaze_config      = read_terragrunt_config(local.backblaze_config_path, { locals = {} })
   backblaze_enabled     = local.backblaze_supported && lookup(local.backblaze_config.locals, "enabled", false)
 
+  grafana_config_path = "${local.workload_dir}/${path_relative_to_include()}/grafana_config.hcl"
+  grafana_config      = read_terragrunt_config(local.grafana_config_path, { locals = {} })
+  grafana_enabled     = local.grafana_supported && lookup(local.grafana_config.locals, "enabled", false)
+
+  grafana_required_providers_entry = <<EOF
+    grafana = {
+      source  = "grafana/grafana"
+      version = "~> 4.0"
+    }
+EOF
+
+  grafana_provider_block = <<EOF
+# Scaleway Cockpit's managed Grafana, authenticated with an IAM API key secret
+# the leaf supplies as local.grafana_auth_token (ADR-0135).
+data "scaleway_cockpit_grafana" "grafana" {
+  project_id = local.scaleway_project_id
+}
+
+provider "grafana" {
+  url  = data.scaleway_cockpit_grafana.grafana.grafana_url
+  auth = "anonymous"
+
+  http_headers = {
+    "X-Auth-Token" = local.grafana_auth_token
+  }
+}
+EOF
+
   backblaze_required_providers_entry = <<EOF
     b2 = {
       source  = "registry.terraform.io/Backblaze/b2"
@@ -110,6 +144,7 @@ EOF
   required_providers_extension = join("", concat(
     [for name, p in local.extra_required_providers : "    ${name} = {\n      source  = \"${p.source}\"\n      version = \"${p.version}\"\n    }\n"],
     local.backblaze_enabled ? [local.backblaze_required_providers_entry] : [],
+    local.grafana_enabled ? [local.grafana_required_providers_entry] : [],
   ))
 
   # Injected secrets/sensitive values: any secrets.enc key prefixed ENV_SW_ or
@@ -191,6 +226,15 @@ generate "provider_backblaze" {
   if_exists = "overwrite"
   disable   = !local.backblaze_supported
   contents  = local.backblaze_enabled ? local.backblaze_provider_block : "# Backblaze not enabled for this leaf -- see backblaze_config.hcl.\n"
+}
+
+# Only generated for a spoke that supports Grafana. Within such a spoke, a leaf
+# that has not opted in gets a comment-only file.
+generate "provider_grafana" {
+  path      = "provider_grafana_generated.tf"
+  if_exists = "overwrite"
+  disable   = !local.grafana_supported
+  contents  = local.grafana_enabled ? local.grafana_provider_block : "# Grafana not enabled for this leaf -- see grafana_config.hcl.\n"
 }
 
 generate "scaleway_ids" {

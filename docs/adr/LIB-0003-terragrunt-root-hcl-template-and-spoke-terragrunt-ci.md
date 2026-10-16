@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-15.
-- **Status**: Accepted; amended 2026-10-15, twice (see `## Amendments`).
+- **Status**: Accepted; amended 2026-10-15, three times (see `## Amendments`).
 
 ## Context
 
@@ -196,3 +196,26 @@ Verified by `terragrunt render --format=json` against three baselines:
   `v1.1.0`. Each differs in exactly one key: an added `generate.provider_backblaze`
   with `disable: true` and `if_disabled: skip`, which writes nothing. Neither
   spoke needs to bump, but either can.
+
+### 2026-10-15: a latent Grafana provider ships as `v1.2.0`
+
+`willowgraysen.com`'s adoption of LIB-0004 needed its Grafana leaf to hold one
+module and nothing else. That leaf carried a `provider "grafana"` block and a
+`scaleway_cockpit_grafana` data source as glue. `v1.2.0` moves both into the
+template, as a latent feature shaped like DEV-0148's Backblaze one:
+
+- **Two opt-ins.** `grafana = true` in `spoke.hcl`, then `grafana_config.hcl`
+  with `enabled = true` per leaf.
+- **What an enabled leaf gets:** the `grafana/grafana ~> 4.0` requirement, the
+  data source, and the provider.
+- **The one contract on the leaf:** it defines `local.grafana_auth_token`.
+- **What everything else gets:** a comment-only file, or nothing at all when
+  the spoke doesn't set `grafana`.
+
+The first-access curl hook the same leaf carried moved into
+`scaleway/grafana-dashboard` v0.2.0 instead.
+
+Verified by rendering every leaf of all three spokes (24 leaves) under its
+committed `root.hcl` and under `v1.2.0`. The only differences are added `generate`
+entries with `disable: true`: `provider_grafana` everywhere, plus `provider_backblaze`
+on the two spokes still at `v1.0.1`. State keys are equal throughout.
