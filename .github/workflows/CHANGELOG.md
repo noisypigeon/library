@@ -4,6 +4,92 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.0.0] - 2026-10-17
+
+### Split spoke secrets into one sops file per concern
+
+A spoke's secrets now live in one sops dotenv file per concern under `terraform/secrets/`, instead of all in `terraform/secrets.enc` (LIB-0012). Each leaf decrypts only the files it needs, and each file holds exactly its own keys, so a value under the wrong key or in the wrong file fails before any plan. This is a breaking release of both the `root.hcl` template and the reusable workflows. Spokes move one PR each. The values and their names don't change (except `env.enc` dropping `ENV_`), so every leaf should plan `No changes.`
+
+**`root.hcl` v4.0.0**
+
+- **The files.**
+
+  | File | Required when | Keys, exactly |
+  | --- | --- | --- |
+  | `terraform.enc` | always | `TERRAFORM_STATE_{BUCKET_NAME,ACCESS_KEY_ID,ACCESS_KEY}`, plus `TERRAFORM_STATE_BACKUP_{BUCKET_NAME,ACCESS_KEY_ID,ACCESS_KEY}` if and only if `state_backup = true` |
+  | `cloudflare.enc` | `providers.cloudflare` | `CLOUDFLARE_PROVIDER_{ACCOUNT_ID,TOKEN}` |
+  | `scaleway.enc` | `providers.scaleway` | `SCALEWAY_PROVIDER_{ACCESS_KEY_ID,ACCESS_KEY,ORGANIZATION_ID,PROJECT_ID}` |
+  | `backblaze.enc` | `providers.backblaze` | `BACKBLAZE_PROVIDER_{ACCESS_KEY_ID,ACCESS_KEY}` |
+  | `env.enc` | optional | any `^[A-Z][A-Z0-9_]*$` key |
+
+  A required file must exist and hold exactly its keys, each non-empty. A file for a provider the spoke doesn't enable is ignored, never decrypted.
+- **Least-privilege decryption.** A leaf runs `sops` only on:
+  - `terraform.enc`;
+  - `cloudflare.enc` when the backend is `cloudflare`, for the R2 endpoint;
+  - each provider file whose provider is on for that leaf, honouring `leaves` scoping;
+  - `env.enc` if it exists.
+
+  willowgraysen's Grafana leaf decrypts `terraform.enc`, `scaleway.enc` and `env.enc`, and never `backblaze.enc`. An environment variable still overrides any value (`get_env`).
+- **`env.enc` has no prefix.** Its key `FOO_BAR` becomes `local.foo_bar` in every leaf, in `env_secrets_generated.tf` as before. A key fails the render when:
+  - its local would shadow a generated one: `cloudflare_account_id`, `cloudflare_zone`, `scaleway_organization_id`, `scaleway_project_id`, `scaleway_s3_provider_name` or `grafana_auth_token`;
+  - another file owns that name, such as `BACKBLAZE_PROVIDER_ACCESS_KEY`.
+- **`spoke.hcl` gets `state_backup`.** It defaults to `false`; `true` adds the backup keys to `terraform.enc` and turns on `state-backup.yml`. `state_backend = "cloudflare"` now requires `state_backup = true`, because R2 can't version objects (LIB-0007). It still requires `providers.cloudflare`.
+- **The schema is per file.** In `secrets-schema.json`, `files.<name>` has `required_when` (a list of conditions, any of which requires the file), `keys`, and `keys_when` (keys added under a condition). `files.env` has its `pattern` and `reserved` local names. The render fails on a missing file, a missing or empty key, a key outside its file, or a reserved `env.enc` name. Each error names the file and key, never a value.
+
+**`workflows/` v3.0.0**
+
+- **`check-secrets.sh` checks per file,** spoke-wide, from plaintext key names, with no `SOPS_AGE_KEY`. It fails on:
+  - a missing required file;
+  - a file that doesn't hold exactly its keys (backup keys without `state_backup` say so);
+  - a `.enc` the schema doesn't know;
+  - a leftover `terraform/secrets.enc`;
+  - the two R2 guards.
+
+  It reports an ignored file without failing. It takes no file argument any more.
+- **New `split-secrets.sh`,** the one-time migration a spoke's owner runs. It turns `terraform/secrets.enc` into the per-concern files.
+  - It pipes `sops -d` through a filter into `sops -e`, so only ciphertext touches disk and no value is printed.
+  - It encrypts each file to the source file's own age recipients, whatever `.sops.yaml` says.
+  - It strips `ENV_` for `env.enc`. It stops before writing anything if a key has no owner, and refuses to overwrite a file.
+  - It ends by running `check-secrets.sh`.
+- **`terragrunt-run.yml` masks every `terraform/secrets/*.enc` by default.** `secrets_files` now defaults to empty, meaning those files, instead of `.env.enc`.
+- **`state-backup.yml` reads only `terraform.enc` and `cloudflare.enc`,** and does nothing unless `spoke.hcl` sets `state_backup = true`.
+- **`terragrunt-detect.yml`'s default leaf pattern covers `terraform/secrets/`.**
+
+**Migrating a spoke.** `terragrunt/root-hcl/README.md` has the steps:
+
+1. The owner runs `.lib-src/.github/scripts/split-secrets.sh` with the hub at `workflows/v3.0.0`.
+2. The spoke's PR:
+   - runs `git rm terraform/secrets.enc` and adds `terraform/secrets/*.enc`;
+   - sets `.sops.yaml`'s rule to `path_regex: ^terraform/secrets/[a-z]+\.enc$`;
+   - makes `mise run secrets-edit <file>` take a file name;
+   - sets `state_backup = true` on an R2 spoke;
+   - bumps `root_hcl_version` to `"4.0.0"` and `/.lib-version` to `workflows/v3.0.0`, and commits both generated files;
+   - pins `@workflows/v3.0.0`, and deletes `secrets_files: terraform/secrets.enc` from the `terragrunt-run.yml` callers.
+3. Every leaf plans `No changes.`
+
+The B2 restore runbook loads its keys from the split files.
+
+**Verified against all three spokes,** using LIB-0010's method. garden, blog and willowgraysen were copied to a scratch dir with fake values encrypted to a throwaway age key; no real secrets file was decrypted.
+
+- **Parity.** v4's copies were made by running `split-secrets.sh` on each fake v3 file. All 32 leaves rendered under v3 and v4. `remote_state`, inputs and every generated file are byte-identical; `env_secrets_generated.tf` is identical in all 18 willowgraysen leaves. The only difference is the one-line comment written when a spoke has no `env.enc` (garden and blog).
+- **Least privilege.** A `sops` wrapper logged every file decrypted. The Grafana leaf decrypted only `terraform.enc`, `scaleway.enc` and `env.enc`, and no leaf outside `terraform/backblaze/` decrypted `backblaze.enc`. An ignored `cloudflare.enc` in willowgraysen was never read.
+- **Guards.** Each fires and names its file and key:
+  - a missing required file;
+  - a missing key, and an empty key (which an environment variable then fills);
+  - a Cloudflare key in `scaleway.enc`;
+  - backup keys without `state_backup`, willowgraysen's earlier mistake;
+  - a reserved `env.enc` name, an `env.enc` key another file owns, and a lowercase `env.enc` key;
+  - R2 without `state_backup`, and R2 without `providers.cloudflare`.
+
+  A missing `backblaze.enc` fails only the Backblaze leaves.
+- **`check-secrets.sh`.** It passes on each split copy, with no age key and no `sops` on `PATH`. It fails on every case above, on an unknown `.enc`, on a plaintext file, and on each real spoke as it stands today.
+- **Workflows.** `state-backup.yml`'s steps ran against the fake copies. garden's loaded only `terraform.enc` and `cloudflare.enc`, and willowgraysen's skipped. `terragrunt-run.yml`'s default masked every split file. `actionlint` passes.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#62](https://github.com/noisypigeon/pigeon-lib/pull/62)
+
 ## [2.0.0] - 2026-10-16
 
 ### Fixed secret names checked against a schema (root.hcl v3, workflows v2)
