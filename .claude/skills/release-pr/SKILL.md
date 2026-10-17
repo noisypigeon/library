@@ -52,7 +52,7 @@ later — get the PR body right the first time.
    - A PR that doesn't touch any `terraform/<provider>/<module>/`
      directory, `zola-site/templates/`, `static/`, or
      `theme.toml`, `.github/workflows/*.yml` or `.github/scripts/`, or
-     `terragrunt/root-hcl/root.hcl`, or `grafana-dashboards/<set>/*.json` (e.g. root-doc, or
+     `terragrunt/root-hcl/root.hcl` or `secrets-schema.json`, or `grafana-dashboards/<set>/*.json` (e.g. root-doc, or
      `zola-site/README.md`/`CHANGELOG.md`-only changes) doesn't
      need a label at all — nothing will be tagged or released regardless. It
      still gets a one-line entry in the root `CHANGELOG.md` from
