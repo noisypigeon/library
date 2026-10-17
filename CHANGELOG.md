@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-17
 
+- [adr] docs(adr): LIB-0014 moves the deployer IAM to runway behind a breakglass key ([#65](https://github.com/noisypigeon/pigeon-lib/pull/65))
 - [adr] docs(adr): LIB-0013 renames noisypigeon/willowgraysen to runway ([#64](https://github.com/noisypigeon/pigeon-lib/pull/64))
 - [adr] docs(adr): LIB-0012 records the rollout; LIB-0010 amended ([#63](https://github.com/noisypigeon/pigeon-lib/pull/63))
 - [workflows] Split spoke secrets into one sops file per concern ([#62](https://github.com/noisypigeon/pigeon-lib/pull/62))
