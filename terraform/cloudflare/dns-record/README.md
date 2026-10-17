@@ -7,8 +7,12 @@ managing DNS records calls a pigeon-lib module, like every other leaf (LIB-0004)
 
 It's **zone-scoped**: a leaf calling it lives at
 `terraform/cloudflare/<zone>/dns-record/<instance>/`, where `<zone>` is the
-zone's apex domain. `terragrunt/root-hcl` v2.2.0 then gives the leaf
-`local.cloudflare_zone_id` for that zone (LIB-0008).
+zone's apex domain (LIB-0008). The module takes that apex as `zone` and looks
+the zone ID up itself with `data "cloudflare_zone"`, so the leaf passes
+`zone = local.cloudflare_zone`, which `terragrunt/root-hcl` derives from the
+path, and no zone ID is kept in a secret (LIB-0011). The lookup needs a token
+with **Zone:Read** on the zone as well as DNS edit. The ID it found is the
+`zone_id` output.
 
 ## Usage
 
@@ -35,10 +39,10 @@ locals {
 }
 
 module "dns_record" {
-  source   = "https://noisypigeon.garden/terraform/cloudflare/dns-record/v0.1.0"
+  source   = "https://noisypigeon.garden/terraform/cloudflare/dns-record/v1.0.0"
   for_each = local.records
 
-  zone_id  = local.cloudflare_zone_id
+  zone     = local.cloudflare_zone
   name     = each.value.name
   type     = each.value.type
   content  = each.value.content
@@ -60,6 +64,13 @@ moved {
 }
 ```
 
+### Upgrading from v0.x
+
+v1.0.0 replaces the `zone_id` input with `zone`. Swap
+`zone_id = local.cloudflare_zone_id` for `zone = local.cloudflare_zone` and
+change nothing else: the looked-up ID is the one that was configured, so the
+plan shows `No changes.`
+
 <!-- BEGIN_TF_DOCS -->
 ## Inputs
 
@@ -72,11 +83,12 @@ moved {
 | <a name="input_proxied"></a> [proxied](#input\_proxied) | Whether Cloudflare proxies the record. Null leaves it unset, which is not the same as false in plan output | `bool` | `null` | no |
 | <a name="input_ttl"></a> [ttl](#input\_ttl) | TTL in seconds; 1 means automatic | `number` | `1` | no |
 | <a name="input_type"></a> [type](#input\_type) | Record type, e.g. A, AAAA, CNAME, MX, TXT | `string` | n/a | yes |
-| <a name="input_zone_id"></a> [zone\_id](#input\_zone\_id) | Cloudflare zone ID the record belongs to | `string` | n/a | yes |
+| <a name="input_zone"></a> [zone](#input\_zone) | Apex domain of the Cloudflare zone the record belongs to, e.g. "example.com". The zone ID is looked up from it | `string` | n/a | yes |
 
 ## Outputs
 
 | Name | Description |
 |------|-------------|
 | <a name="output_id"></a> [id](#output\_id) | DNS record ID |
+| <a name="output_zone_id"></a> [zone\_id](#output\_zone\_id) | ID of the zone looked up from `zone` |
 <!-- END_TF_DOCS -->

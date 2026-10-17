@@ -36,6 +36,9 @@ This directory holds only module source — it has no root provider/backend conf
 | `backblaze/bucket` | A private Backblaze B2 bucket (`b2_bucket`) with a randomized name suffix; always `bucket_type = "allPrivate"`. |
 | `backblaze/api-key` | A thin wrapper around `b2_application_key`, defaulting `valid_duration_in_seconds` to 30 days. |
 | `cloudflare/bucket` | A thin wrapper around a single Cloudflare R2 bucket (`cloudflare_r2_bucket`), named like `backblaze/bucket` and `scaleway/object-bucket`: a randomized name suffix, or `exact_name`. |
+| `cloudflare/dns-record` | A thin wrapper around a single `cloudflare_dns_record`. Zone-scoped: takes the zone's apex domain as `zone` and looks its ID up (LIB-0011). |
+| `cloudflare/apex-redirect` | Redirects a zone's apex, and `www`, to one URL: proxied placeholder records plus one `http_request_dynamic_redirect` ruleset, with names generated so existing redirects import with no diff (LIB-0011). |
+| `cloudflare/ruleset` | **End-of-life** (LIB-0011): no further releases, tags still resolve. Use `cloudflare/apex-redirect` for redirects. |
 | `grafana/dashboard` | A `grafana_folder`/`grafana_dashboard` wrapper that creates a Grafana folder and provisions a set of dashboards into it from JSON dashboard models or tag URLs. Formerly `scaleway/grafana-dashboard`. |
 
 ## Versioning
