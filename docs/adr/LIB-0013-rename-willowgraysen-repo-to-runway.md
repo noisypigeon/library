@@ -102,8 +102,9 @@ To fill in at rollout:
 
 1. `noisypigeon/willowgraysen` renamed to `noisypigeon/runway`, with the same
    repo ID; `gh repo view noisypigeon/willowgraysen` resolves to it.
-2. The spoke's CI on `main` plans `No changes.` on every leaf, which confirms
-   that no state key moved.
+2. **Done.** After the rename, runway's CI planned `No changes.` on every
+   existing leaf (17 of 17, noisypigeon/runway#18, LIB-0014 Verification 3),
+   so no state key moved.
 3. The spoke's own prose has been updated (PR in `noisypigeon/runway`).
 4. This repo's `CLAUDE.md`, `README.md` and `release-pr` skill name
    `noisypigeon/runway` (the PR that filed this record).
