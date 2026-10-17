@@ -29,7 +29,11 @@ nothing that is deployed:
   holds, follows from those values; the schema says so, and both the template
   (per leaf, decrypting only the files that leaf needs) and
   `.github/scripts/check-secrets.sh` (spoke-wide, from key names alone)
-  enforce it. `.github/scripts/split-secrets.sh` is the one-time v3→v4
+  enforce it. A provider's entry may also set `breakglass = { leaves = [...] }`:
+  only those leaves then read that provider's credentials, and the state
+  backend's when it's the same provider, from
+  `terraform/secrets/<provider>_breakglass.enc`, a hand-made key Terraform
+  never manages (LIB-0014). `.github/scripts/split-secrets.sh` is the one-time v3→v4
   migration a spoke's owner runs. The spoke
   **commits** those generated copies, because
   Terragrunt's git filter plans inside worktrees where only tracked files exist,
