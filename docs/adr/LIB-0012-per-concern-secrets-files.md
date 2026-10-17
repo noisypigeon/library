@@ -153,4 +153,42 @@ Permanent boundaries, with no issue:
 
 ## Verification
 
-Recorded as §6 lands.
+1. **The release** (#62) cut `terragrunt/root-hcl/v4.0.0` and `workflows/v3.0.0`.
+   Before merging, it was tested on fake-valued copies of all three spokes,
+   encrypted to a throwaway age key, with each v4 copy made by running
+   `split-secrets.sh` on its v3 file:
+   - all 32 leaves rendered identically under v3 and v4, apart from a one-line
+     comment where a spoke has no `env.enc`;
+   - a logging `sops` wrapper showed the Grafana leaf decrypting only
+     `terraform.enc`, `scaleway.enc` and `env.enc`. No leaf outside
+     `terraform/backblaze/` decrypted `backblaze.enc`, and a disabled provider's
+     file was never read;
+   - 15 guard cases each failed with the right file and key and no value;
+   - `check-secrets.sh` ran with no age key and no `sops` installed. It passed
+     on the split copies and failed on every bad case.
+2. **Deviations, as built.**
+   - The schema calls conditional keys `keys_when`.
+   - An `env.enc` key that another file owns is an error, and
+     `scaleway_s3_provider_name` is reserved too.
+   - `check-secrets.sh` fails on a leftover `terraform/secrets.enc` or an unknown
+     `.enc` name.
+   - `state-backup.yml` masks only the two files it reads.
+   - An environment variable can fill a value but can't stand in for a missing
+     file.
+3. **garden** (noisypigeon/garden#49). The owner ran `split-secrets.sh`, and
+   `check-secrets.sh` passed on `terraform.enc` (6 keys), `cloudflare.enc` and
+   `backblaze.enc` (2 each). CI planned and applied `No changes.` on 4/4 leaves,
+   and the post-apply backup copied state to B2 using only the new files.
+4. **blog** (noisypigeon/blog#40). The same three files and key counts. CI ran
+   `No changes.` on 10/10 leaves, the backup succeeded, and the
+   `willowgraysen.com` and `pigeon.dev` redirects still returned `301` to
+   `https://noisypigeon.com/`.
+5. **willowgraysen** (noisypigeon/willowgraysen#17). `terraform.enc` holds
+   exactly the 3 state keys and no backup keys, which LIB-0010's shape couldn't
+   enforce. `scaleway.enc` holds 4, `backblaze.enc` 2, and `env.enc` holds the 18
+   leaf values without `ENV_`. CI ran 18/18 units `No changes.`, and the apply
+   was a no-op.
+6. **The sweep.** No spoke has a `terraform/secrets.enc`. noisypigeon/garden#50
+   and noisypigeon/blog#41 updated the output descriptions and `spoke.hcl`
+   comments that still named it. Afterwards, `secrets.enc` appears in no spoke
+   outside ADRs and changelogs.
