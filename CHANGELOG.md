@@ -46,6 +46,8 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-16
 
+- [cloudflare/dns-record] Look Cloudflare zones up by apex in dns-record and add apex-redirect ([#58](https://github.com/noisypigeon/pigeon-lib/pull/58))
+- [cloudflare/apex-redirect] Look Cloudflare zones up by apex in dns-record and add apex-redirect ([#58](https://github.com/noisypigeon/pigeon-lib/pull/58))
 - [adr] docs(adr): LIB-0010 normalized spoke secrets, LIB-0011 zone lookup and apex-redirect ([#57](https://github.com/noisypigeon/pigeon-lib/pull/57))
 - [workflows] Dispatch the blog deploy to noisypigeon/blog ([#56](https://github.com/noisypigeon/pigeon-lib/pull/56))
 - [workflows] Drop pigeon.dev from comments and docs ([#55](https://github.com/noisypigeon/pigeon-lib/pull/55))
