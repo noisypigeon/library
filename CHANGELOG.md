@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-17
 
+- [adr] docs(adr): LIB-0012 records the rollout; LIB-0010 amended ([#63](https://github.com/noisypigeon/pigeon-lib/pull/63))
 - [workflows] Split spoke secrets into one sops file per concern ([#62](https://github.com/noisypigeon/pigeon-lib/pull/62))
 - [terragrunt/root-hcl] Split spoke secrets into one sops file per concern ([#62](https://github.com/noisypigeon/pigeon-lib/pull/62))
 - [adr] docs(adr): LIB-0012 splits spoke secrets into one sops file per concern ([#61](https://github.com/noisypigeon/pigeon-lib/pull/61))
