@@ -4,6 +4,22 @@ All notable changes to this template are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.1.1] - 2026-10-17
+
+### Name the hub noisypigeon/library
+
+This repo is now `noisypigeon/library`, renamed from `noisypigeon/pigeon-lib` (LIB-0015).
+
+- **`generate-module-redirects.sh`** defaults `TAG_REPO` to `noisypigeon/library`. Once a site takes this `workflows` release, every module short URL's `terraform-get` meta resolves to `git::https://github.com/noisypigeon/library.git//…`, and the overview and release links name the new repo too. The old `pigeon-lib.git` sources keep working through GitHub's redirect in the meantime. The short URLs themselves don't change.
+- **The theme's `homepage`** points at the new repo.
+- **Docs.** The `root.hcl` template header, the READMEs (including the raw dashboard URLs), CLAUDE.md and the release-pr skill now name the library. ADRs and changelogs keep the old name as history.
+
+No inputs, outputs or behaviour change for any consumer.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#70](https://github.com/noisypigeon/library/pull/70)
+
 ## [4.1.0] - 2026-10-17
 
 ### Add per-leaf breakglass credentials to root.hcl and check-secrets
