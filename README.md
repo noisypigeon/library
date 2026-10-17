@@ -1,4 +1,4 @@
-# pigeon-lib
+# library
 
 Reusable, versioned building blocks for the `noisypigeon` family: Terraform
 modules, a Zola theme, a Terragrunt `root.hcl` template, and the shared CI that

@@ -70,7 +70,7 @@ write by hand:
 
 ```hcl
 module "state_bucket" {
-  source = "git::https://github.com/noisypigeon/pigeon-lib.git//terraform/scaleway/object-bucket?ref=terraform/scaleway/object-bucket/v4.2.0"
+  source = "git::https://github.com/noisypigeon/library.git//terraform/scaleway/object-bucket?ref=terraform/scaleway/object-bucket/v4.2.0"
   ...
 }
 ```
@@ -87,8 +87,8 @@ For local iteration against an unreleased module change (no network fetch, no
 tag required), clone this repo as a sibling directory and reference it by path:
 
 ```
-git clone git@github.com:noisypigeon/pigeon-lib.git ../pigeon-lib
+git clone git@github.com:noisypigeon/library.git ../library
 ```
 
 then reference modules under `terraform/`, e.g.
-`../pigeon-lib/terraform/scaleway/object-bucket`.
+`../library/terraform/scaleway/object-bucket`.

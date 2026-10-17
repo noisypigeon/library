@@ -11,7 +11,7 @@
 A thin wrapper around a single `cloudflare_ruleset`. It adds no behaviour: the
 `rules` list goes to the provider exactly as given, and `description` left
 `null` stays unset. It exists so that a leaf managing a ruleset calls a
-pigeon-lib module (LIB-0004).
+library module (LIB-0004).
 
 It's **zone-scoped**: a leaf calling it lives at
 `terraform/cloudflare/<zone>/ruleset/<instance>/`, where `<zone>` is the zone's

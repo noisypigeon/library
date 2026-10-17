@@ -33,7 +33,7 @@ on:
         required: false
         default: "repo"
       fetch_script:
-        description: "Script (relative to the caller's repo root) that materializes pigeon-lib at the version the caller pins."
+        description: "Script (relative to the caller's repo root) that materializes library at the version the caller pins."
         type: string
         required: false
         default: "fetch-lib.sh"
@@ -101,7 +101,7 @@ jobs:
           echo "Rollup tag: ${TAG}"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
-      - name: Fetch pigeon-lib
+      - name: Fetch library
         env:
           FETCH_SCRIPT: ${{ inputs.fetch_script }}
         run: '"./$FETCH_SCRIPT"'

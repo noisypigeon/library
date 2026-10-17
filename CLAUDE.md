@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This is `pigeon-lib`, the **hub** of the hub-and-spoke architecture LIB-0001
+This is `library`, the **hub** of the hub-and-spoke architecture LIB-0001
 defines. It holds everything in this family that is reusable and versioned, and
 nothing that is deployed:
 
@@ -42,7 +42,7 @@ nothing that is deployed:
   own directory (LIB-0001 invariant 4).
 - `grafana-dashboards/<set>/` — versioned Grafana dashboard JSON, tagged
   `grafana-dashboards/<set>/vX.Y.Z` per set. Consumers fetch a dashboard by its
-  tag's raw URL (`raw.githubusercontent.com/noisypigeon/pigeon-lib/refs/tags/<tag>/<path>`),
+  tag's raw URL (`raw.githubusercontent.com/noisypigeon/library/refs/tags/<tag>/<path>`),
   which is what `grafana/dashboard`'s `url` input does, so the same
   pinned file can feed both Terraform and anything else that ships it.
 - `.github/workflows/` — the reusable CI the spokes call, tagged

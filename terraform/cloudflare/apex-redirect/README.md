@@ -22,7 +22,7 @@ with `data "cloudflare_zone"`, so the leaf passes
 `zone = local.cloudflare_zone` and no zone ID is kept in a secret. The token
 needs **Zone:Read** on the zone, as well as DNS and ruleset edit.
 
-The module owns its resources directly rather than calling other pigeon-lib
+The module owns its resources directly rather than calling other library
 modules: a module that sources another by short URL breaks when that URL's
 host moves (LIB-0009).
 

@@ -10,7 +10,7 @@ A Cloudflare R2 bucket (`cloudflare_r2_bucket`), named the way
 - **`storage_class` defaults to `Standard`.** `InfrequentAccess` is the
   alternative.
 
-It exists so that a leaf managing an R2 bucket calls a pigeon-lib module and can
+It exists so that a leaf managing an R2 bucket calls a library module and can
 live at `terraform/cloudflare/bucket/<instance>/`, like every other leaf
 (LIB-0004). It's **account-level**, not zone-scoped, so its path has no zone
 segment (LIB-0008).

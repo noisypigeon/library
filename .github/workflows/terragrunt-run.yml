@@ -12,7 +12,7 @@
 #
 # secrets_files and prepare_cmd exist for spokes (LIB-0003). A spoke keeps its
 # secrets in one sops file per concern under terraform/secrets/ (LIB-0012), and
-# its root.hcl is materialized from pigeon-lib's template, so it has to run its
+# its root.hcl is materialized from the library's template, so it has to run its
 # fetcher and the resolver before terragrunt can find a root at all. Since
 # v3.0.0 secrets_files defaults to every terraform/secrets/*.enc the caller has,
 # so a spoke passes neither the old single file nor a list to keep in step.
@@ -40,7 +40,7 @@ on:
         required: false
         default: ""
       prepare_cmd:
-        description: "Optional command run from the caller's repo root before terragrunt -- e.g. fetching pigeon-lib and materializing root.hcl."
+        description: "Optional command run from the caller's repo root before terragrunt -- e.g. fetching library and materializing root.hcl."
         type: string
         required: false
         default: ""

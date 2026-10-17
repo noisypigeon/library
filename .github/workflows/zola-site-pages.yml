@@ -6,7 +6,7 @@
 # than merely different.
 #
 # No caller vendors the theme any more: since LIB-0002 the theme lives in
-# noisypigeon/pigeon-lib and every site fetches it. So a caller passes
+# noisypigeon/library and every site fetches it. So a caller passes
 # fetch_script (a script in its own checkout that materializes the library at
 # the version that site pins) and theme_script (where that leaves
 # resolve-theme.sh). Both are paths in the caller's checkout, not hardcoded
@@ -44,7 +44,7 @@ on:
         required: false
         default: "0.23.6"
       fetch_script:
-        description: "Optional script (relative to the caller's repo root) to run before resolving the theme -- materializes the pigeon-lib version this site pins."
+        description: "Optional script (relative to the caller's repo root) to run before resolving the theme -- materializes the library version this site pins."
         type: string
         required: false
         default: ""
@@ -67,7 +67,7 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Fetch pigeon-lib
+      - name: Fetch library
         if: inputs.fetch_script != ''
         env:
           FETCH_SCRIPT: ${{ inputs.fetch_script }}

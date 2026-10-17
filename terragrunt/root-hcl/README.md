@@ -50,7 +50,7 @@ locals {
 `secrets-schema.json`**:
 
 ```sh
-./fetch-lib.sh                                   # pigeon-lib at /.lib-version
+./fetch-lib.sh                                   # library at /.lib-version
 .lib-src/.github/scripts/resolve-root-hcl.sh     # writes ./root.hcl and ./secrets-schema.json
 ```
 
