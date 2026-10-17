@@ -3,6 +3,12 @@
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-17.
 - **Status**: Accepted.
+- **Amended 2026-10-17**: §3 step 2's "merged by hand" needed `gh pr merge
+  --admin`. Each spoke's ruleset requires the `terragrunt/apply` status, which
+  only the apply workflow sets, and that workflow runs from `main`, which still
+  called the old name. The owner approved bypassing the ruleset for those three
+  PRs only. The new `workflows` release turned out to be `v3.1.1` (one
+  `release:patch` label), not a new minor.
 
 ## Context
 
@@ -120,15 +126,24 @@ raw dashboard URLs, and every historical link.
 
 ## Verification
 
-To fill in at rollout:
-
-1. The repo is renamed with the same repo ID.
+1. The repo was renamed with the same repo ID (`R_kgDOVItaiA`), and
    `git ls-remote https://github.com/noisypigeon/pigeon-lib.git HEAD` still
-   resolves, and an old raw dashboard URL still serves the same bytes.
-2. garden, blog and runway each planned `No changes.` on every leaf while
-   calling `noisypigeon/library`, and each was merged.
-3. The hub PR was released, and its garden dispatch succeeded.
-4. garden is on the new `workflows` release, and a short URL's `terraform-get`
-   meta names `noisypigeon/library.git`.
-5. runway's dashboard URL names `noisypigeon/library`, and the change planned
-   `No changes.`.
+   resolves. The old and new raw URLs of the `pigeon-cli` dashboard both
+   return 200 with the same SHA-256.
+2. garden#51, blog#42 and runway#19 each called `noisypigeon/library` at their
+   existing pins. They planned `No changes.` on every leaf they ran (4, 10 and
+   18 leaves) and were merged with `--admin` (Amended).
+3. library#70 released `workflows/v3.1.1`, `terragrunt/root-hcl/v4.1.1` and
+   `zola-site/v1.2.1`. Its garden and blog dispatches succeeded, and both
+   Pages deploys passed.
+4. garden#52 took `workflows/v3.1.1`. After a dispatched Pages build, a short
+   URL's `terraform-get` meta names
+   `git::https://github.com/noisypigeon/library.git//…` (checked for
+   `scaleway/terraform-deployer-iam/v0.1.0` and `scaleway/object-bucket/v4.2.0`).
+   A push touching only workflows doesn't trigger that build, which is why it
+   had to be dispatched.
+5. runway#20 moved the dashboard URL to `noisypigeon/library`. It planned
+   `No changes.` on its 4 leaves, and the apply was 0/0/0 on each. It was
+   merged by hand after auto-merge hit noisypigeon/noisypigeon#310.
+6. As expected, `noisypigeon/noisypigeon`'s workflows now call a repo that
+   doesn't resolve. They weren't changed (Out of scope).
