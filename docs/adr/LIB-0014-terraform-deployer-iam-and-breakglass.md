@@ -1,8 +1,15 @@
-# LIB-0014: The deployer IAM moves to runway, signed in with a breakglass key
+# LIB-0014: The deployer IAM moves to runway, and breakglass keys become possible
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-17.
 - **Status**: Accepted.
+- **Amended 2026-10-17**: runway doesn't enable breakglass. Its own Scaleway
+  key is not the one the deployer leaf mints, so the leaf doesn't sign in with
+  a key it manages, and it uses `scaleway.enc` like every other leaf. §2's
+  breakglass ships in the template as the precedent for a leaf that does.
+  The state copy was a server-side S3 copy with runway's own key, which can
+  reach the old bucket, not the LIB-0008 §3 pull/push runbook. §4, §5,
+  Consequences and Verification are corrected to match.
 
 ## Context
 
@@ -139,12 +146,15 @@ hand, by editing that one file.
 ### 4. runway takes the leaf: `terraform/scaleway/terraform-deployer-iam/runway`
 
 - **The leaf** calls the module (§1) with the existing names, permission sets
-  and project, and sets breakglass for its own prefix (§2). Its outputs keep
+  and project. It signs in with runway's own Scaleway key, which it doesn't
+  manage, so it needs no breakglass key. If runway ever hands it the key it
+  signs in with, allowlist it (§2) first. Its outputs keep
   the existing hand-copy step: the deployer key goes into `scaleway.enc` and
   `terraform.enc`.
-- **The state is copied, not imported.** The LIB-0008 §3 runbook copies the
-  old state from the shared bucket into runway's bucket, at the leaf's key, and
-  checks it by SHA-256, serial and lineage. An import couldn't recover the API
+- **The state is copied, not imported.** Runway's own key can reach the
+  shared bucket, so a server-side S3 copy moves the old state object into
+  runway's bucket, at the leaf's key, and it is checked by SHA-256, serial and
+  lineage. An import couldn't recover the API
   key's `secret_key`, so the outputs would be empty until the next rotation.
 - **`moved` blocks map the addresses.** `module.iam_application`,
   `module.iam_policy` and `module.iam_api_key` become
@@ -152,8 +162,11 @@ hand, by editing that one file.
   changes or destroys.
 - **Then the old key is emptied.** DEV-0130 says a migration "is not complete
   until the old location's state is also emptied, not merely orphaned". So
-  after runway's apply, `state rm` empties
-  `workloads/willowgraysen.com/terraform/state/iam/terraform.tfstate`.
+  after runway's apply, `workloads/willowgraysen.com/terraform/state/iam/terraform.tfstate`
+  is rewritten as the same lineage at the next serial, with no resources and
+  no outputs. That is `state rm` of every instance, and it also drops the API
+  key's secret from the old output. The bucket is versioned, so the previous
+  version is kept.
 - **The old leaf's files stay where they are.** This record moves state, not
   files (see Out of scope).
 
@@ -161,9 +174,11 @@ hand, by editing that one file.
 
 After §4, nothing in runway reads anything from `noisypigeon`: no root, no
 secrets, no state, and no IAM that `noisypigeon` manages. That was the last
-`state/iam` leaf. This record amends LIB-0001 Amendment 7: a spoke can run its
-own deployer IAM behind a breakglass key, the "local bootstrap root" candidate
-in §8, done with one root and a per-leaf credential rather than a second root.
+`state/iam` leaf. This record amends LIB-0001 Amendment 7: a spoke runs its
+own deployer IAM. When that leaf would depend on a key it manages, a per-leaf
+breakglass key breaks the loop (§2). That is the "local bootstrap root"
+candidate in §8, done with one root and a per-leaf credential rather than a
+second root. runway doesn't need it today (Amended).
 
 ## Consequences
 
@@ -174,13 +189,14 @@ in §8, done with one root and a per-leaf credential rather than a second root.
   empty, so an apply would create a second application, policy and key with the
   same names. The leaf's files stay until a separate cleanup, so this hazard
   lasts until then.
-- **The deployer leaf survives its own key.** If the deployer key expires or is
-  destroyed, the leaf still plans and applies with the breakglass key and can
-  mint a new one. Every other leaf waits for the hand-copy, as it does today.
-- **One more secret to guard.** `scaleway_breakglass.enc` holds an
-  organization-level IAM credential. Only the allowlisted leaf decrypts it,
-  but the age key that decrypts every other file decrypts it too. A separate
-  recipient is possible later and isn't needed for this.
+- **A breakglass-allowlisted leaf survives its own key.** If the key it
+  manages expires or is destroyed, it still plans and applies with the
+  breakglass key and can mint a new one. runway's deployer leaf already
+  survives the deployer key, because it signs in with runway's own key.
+- **A breakglass file is one more secret to guard,** in a spoke that enables
+  one. It holds an organization-level IAM credential. Only the allowlisted
+  leaf decrypts it, but the age key that decrypts every other file decrypts it
+  too. A separate recipient is possible later and isn't needed for this.
 - **The template grows a concept.** spoke.hcl's `providers` entries gain an
   optional `breakglass` key, and the schema gains `replaces` and
   `replaces_state`. Both are additive.
@@ -202,19 +218,30 @@ in §8, done with one root and a per-leaf credential rather than a second root.
 
 ## Verification
 
-To fill in at rollout:
-
-1. `terraform/scaleway/terraform-deployer-iam/v0.1.0` is tagged, and its short
-   URL resolves.
-2. `terragrunt/root-hcl/v4.1.0` and `workflows/v3.1.0` are tagged. A fixture
-   spoke showed that an allowlisted leaf takes its provider and backend
-   credentials from the breakglass file, and that a non-allowlisted leaf never
-   decrypts it.
-3. runway is on v4.1.0, with `scaleway_breakglass.enc` committed, and plans
-   `No changes.` on every existing leaf.
-4. The copied state matches the source by SHA-256, serial and lineage. runway's
-   CI planned four moves and no changes on
+1. `terraform/scaleway/terraform-deployer-iam/v0.1.0` was tagged (pigeon-lib#66).
+   Its `noisypigeon.garden` short URL serves the `terraform-get` meta for that
+   tag.
+2. `terragrunt/root-hcl/v4.1.0` and `workflows/v3.1.0` were tagged
+   (pigeon-lib#67). Against a sops/age fixture spoke:
+   - an allowlisted leaf took its provider and backend credentials from
+     `scaleway_breakglass.enc`;
+   - a non-allowlisted leaf rendered with that file corrupted, so it never
+     decrypted it;
+   - each guard fired;
+   - `check-secrets.sh` failed without the file and passed with it.
+   A spoke without `breakglass` rendered byte-for-byte the same as under
+   v4.0.0.
+3. runway took v4.1.0 and `workflows/v3.1.0` without enabling breakglass
+   (noisypigeon/runway#18). Its CI planned `No changes.` on all 17 existing
+   leaves.
+4. The server-side copy matched the source by SHA-256, serial (6), lineage and
+   resource count (4 resources, 4 instances), and the policy kept its `[0]`
+   index. CI planned four moves and `0 to add, 0 to change, 0 to destroy` on
    `terraform/scaleway/terraform-deployer-iam/runway`, and the apply was a
-   no-op.
-5. The old key in the shared bucket was emptied with `state rm`, and the
-   legacy leaf's files are unchanged in `noisypigeon`.
+   no-op. The new state is at serial 7 with all four resources under
+   `module.terraform_deployer_iam`.
+5. The old key now holds serial 7 of the same lineage, with 0 resources and no
+   outputs. The previous version (6245 bytes) is kept in the versioned shared
+   bucket, and the legacy leaf's files in `noisypigeon` are unchanged.
+6. runway's auto-merge failed with the known job-token error
+   (noisypigeon/noisypigeon#310), and #18 was merged by hand after the apply.
