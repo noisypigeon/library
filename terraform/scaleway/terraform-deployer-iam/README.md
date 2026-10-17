@@ -24,4 +24,27 @@ module "terraform_deployer_iam" {
 ```
 
 <!-- BEGIN_TF_DOCS -->
+## Inputs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| <a name="input_api_key_description"></a> [api\_key\_description](#input\_api\_key\_description) | IAM API key description | `string` | `null` | no |
+| <a name="input_default_project_id"></a> [default\_project\_id](#input\_default\_project\_id) | Default project ID to use for Object Storage operations with the API key (defaults to the provider's own project when unset) | `string` | `null` | no |
+| <a name="input_description"></a> [description](#input\_description) | Description for the IAM application and its policy | `string` | `null` | no |
+| <a name="input_expires_at"></a> [expires\_at](#input\_expires\_at) | API key expiration timestamp (i.e. 2027-09-25T22:32:12Z). Defaults to 30 days after the key is first created. | `string` | `null` | no |
+| <a name="input_name"></a> [name](#input\_name) | IAM application name | `string` | n/a | yes |
+| <a name="input_organization_id"></a> [organization\_id](#input\_organization\_id) | Organization id | `string` | `null` | no |
+| <a name="input_organization_permission_sets"></a> [organization\_permission\_sets](#input\_organization\_permission\_sets) | Organization permission set grants | `list(string)` | `null` | no |
+| <a name="input_policy_name"></a> [policy\_name](#input\_policy\_name) | IAM policy name, used exactly as given (defaults to "<name>-policy") | `string` | `null` | no |
+| <a name="input_project_ids"></a> [project\_ids](#input\_project\_ids) | Project ids | `list(string)` | `null` | no |
+| <a name="input_project_permission_sets"></a> [project\_permission\_sets](#input\_project\_permission\_sets) | Project permission set grants | `list(string)` | `null` | no |
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| <a name="output_access_key"></a> [access\_key](#output\_access\_key) | IAM API key access key |
+| <a name="output_application_id"></a> [application\_id](#output\_application\_id) | IAM application ID |
+| <a name="output_policy_id"></a> [policy\_id](#output\_policy\_id) | IAM policy ID |
+| <a name="output_secret_key"></a> [secret\_key](#output\_secret\_key) | IAM API key secret key |
 <!-- END_TF_DOCS -->
