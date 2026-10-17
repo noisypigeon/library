@@ -3,6 +3,9 @@
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-16.
 - **Status**: Accepted.
+- **Amended 2026-10-17**: LIB-0012 splits the single `secrets.enc` into one
+  file per concern under `terraform/secrets/`, superseding §4's single-file
+  schema and §3's `ENV_` prefix. §1's names are unchanged.
 
 ## Context
 
