@@ -6,7 +6,7 @@ releases and deploys them.
 
 This repo is the **hub**. It holds what other repos reuse and nothing that is
 deployed — no site, no Terraform state, no secrets. The repos that consume it
-(`garden`, `noisypigeon.com`, `willowgraysen`, and what is left of
+(`garden`, `noisypigeon.com`, `runway`, and what is left of
 `noisypigeon`) are spokes: content plus the
 infrastructure that serves it, each pinning a version of what it takes from
 here. The full argument is
@@ -76,4 +76,4 @@ This repo's ADRs live in [`docs/adr/`](docs/adr), as `LIB-NNNN-<slug>.md`.
 Sibling domains live with their own repos: `DEV-` records in
 `noisypigeon/garden`, `COM-` records in `noisypigeon/blog`
 (`NPC-` in older prose is an alias for `COM-`), and `RUN-` records in
-`noisypigeon/willowgraysen`.
+`noisypigeon/runway`.
