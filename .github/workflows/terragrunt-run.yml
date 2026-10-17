@@ -11,10 +11,11 @@
 # below.
 #
 # secrets_files and prepare_cmd exist for spokes (LIB-0003). A spoke keeps its
-# secrets in terraform/secrets.enc rather than a root .env.enc, and its root.hcl
-# is materialized from pigeon-lib's template rather than committed, so it has
-# to run its fetcher and the resolver before terragrunt can find a root at
-# all. Both default to exactly what noisypigeon/noisypigeon did before.
+# secrets in one sops file per concern under terraform/secrets/ (LIB-0012), and
+# its root.hcl is materialized from pigeon-lib's template, so it has to run its
+# fetcher and the resolver before terragrunt can find a root at all. Since
+# v3.0.0 secrets_files defaults to every terraform/secrets/*.enc the caller has,
+# so a spoke passes neither the old single file nor a list to keep in step.
 name: Terragrunt run
 
 on:
@@ -34,10 +35,10 @@ on:
         required: false
         default: ${{ github.ref }}
       secrets_files:
-        description: "Space-separated sops dotenv files (relative to the caller's repo root) whose decrypted values are masked in the log."
+        description: "Space-separated sops dotenv files (relative to the caller's repo root) whose decrypted values are masked in the log. Empty (the default) means every terraform/secrets/*.enc that exists."
         type: string
         required: false
-        default: ".env.enc"
+        default: ""
       prepare_cmd:
         description: "Optional command run from the caller's repo root before terragrunt -- e.g. fetching pigeon-lib and materializing root.hcl."
         type: string
@@ -86,6 +87,11 @@ jobs:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
           SECRETS_FILES: ${{ inputs.secrets_files }}
         run: |
+          shopt -s nullglob
+          [ -n "$SECRETS_FILES" ] || SECRETS_FILES=$(echo terraform/secrets/*.enc)
+          if [ -z "$SECRETS_FILES" ]; then
+            echo "::warning::No secrets files to mask: terraform/secrets/ has no .enc files"
+          fi
           for file in $SECRETS_FILES; do
             while IFS='=' read -r key value; do
               [[ -z "$key" || "$key" == \#* || "$key" == sops_* ]] && continue

@@ -18,22 +18,27 @@
 #
 # A spoke on state_backend = "cloudflare" calls this from terragrunt-apply.yml
 # (a job after apply) and from a scheduled caller, which picks up local applies.
+# Since v3.0.0 (LIB-0012) it does nothing unless the caller's spoke.hcl sets
+# state_backup = true, so a caller left on a spoke without a backup is a no-op,
+# not a failure.
 #
 # Since v2.0.0 every name is fixed (LIB-0010): the R2 side reads
 # TERRAFORM_STATE_{BUCKET_NAME,ACCESS_KEY_ID,ACCESS_KEY} and builds its endpoint
 # from CLOUDFLARE_PROVIDER_ACCOUNT_ID, exactly as root.hcl's backend does, and
 # the B2 side reads TERRAFORM_STATE_BACKUP_{BUCKET_NAME,ACCESS_KEY_ID,ACCESS_KEY}.
-# There are no inputs naming them any more.
+# There are no inputs naming them any more. Since v3.0.0 they come from the
+# spoke's terraform/secrets/terraform.enc and cloudflare.enc, and no other
+# secrets file is decrypted.
 name: State backup
 
 on:
   workflow_call:
     inputs:
       secrets_files:
-        description: "Space-separated sops dotenv files (relative to the caller's repo root) to read secrets from; every value is masked."
+        description: "Space-separated sops dotenv files (relative to the caller's repo root) to read secrets from; every value is masked. Empty (the default) means whichever of terraform/secrets/terraform.enc and cloudflare.enc exist, the only two this job needs."
         type: string
         required: false
-        default: "terraform/secrets.enc"
+        default: ""
     secrets:
       SOPS_AGE_KEY:
         required: true
@@ -51,9 +56,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # spoke.hcl is HCL, read without a parser, as check-secrets.sh does:
+      # state_backup is one `name = value` line.
+      - name: Check spoke.hcl sets state_backup
+        id: gate
+        run: |
+          backup=$(sed -nE 's/^[[:space:]]*state_backup[[:space:]]*=[[:space:]]*([a-z]+).*/\1/p' spoke.hcl | head -n1)
+          if [ "$backup" = true ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::spoke.hcl doesn't set state_backup = true; nothing to back up (LIB-0012)"
+          fi
+
       - uses: jdx/mise-action@v2
+        if: steps.gate.outputs.enabled == 'true'
 
       - name: Install rclone
+        if: steps.gate.outputs.enabled == 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq rclone
@@ -63,11 +83,17 @@ jobs:
       # exported are the few this job needs, under rclone's env-var config
       # names -- no config file is ever written.
       - name: Load secrets
+        if: steps.gate.outputs.enabled == 'true'
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
           SECRETS_FILES: ${{ inputs.secrets_files }}
         run: |
           declare -A secrets
+          if [ -z "$SECRETS_FILES" ]; then
+            for file in terraform/secrets/terraform.enc terraform/secrets/cloudflare.enc; do
+              if [ -f "$file" ]; then SECRETS_FILES="$SECRETS_FILES $file"; fi
+            done
+          fi
           for file in $SECRETS_FILES; do
             while IFS='=' read -r key value; do
               [[ -z "$key" || "$key" == \#* || "$key" == sops_* ]] && continue
@@ -113,9 +139,11 @@ jobs:
       # modification times instead makes rclone HEAD each B2 object and then
       # rewrite its metadata, which a key without readFiles can't do.
       - name: Copy state to B2
+        if: steps.gate.outputs.enabled == 'true'
         run: rclone copy "r2:$STATE_BUCKET" "b2:$BACKUP_BUCKET" --include "terraform/**" --checksum --s3-no-head --stats-one-line -v
 
       - name: Check B2 holds every state file
+        if: steps.gate.outputs.enabled == 'true'
         run: |
           src=$(rclone lsf -R --files-only --include "terraform/**" "r2:$STATE_BUCKET" | sort)
           dst=$(rclone lsf -R --files-only --include "terraform/**" "b2:$BACKUP_BUCKET" | sort)

@@ -32,6 +32,13 @@
 # state bucket's key, and any ENV_<NAME> key becomes local.<name> in every
 # leaf. The zone ID left with it: dns-record v1 looks the zone up by apex
 # (LIB-0011).
+#
+# Since v4.0.0 (LIB-0012) those secrets live in one sops file per concern under
+# terraform/secrets/ -- terraform.enc, cloudflare.enc, scaleway.enc,
+# backblaze.enc and env.enc -- each holding exactly its own keys. A leaf
+# decrypts only the files it needs. spoke.hcl's state_backup says whether the
+# state is backed up, and an env.enc key <NAME> becomes local.<name>, without
+# v3's ENV_ prefix.
 
 locals {
   # The spoke's instance values. Missing spoke.hcl is a hard error, which is
@@ -78,8 +85,9 @@ locals {
   guard_prefixes     = alltrue([for p in local.provider_prefixes : endswith(p, "/")]) ? true : file("spoke.hcl providers: every leaves prefix must end in a slash, or it matches sibling paths too")
   guard_backend      = contains(local.known_state_backend, local.state_backend) ? true : file("spoke.hcl state_backend is ${local.state_backend}; known: ${join(", ", local.known_state_backend)}")
   guard_grafana      = local.grafana_enabled && !local.scaleway_enabled ? file("providers.grafana is on for ${path_relative_to_include()} but providers.scaleway is not; its data source needs the Scaleway provider") : true
-  guard_bucket_key   = contains(keys(local.spoke.locals), "state_bucket_secret") ? file("spoke.hcl sets state_bucket_secret: root.hcl v3 reads the state bucket from TERRAFORM_STATE_BUCKET_NAME (LIB-0010); rename the key in secrets.enc and delete state_bucket_secret") : true
-  guard_r2_account   = local.state_backend == "cloudflare" && !contains(keys(local.providers), "cloudflare") ? file("spoke.hcl state_backend is cloudflare but providers has no cloudflare; the R2 endpoint is built from CLOUDFLARE_PROVIDER_ACCOUNT_ID (LIB-0010)") : true
+  guard_bucket_key   = contains(keys(local.spoke.locals), "state_bucket_secret") ? file("spoke.hcl sets state_bucket_secret: root.hcl v3 reads the state bucket from TERRAFORM_STATE_BUCKET_NAME (LIB-0010) in terraform/secrets/terraform.enc; delete state_bucket_secret") : true
+  guard_r2_account   = local.state_backend == "cloudflare" && !contains(keys(local.providers), "cloudflare") ? file("spoke.hcl state_backend is cloudflare but providers has no cloudflare; the R2 endpoint is built from CLOUDFLARE_PROVIDER_ACCOUNT_ID in terraform/secrets/cloudflare.enc (LIB-0010, LIB-0012)") : true
+  guard_r2_backup    = local.state_backend == "cloudflare" && local.state_backup != true ? file("spoke.hcl state_backend is cloudflare but state_backup is not true; R2 can't version objects, so its state must be backed up to B2 (LIB-0007, LIB-0012)") : true
 
   # extra_required_providers: { <name> = { source = "...", version = "..." } },
   # appended to the one required_providers block (LIB-0003 v1.1.0). A
@@ -92,71 +100,140 @@ locals {
   state_backend       = lookup(local.spoke.locals, "state_backend", "scaleway")
   known_state_backend = ["scaleway", "cloudflare"]
 
-  # Secrets: decrypted in-memory from the spoke's terraform/secrets.enc via
-  # sops/age (ADR-0123, ADR-0131). No plaintext copy ever touches disk, and
-  # nothing ever falls back to another repo's secrets.
-  secrets_enc_path = find_in_parent_folders("secrets.enc", "")
+  # Whether state-backup.yml copies the state to B2 (LIB-0012 §2). It also
+  # makes the backup keys part of terraform/secrets/terraform.enc.
+  state_backup = lookup(local.spoke.locals, "state_backup", false)
 
-  secrets_decrypted = local.secrets_enc_path != "" ? run_cmd(
-    "--terragrunt-quiet", "sops", "--decrypt",
-    "--input-type", "dotenv", "--output-type", "dotenv",
-    local.secrets_enc_path
-  ) : ""
-
-  secrets = { for pair in [
-    for line in split("\n", local.secrets_decrypted) :
-    regex("^([^=]+)=(.*)$", trimspace(line))
-    if trimspace(line) != "" && !startswith(trimspace(line), "#")
-    && !startswith(trimspace(line), "sops_")
-    && can(regex("^([^=]+)=(.*)$", trimspace(line)))
-  ] : trimspace(pair[0]) => trimspace(pair[1]) }
-
-  # Every value has one name, read from the environment first and then
-  # secrets.enc (LIB-0010 §1). The state reads only TERRAFORM_STATE_*, and each
-  # provider only its own <PROVIDER>_PROVIDER_*; the one overlap is the R2
-  # endpoint, which needs the Cloudflare account ID (guard_r2_account).
-  terraform_state_bucket_name   = get_env("TERRAFORM_STATE_BUCKET_NAME", lookup(local.secrets, "TERRAFORM_STATE_BUCKET_NAME", ""))
-  terraform_state_access_key_id = get_env("TERRAFORM_STATE_ACCESS_KEY_ID", lookup(local.secrets, "TERRAFORM_STATE_ACCESS_KEY_ID", ""))
-  terraform_state_access_key    = get_env("TERRAFORM_STATE_ACCESS_KEY", lookup(local.secrets, "TERRAFORM_STATE_ACCESS_KEY", ""))
-
-  cloudflare_account_id = get_env("CLOUDFLARE_PROVIDER_ACCOUNT_ID", lookup(local.secrets, "CLOUDFLARE_PROVIDER_ACCOUNT_ID", ""))
-  cloudflare_api_token  = get_env("CLOUDFLARE_PROVIDER_TOKEN", lookup(local.secrets, "CLOUDFLARE_PROVIDER_TOKEN", ""))
-
-  scaleway_access_key      = get_env("SCALEWAY_PROVIDER_ACCESS_KEY_ID", lookup(local.secrets, "SCALEWAY_PROVIDER_ACCESS_KEY_ID", ""))
-  scaleway_secret_key      = get_env("SCALEWAY_PROVIDER_ACCESS_KEY", lookup(local.secrets, "SCALEWAY_PROVIDER_ACCESS_KEY", ""))
-  scaleway_organization_id = get_env("SCALEWAY_PROVIDER_ORGANIZATION_ID", lookup(local.secrets, "SCALEWAY_PROVIDER_ORGANIZATION_ID", ""))
-  scaleway_project_id      = get_env("SCALEWAY_PROVIDER_PROJECT_ID", lookup(local.secrets, "SCALEWAY_PROVIDER_PROJECT_ID", ""))
-
-  backblaze_application_key_id = get_env("BACKBLAZE_PROVIDER_ACCESS_KEY_ID", lookup(local.secrets, "BACKBLAZE_PROVIDER_ACCESS_KEY_ID", ""))
-  backblaze_application_key    = get_env("BACKBLAZE_PROVIDER_ACCESS_KEY", lookup(local.secrets, "BACKBLAZE_PROVIDER_ACCESS_KEY", ""))
-
-  # The schema (LIB-0010 §4), copied beside this file by resolve-root-hcl.sh.
-  # A key is required when its condition holds -- "always", the spoke's
-  # "backend.<state_backend>", or "provider.<name>" for each provider in the
-  # map, whichever leaves it is scoped to -- and must then be non-empty in the
-  # environment or secrets.enc. Any other key in secrets.enc must be listed
-  # under some condition or match an allowed pattern; that catches typos and
-  # names left behind by a rename. The guards name keys, never values. Only
-  # secrets.enc's keys are checked for being known: the environment holds far
-  # more than secrets.
+  # Secrets (LIB-0012): one sops dotenv file per concern under the spoke's
+  # terraform/secrets/, each decrypted in-memory via sops/age (ADR-0123,
+  # ADR-0131). No plaintext copy ever touches disk, and nothing ever falls
+  # back to another repo's secrets.
+  #
+  # secrets-schema.json, copied beside this file by resolve-root-hcl.sh, says
+  # what each file holds and when it is required: `required_when` lists
+  # conditions -- "always", "backend.<state_backend>", "provider.<name>" -- of
+  # which any one is enough, and `keys_when` adds keys under a condition
+  # ("state_backup"). A file with no `required_when` (env) is optional.
+  #
+  # A leaf decrypts only the files its own conditions require, with
+  # provider.<name> holding only where that provider is on for this leaf
+  # (leaves scoping, LIB-0005), plus any optional file that exists. So a
+  # Grafana leaf never decrypts backblaze.enc, and a file for a provider this
+  # spoke doesn't enable is never read at all.
   secrets_schema = jsondecode(file("${get_parent_terragrunt_dir()}/secrets-schema.json"))
-  secret_conditions = concat(
+  secrets_dir    = "${get_parent_terragrunt_dir()}/terraform/secrets"
+  secret_files   = local.secrets_schema.files
+
+  leaf_conditions = concat(
     ["always", "backend.${local.state_backend}"],
-    [for name in keys(local.providers) : "provider.${name}"],
+    [for name in local.known_providers : "provider.${name}" if local.provider_on[name]],
+    local.state_backup ? ["state_backup"] : [],
   )
-  required_secrets = distinct(flatten([
-    for condition, names in local.secrets_schema.required : names if contains(local.secret_conditions, condition)
-  ]))
-  missing_secrets = [
-    for name in local.required_secrets : name if get_env(name, lookup(local.secrets, name, "")) == ""
+  secret_file_path     = { for name, f in local.secret_files : name => "${local.secrets_dir}/${name}.enc" }
+  secret_file_optional = { for name, f in local.secret_files : name => length(try(f.required_when, [])) == 0 }
+  secret_file_needed = [
+    for name, f in local.secret_files : name
+    if anytrue([for c in try(f.required_when, []) : contains(local.leaf_conditions, c)])
   ]
-  schema_secrets = distinct(flatten(values(local.secrets_schema.required)))
-  unknown_secrets = sort([
-    for name in keys(local.secrets) : name
-    if !contains(local.schema_secrets, name) && !anytrue([for pattern in local.secrets_schema.allowed_patterns : can(regex(pattern, name))])
+  secret_files_read = concat(local.secret_file_needed, [
+    for name, optional in local.secret_file_optional : name if optional && fileexists(local.secret_file_path[name])
   ])
-  guard_missing_secrets = length(local.missing_secrets) > 0 ? file("secrets.enc and the environment lack, or leave empty, ${join(", ", local.missing_secrets)}, required by this spoke's state_backend and providers (LIB-0010; see secrets-schema.json)") : true
-  guard_unknown_secrets = length(local.unknown_secrets) > 0 ? file("secrets.enc has keys outside secrets-schema.json: ${join(", ", local.unknown_secrets)}; rename or delete them (LIB-0010)") : true
+
+  # The existence test is the for's filter, not a conditional: HCL evaluates
+  # both arms of ?:, so run_cmd would still run sops on a missing file.
+  secrets_decrypted = {
+    for name in local.secret_files_read : name => run_cmd(
+      "--terragrunt-quiet", "sops", "--decrypt",
+      "--input-type", "dotenv", "--output-type", "dotenv",
+      local.secret_file_path[name]
+    ) if fileexists(local.secret_file_path[name])
+  }
+
+  secrets_by_file = {
+    for name, text in local.secrets_decrypted : name => { for pair in [
+      for line in split("\n", text) :
+      regex("^([^=]+)=(.*)$", trimspace(line))
+      if trimspace(line) != "" && !startswith(trimspace(line), "#")
+      && !startswith(trimspace(line), "sops_")
+      && can(regex("^([^=]+)=(.*)$", trimspace(line)))
+    ] : trimspace(pair[0]) => trimspace(pair[1]) }
+  }
+
+  # Each file's own keys under this leaf's conditions: exactly what it must
+  # hold. env, open-ended, has none.
+  secret_file_keys = {
+    for name, f in local.secret_files : name => distinct(concat(
+      try(f.keys, []),
+      flatten([for c, ks in try(f.keys_when, {}) : ks if contains(local.leaf_conditions, c)]),
+    ))
+  }
+  # Every key some non-env file may hold, whatever the conditions: an env key
+  # with one of these names is a value in the wrong file.
+  schema_keys = distinct(flatten([
+    for name, f in local.secret_files : concat(try(f.keys, []), flatten(values(try(f.keys_when, {}))))
+  ]))
+
+  # The guards name the file and the key, never a value. A key's value is
+  # read from the environment first (get_env), so an environment variable
+  # still overrides the file, and only the effective value must be non-empty.
+  missing_secret_files = [
+    for name in local.secret_file_needed : "terraform/secrets/${name}.enc" if !fileexists(local.secret_file_path[name])
+  ]
+  missing_secrets = flatten([
+    for name in keys(local.secrets_by_file) : [
+      for k in local.secret_file_keys[name] : "${name}.enc ${k}" if !contains(keys(local.secrets_by_file[name]), k)
+    ]
+  ])
+  empty_secrets = flatten([
+    for name in keys(local.secrets_by_file) : [
+      for k, v in local.secrets_by_file[name] : "${name}.enc ${k}" if get_env(k, v) == ""
+    ]
+  ])
+  unexpected_secrets = flatten([
+    for name in keys(local.secrets_by_file) : [
+      for k in sort(keys(local.secrets_by_file[name])) : "${name}.enc ${k}"
+      if local.secret_file_optional[name] ? (
+        !can(regex(try(local.secret_files[name].pattern, ""), k)) || contains(local.schema_keys, k)
+      ) : !contains(local.secret_file_keys[name], k)
+    ]
+  ])
+  reserved_env_secrets = flatten([
+    for name in keys(local.secrets_by_file) : [
+      for k in sort(keys(local.secrets_by_file[name])) : "${name}.enc ${k} (local.${lower(k)})"
+      if contains(try(local.secret_files[name].reserved, []), lower(k))
+    ] if local.secret_file_optional[name]
+  ])
+  guard_missing_secret_files = length(local.missing_secret_files) > 0 ? file("${path_relative_to_include()} needs ${join(", ", local.missing_secret_files)}, required by spoke.hcl's state_backend and providers (LIB-0012; see secrets-schema.json)") : true
+  guard_missing_secrets      = length(local.missing_secrets) > 0 ? file("terraform/secrets/ lacks ${join(", ", local.missing_secrets)}, each required in that file (LIB-0012; see secrets-schema.json)") : true
+  guard_empty_secrets        = length(local.empty_secrets) > 0 ? file("terraform/secrets/ and the environment leave empty ${join(", ", local.empty_secrets)} (LIB-0012)") : true
+  guard_unexpected_secrets   = length(local.unexpected_secrets) > 0 ? file("terraform/secrets/ holds keys outside their file's own: ${join(", ", local.unexpected_secrets)}; move, rename or delete them (LIB-0012; see secrets-schema.json)") : true
+  guard_reserved_env         = length(local.reserved_env_secrets) > 0 ? file("terraform/secrets/ env keys shadow a generated local: ${join(", ", local.reserved_env_secrets)}; rename them (LIB-0012)") : true
+
+  # Every value has one name (LIB-0010 §1), read from the environment first
+  # and then the file that owns it. The state reads only TERRAFORM_STATE_*,
+  # and each provider only its own <PROVIDER>_PROVIDER_*; the one overlap is
+  # the R2 endpoint, which needs the Cloudflare account ID (guard_r2_account),
+  # and is why a cloudflare backend decrypts cloudflare.enc in every leaf.
+  secrets_terraform  = lookup(local.secrets_by_file, "terraform", {})
+  secrets_cloudflare = lookup(local.secrets_by_file, "cloudflare", {})
+  secrets_scaleway   = lookup(local.secrets_by_file, "scaleway", {})
+  secrets_backblaze  = lookup(local.secrets_by_file, "backblaze", {})
+  secrets_env        = lookup(local.secrets_by_file, "env", {})
+
+  terraform_state_bucket_name   = get_env("TERRAFORM_STATE_BUCKET_NAME", lookup(local.secrets_terraform, "TERRAFORM_STATE_BUCKET_NAME", ""))
+  terraform_state_access_key_id = get_env("TERRAFORM_STATE_ACCESS_KEY_ID", lookup(local.secrets_terraform, "TERRAFORM_STATE_ACCESS_KEY_ID", ""))
+  terraform_state_access_key    = get_env("TERRAFORM_STATE_ACCESS_KEY", lookup(local.secrets_terraform, "TERRAFORM_STATE_ACCESS_KEY", ""))
+
+  cloudflare_account_id = get_env("CLOUDFLARE_PROVIDER_ACCOUNT_ID", lookup(local.secrets_cloudflare, "CLOUDFLARE_PROVIDER_ACCOUNT_ID", ""))
+  cloudflare_api_token  = get_env("CLOUDFLARE_PROVIDER_TOKEN", lookup(local.secrets_cloudflare, "CLOUDFLARE_PROVIDER_TOKEN", ""))
+
+  scaleway_access_key      = get_env("SCALEWAY_PROVIDER_ACCESS_KEY_ID", lookup(local.secrets_scaleway, "SCALEWAY_PROVIDER_ACCESS_KEY_ID", ""))
+  scaleway_secret_key      = get_env("SCALEWAY_PROVIDER_ACCESS_KEY", lookup(local.secrets_scaleway, "SCALEWAY_PROVIDER_ACCESS_KEY", ""))
+  scaleway_organization_id = get_env("SCALEWAY_PROVIDER_ORGANIZATION_ID", lookup(local.secrets_scaleway, "SCALEWAY_PROVIDER_ORGANIZATION_ID", ""))
+  scaleway_project_id      = get_env("SCALEWAY_PROVIDER_PROJECT_ID", lookup(local.secrets_scaleway, "SCALEWAY_PROVIDER_PROJECT_ID", ""))
+
+  backblaze_application_key_id = get_env("BACKBLAZE_PROVIDER_ACCESS_KEY_ID", lookup(local.secrets_backblaze, "BACKBLAZE_PROVIDER_ACCESS_KEY_ID", ""))
+  backblaze_application_key    = get_env("BACKBLAZE_PROVIDER_ACCESS_KEY", lookup(local.secrets_backblaze, "BACKBLAZE_PROVIDER_ACCESS_KEY", ""))
 
   # Enforce the terraform/<leaf> convention (ADR-0092, ADR-0096): anything this
   # root is included from outside <spoke>/terraform/ is excluded.
@@ -252,11 +329,11 @@ EOF
   # the leaf's .terragrunt-cache.
   provider_off = "# Not enabled for this leaf -- see spoke.hcl's providers map (LIB-0005).\n"
 
-  # Leaf values (LIB-0010 §3): any secrets.enc key ENV_<NAME> is exposed to
-  # every leaf, whatever its providers, as local.<name> (ADR-0006).
+  # Leaf values (LIB-0012 §1): every key <NAME> in terraform/secrets/env.enc
+  # is exposed to every leaf, whatever its providers, as local.<name>
+  # (ADR-0006). The file is the namespace, so there is no prefix.
   env_secrets = {
-    for k, v in local.secrets : lower(trimprefix(k, "ENV_")) => get_env(k, v)
-    if startswith(k, "ENV_")
+    for k, v in local.secrets_env : lower(k) => get_env(k, v)
   }
 
   # The key is the same whichever backend holds it (LIB-0001 invariant 4), so
@@ -307,11 +384,11 @@ exclude {
   actions = ["all_except_output"]
 }
 
-# Every ENV_ key, in every leaf (LIB-0010 §3).
+# Every env.enc key, in every leaf (LIB-0012 §1).
 generate "env_secrets" {
   path      = "env_secrets_generated.tf"
   if_exists = "overwrite"
-  contents  = length(local.env_secrets) == 0 ? "# No ENV_ keys in secrets.enc (LIB-0010).\n" : <<EOF
+  contents  = length(local.env_secrets) == 0 ? "# No terraform/secrets/env.enc keys (LIB-0012).\n" : <<EOF
 locals {
 ${join("\n", [for k, v in local.env_secrets : "  ${k} = \"${v}\""])}
 }
