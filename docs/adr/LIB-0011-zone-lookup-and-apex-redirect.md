@@ -111,4 +111,26 @@ Permanent boundaries, with no issue:
 
 ## Verification
 
-Recorded as §1–§4 land.
+1. **The release** (#58) cut `terraform/cloudflare/dns-record/v1.0.0` and
+   `terraform/cloudflare/apex-redirect/v0.1.0`, and both short URLs served their
+   `terraform-get` meta. `cloudflare/ruleset`'s README marks it end-of-life, a
+   README-only change that released nothing.
+2. **The zone lookup.** The first zone leaf to take dns-record v1.0.0 was garden's
+   `noisypigeon.garden/dns-record/github-pages` (noisypigeon/garden#47). It
+   planned `No changes.`, which also showed the token can read zones. blog's five
+   DNS leaves did the same (noisypigeon/blog#38).
+3. **The migration** (noisypigeon/blog#38), by §4:
+   - for both `willowgraysen.com` and `pigeon.dev`, `terraform import` put the
+     apex record, the `www` record and the ruleset into the new
+     `apex-redirect/noisypigeon-com` leaf, 6 resources in all;
+   - both new leaves planned `No changes.`, so every generated name, comment and
+     rule matched the live resources;
+   - `state rm` then emptied the four old keys (6 instances) from `main`.
+
+   CI planned `No changes.` on all 14 units, and the apply was a no-op.
+   Afterwards, `willowgraysen.com`, `pigeon.dev`, their `www` hosts and a deep
+   `pigeon.dev` path all returned `301` to `https://noisypigeon.com/`, and
+   `pigeon.dev`'s Fastmail MX was unchanged.
+4. **Zone IDs left the secrets.** garden's one `ENV_CF_ZONE_ID_*` key and blog's
+   three were deleted. No leaf in any spoke references `cloudflare/ruleset`,
+   `local.cloudflare_zone_id` or a pre-v1 `dns-record`.
