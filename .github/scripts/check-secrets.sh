@@ -13,7 +13,8 @@
 # Which files are required, and which keys each holds, follows from spoke.hcl
 # spoke-wide: "always", "backend.<state_backend>" (default scaleway),
 # "provider.<name>" for every key of the providers map however its leaves are
-# scoped, and "state_backup" when spoke.hcl sets state_backup = true. A file
+# scoped, "breakglass.<name>" for every provider whose entry sets breakglass
+# (LIB-0014), and "state_backup" when spoke.hcl sets state_backup = true. A file
 # none of whose conditions hold is reported as ignored, because root.hcl never
 # reads it, and doesn't fail. root.hcl applies the same schema again per leaf
 # at render time, where it also catches an empty value -- which only
@@ -55,7 +56,9 @@ fi
 
 # spoke.hcl is HCL, read without an HCL parser: state_backend and state_backup
 # are one `name = value` line each, and the providers map's keys are the names
-# assigned at its first level of braces. Comments are stripped first.
+# assigned at its first level of braces; a `breakglass` assigned at the second
+# level, inside one of them, turns breakglass on for that provider. Comments
+# are stripped first.
 backend=$(sed -nE 's/^[[:space:]]*state_backend[[:space:]]*=[[:space:]]*"([^"]*)".*/\1/p' "$SPOKE_DIR/spoke.hcl" | head -n1)
 backend="${backend:-scaleway}"
 backup=$(sed -nE 's/^[[:space:]]*state_backup[[:space:]]*=[[:space:]]*([a-z]+).*/\1/p' "$SPOKE_DIR/spoke.hcl" | head -n1)
@@ -72,17 +75,24 @@ providers=$(awk '
       c = substr(line, i, 1)
       if (c == "{") { depth++; buf = ""; continue }
       if (c == "}") { depth--; buf = ""; if (depth == 0) { inmap = 0; done = 1; break }; continue }
-      if (depth != 1) continue
-      if (c == "=") { gsub(/[[:space:]"]/, "", buf); if (buf != "") print buf; buf = "" }
+      if (depth != 1 && depth != 2) continue
+      if (c == "=") {
+        gsub(/[[:space:]"]/, "", buf)
+        if (depth == 1 && buf != "") { print "provider " buf; cur = buf }
+        if (depth == 2 && buf == "breakglass") print "breakglass " cur
+        buf = ""
+      }
       else if (c == ",") buf = ""
       else buf = buf c
     }
   }
 ' "$SPOKE_DIR/spoke.hcl")
+breakglass=$(sed -n 's/^breakglass //p' <<<"$providers")
+providers=$(sed -n 's/^provider //p' <<<"$providers")
 
-conditions=$(printf '%s\n' always "backend.$backend"; for p in $providers; do echo "provider.$p"; done; [ "$backup" = true ] && echo state_backup || true)
+conditions=$(printf '%s\n' always "backend.$backend"; for p in $providers; do echo "provider.$p"; done; for p in $breakglass; do echo "breakglass.$p"; done; [ "$backup" = true ] && echo state_backup || true)
 
-echo "spoke.hcl: state_backend=$backend, state_backup=$backup, providers: $(paste -sd, - <<<"$providers")"
+echo "spoke.hcl: state_backend=$backend, state_backup=$backup, providers: $(paste -sd, - <<<"$providers")${breakglass:+, breakglass: $(paste -sd, - <<<"$breakglass")}"
 status=0
 fail() { echo "::error::$*" >&2; status=1; }
 
@@ -91,6 +101,13 @@ if [ "$backend" = cloudflare ]; then
   [ "$backup" = true ] || fail "spoke.hcl state_backend is cloudflare but state_backup is not true; R2 can't version objects (LIB-0007, LIB-0012)"
   grep -qx cloudflare <<<"$providers" || fail "spoke.hcl state_backend is cloudflare but providers has no cloudflare; the R2 endpoint needs cloudflare.enc's CLOUDFLARE_PROVIDER_ACCOUNT_ID (LIB-0010)"
 fi
+
+# Breakglass (LIB-0014) needs a <provider>_breakglass file in the schema;
+# root.hcl also checks its leaves list, which this parse doesn't read.
+for p in $breakglass; do
+  jq -e --arg n "${p}_breakglass" '.files | has($n)' "$SCHEMA" >/dev/null ||
+    fail "spoke.hcl providers.$p sets breakglass, but secrets-schema.json has no ${p}_breakglass file (LIB-0014)"
+done
 
 if [ -e terraform/secrets.enc ]; then
   if [ "$ALLOW_V3" = true ]; then
