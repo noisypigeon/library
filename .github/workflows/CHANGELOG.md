@@ -4,6 +4,48 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.1.0] - 2026-10-17
+
+### Add per-leaf breakglass credentials to root.hcl and check-secrets
+
+A spoke can now give chosen leaves a second, hand-made credential for a provider (LIB-0014). It is for a leaf that manages the key every other leaf deploys with, such as `scaleway/terraform-deployer-iam`: that leaf must not authenticate with the key it rotates.
+
+**Enabling it.** Add `breakglass` to the provider's entry in `spoke.hcl`, with the leaves allowed to use it:
+
+```hcl
+providers = {
+  scaleway = {
+    breakglass = { leaves = ["terraform/scaleway/terraform-deployer-iam/"] }
+  }
+}
+```
+
+Then commit `terraform/secrets/scaleway_breakglass.enc` holding `SCALEWAY_BREAKGLASS_ACCESS_KEY_ID` and `SCALEWAY_BREAKGLASS_ACCESS_KEY`.
+
+**What it does.** Only a listed leaf decrypts that file. It reads `SCALEWAY_PROVIDER_ACCESS_KEY(_ID)` from the breakglass key, and so does `TERRAFORM_STATE_ACCESS_KEY(_ID)` when `state_backend` is `scaleway`. The organization and project IDs still come from `scaleway.enc`. As everywhere else, an environment variable under the regular name overrides both.
+
+**Schema-driven and generic.** `secrets-schema.json` gains a `scaleway_breakglass` file, required under `breakglass.scaleway`. Its `replaces` and `replaces_state` maps say which credentials it stands in for. Every provider's credential lookup goes through the same mechanism, so Cloudflare or Backblaze breakglass would need only a schema entry.
+
+**Guards.** The render fails on:
+- `breakglass` without a non-empty `leaves`;
+- a prefix without a trailing `/`;
+- breakglass for a provider the schema has no breakglass file for.
+
+`check-secrets.sh` requires the file spoke-wide once `spoke.hcl` enables it.
+
+**No change unless you opt in.** For a spoke that doesn't set `breakglass`, rendering is byte-for-byte the same as v4.0.0.
+
+Tested against a sops/age fixture spoke:
+- the allowlisted leaf took its provider and backend credentials from the breakglass file;
+- a non-allowlisted leaf rendered with the breakglass file corrupted, so it never decrypted it;
+- each guard fired;
+- `check-secrets.sh` failed without the file and passed with it;
+- the script still parses runway's current `spoke.hcl`.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#67](https://github.com/noisypigeon/pigeon-lib/pull/67)
+
 ## [3.0.0] - 2026-10-17
 
 ### Split spoke secrets into one sops file per concern

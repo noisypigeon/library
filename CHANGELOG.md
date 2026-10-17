@@ -46,6 +46,8 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-17
 
+- [workflows] Add per-leaf breakglass credentials to root.hcl and check-secrets ([#67](https://github.com/noisypigeon/pigeon-lib/pull/67))
+- [terragrunt/root-hcl] Add per-leaf breakglass credentials to root.hcl and check-secrets ([#67](https://github.com/noisypigeon/pigeon-lib/pull/67))
 - [scaleway/terraform-deployer-iam] Add terraform-deployer-iam: a spoke's deployer application, policy and API key in one module ([#66](https://github.com/noisypigeon/pigeon-lib/pull/66))
 - [adr] docs(adr): LIB-0014 moves the deployer IAM to runway behind a breakglass key ([#65](https://github.com/noisypigeon/pigeon-lib/pull/65))
 - [adr] docs(adr): LIB-0013 renames noisypigeon/willowgraysen to runway ([#64](https://github.com/noisypigeon/pigeon-lib/pull/64))
