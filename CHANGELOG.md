@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-17
 
+- [adr] docs(adr): LIB-0015 renames noisypigeon/pigeon-lib to library ([#69](https://github.com/noisypigeon/pigeon-lib/pull/69))
 - [adr] docs(adr): LIB-0014 records the rollout; runway needs no breakglass ([#68](https://github.com/noisypigeon/pigeon-lib/pull/68))
 - [workflows] Add per-leaf breakglass credentials to root.hcl and check-secrets ([#67](https://github.com/noisypigeon/pigeon-lib/pull/67))
 - [terragrunt/root-hcl] Add per-leaf breakglass credentials to root.hcl and check-secrets ([#67](https://github.com/noisypigeon/pigeon-lib/pull/67))
