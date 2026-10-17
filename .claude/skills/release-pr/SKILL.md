@@ -1,6 +1,6 @@
 ---
 name: release-pr
-description: Use this skill when making a change to one of this repo's terraform/ Terraform modules or the zola-site/ theme and getting it merged to main. This is the pigeon-lib hub repo; consumers are the spoke repos (noisypigeon, garden, blog, willowgraysen) and are bumped in a separate PR there. Covers branching off main, committing, opening the pull request, applying the required release:* label, merging, and syncing local main afterward. Trigger on requests like "open a PR for this", "release this module change", "ship this to main", or "merge this terraform module or zola-site theme change".
+description: Use this skill when making a change to one of this repo's terraform/ Terraform modules or the zola-site/ theme and getting it merged to main. This is the pigeon-lib hub repo; consumers are the spoke repos (noisypigeon, garden, blog, runway) and are bumped in a separate PR there. Covers branching off main, committing, opening the pull request, applying the required release:* label, merging, and syncing local main afterward. Trigger on requests like "open a PR for this", "release this module change", "ship this to main", or "merge this terraform module or zola-site theme change".
 ---
 
 # Releasing a terraform/ or zola-site/ change
