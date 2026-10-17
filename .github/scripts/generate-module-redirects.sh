@@ -8,7 +8,7 @@
 # It matches the tag prefix by choice, not by derivation: it is a public
 # interface of its own, so moving the repo's internal layout never changes it.
 #
-# Every module tag lives in THIS repo (pigeon-lib), under the terraform
+# Every module tag lives in THIS repo (library), under the terraform
 # prefix -- DEV-0160 step 0 retired the last cross-repo mapping arm and
 # LIB-0002 flattened the prefix, so the mapping is a single constant.
 #
@@ -43,7 +43,7 @@
 set -euo pipefail
 
 LIB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TAG_REPO="${TAG_REPO:-noisypigeon/pigeon-lib}"
+TAG_REPO="${TAG_REPO:-noisypigeon/library}"
 CONTENT_ROOT=""
 
 while [ $# -gt 0 ]; do

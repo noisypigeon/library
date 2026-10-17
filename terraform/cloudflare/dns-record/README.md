@@ -3,7 +3,7 @@
 A thin wrapper around a single `cloudflare_dns_record`. It adds no behaviour:
 every argument is passed through as given, and an optional argument left `null`
 stays unset rather than picking up a default here. It exists so that a leaf
-managing DNS records calls a pigeon-lib module, like every other leaf (LIB-0004).
+managing DNS records calls a library module, like every other leaf (LIB-0004).
 
 It's **zone-scoped**: a leaf calling it lives at
 `terraform/cloudflare/<zone>/dns-record/<instance>/`, where `<zone>` is the

@@ -14,7 +14,7 @@ Fetch a dashboard by its tag's raw URL. The `refs/tags/` form is needed because
 the tag itself contains slashes:
 
 ```
-https://raw.githubusercontent.com/noisypigeon/pigeon-lib/refs/tags/grafana-dashboards/pigeon-cli/v1.0.0/grafana-dashboards/pigeon-cli/overview.json
+https://raw.githubusercontent.com/noisypigeon/library/refs/tags/grafana-dashboards/pigeon-cli/v1.0.0/grafana-dashboards/pigeon-cli/overview.json
 ```
 
 From Terraform, pass that URL to

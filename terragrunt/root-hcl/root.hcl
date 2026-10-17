@@ -1,10 +1,10 @@
-# pigeon-lib's spoke root.hcl template (LIB-0001 §6, LIB-0003).
+# the library's spoke root.hcl template (LIB-0001 §6, LIB-0003).
 #
 # GENERATED in a spoke -- do not edit there. .github/scripts/resolve-root-hcl.sh
 # copies this file to the spoke's repo root at the version the spoke's
 # spoke.hcl pins (root_hcl_version); the spoke commits the copy, and its CI runs
 # the same script with --check to fail on any drift. To change it, change it in
-# pigeon-lib and bump root_hcl_version. Every leaf under <spoke>/terraform/
+# library and bump root_hcl_version. Every leaf under <spoke>/terraform/
 # includes it with find_in_parent_folders("root.hcl"). Materialized rather than
 # included from the library clone because Terragrunt does not support nested
 # includes (DEV-0059), and because a leaf's path_relative_to_include() -- its

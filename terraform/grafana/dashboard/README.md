@@ -21,8 +21,8 @@ module "grafana_dashboard" {
 
   folder_title = "pigeon-cli"
   dashboards = {
-    # A pinned version from pigeon-lib's grafana-dashboards track...
-    overview = { url = "https://raw.githubusercontent.com/noisypigeon/pigeon-lib/refs/tags/grafana-dashboards/pigeon-cli/v1.0.0/grafana-dashboards/pigeon-cli/overview.json" }
+    # A pinned version from the library's grafana-dashboards track...
+    overview = { url = "https://raw.githubusercontent.com/noisypigeon/library/refs/tags/grafana-dashboards/pigeon-cli/v1.0.0/grafana-dashboards/pigeon-cli/overview.json" }
     # ...or an inline JSON model.
     # local_one = { config_json = file("${path.module}/local.json") }
   }
@@ -59,7 +59,7 @@ moved {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_dashboards"></a> [dashboards](#input\_dashboards) | Dashboards to create, keyed by a short stable name. Each gives exactly one of config\_json (a Grafana dashboard JSON model) or url (fetched at plan time -- e.g. a pinned grafana-dashboards/<set>/vX.Y.Z raw URL in pigeon-lib) | <pre>map(object({<br/>    config_json = optional(string)<br/>    url         = optional(string)<br/>  }))</pre> | `{}` | no |
+| <a name="input_dashboards"></a> [dashboards](#input\_dashboards) | Dashboards to create, keyed by a short stable name. Each gives exactly one of config\_json (a Grafana dashboard JSON model) or url (fetched at plan time -- e.g. a pinned grafana-dashboards/<set>/vX.Y.Z raw URL in library) | <pre>map(object({<br/>    config_json = optional(string)<br/>    url         = optional(string)<br/>  }))</pre> | `{}` | no |
 | <a name="input_first_access"></a> [first\_access](#input\_first\_access) | Optional: ping grafana\_url/api/org once before creating anything, which Scaleway's Grafana needs to provision an IAM identity's role on first use (ADR-0135). Re-runs when trigger changes -- pass the IAM application ID. Requires first\_access\_auth\_token | <pre>object({<br/>    grafana_url = string<br/>    trigger     = string<br/>  })</pre> | `null` | no |
 | <a name="input_first_access_auth_token"></a> [first\_access\_auth\_token](#input\_first\_access\_auth\_token) | The API key secret first\_access authenticates with (X-Auth-Token) | `string` | `null` | no |
 | <a name="input_folder_title"></a> [folder\_title](#input\_folder\_title) | Title of the Grafana folder all dashboards are created in | `string` | n/a | yes |
