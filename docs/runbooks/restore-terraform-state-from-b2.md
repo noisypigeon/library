@@ -30,20 +30,21 @@ Anything written to R2 after the last copy isn't in B2.
 
 ## What you need
 
-All of it is in the spoke's `terraform/secrets.enc`. Load it into the
-environment of one shell, and never onto disk or the screen.
+All of it is in the spoke's `terraform/secrets.enc`, under the fixed names
+LIB-0010 gives every spoke. Load it into the environment of one shell, and never
+onto disk or the screen.
 
 | Key | For |
 | --- | --- |
-| `BACKBLAZE_APPLICATION_KEY_ID`, `BACKBLAZE_APPLICATION_KEY` | the admin B2 key that reads the backup |
-| `TERRAFORM_STATE_BACKUP_B2_BUCKET_NAME` | the backup bucket |
-| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY` | writing the state back to R2 |
-| the spoke's `state_bucket_secret` (in `spoke.hcl`) | the R2 state bucket's name |
+| `BACKBLAZE_PROVIDER_ACCESS_KEY_ID`, `BACKBLAZE_PROVIDER_ACCESS_KEY` | the admin B2 key that reads the backup |
+| `TERRAFORM_STATE_BACKUP_BUCKET_NAME` | the backup bucket |
+| `CLOUDFLARE_PROVIDER_ACCOUNT_ID`, `TERRAFORM_STATE_ACCESS_KEY_ID`, `TERRAFORM_STATE_ACCESS_KEY` | writing the state back to R2 |
+| `TERRAFORM_STATE_BUCKET_NAME` | the R2 state bucket's name |
 
 ```bash
 cd <spoke checkout>
 eval "$(sops --decrypt --input-type dotenv --output-type dotenv terraform/secrets.enc \
-  | grep -E '^(BACKBLAZE_APPLICATION_KEY(_ID)?|TERRAFORM_STATE_BACKUP_B2_BUCKET_NAME|CLOUDFLARE_ACCOUNT_ID|CLOUDFLARE_R2_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)|<STATE_BUCKET_SECRET>)=' \
+  | grep -E '^(BACKBLAZE_PROVIDER_ACCESS_KEY(_ID)?|CLOUDFLARE_PROVIDER_ACCOUNT_ID|TERRAFORM_STATE_(BUCKET_NAME|ACCESS_KEY_ID|ACCESS_KEY|BACKUP_BUCKET_NAME))=' \
   | sed 's/^/export /')"
 ```
 
@@ -73,10 +74,10 @@ Freeze Terraform PRs in the spoke until you've finished.
 
    ```bash
    RCLONE_CONFIG_R2_TYPE=s3 RCLONE_CONFIG_R2_PROVIDER=Cloudflare \
-   RCLONE_CONFIG_R2_ENDPOINT="https://$CLOUDFLARE_ACCOUNT_ID.eu.r2.cloudflarestorage.com" \
-   RCLONE_CONFIG_R2_ACCESS_KEY_ID="$CLOUDFLARE_R2_ACCESS_KEY_ID" \
-   RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="$CLOUDFLARE_R2_SECRET_ACCESS_KEY" \
-   rclone copyto --s3-no-check-bucket <scratch file> "r2:$<STATE_BUCKET_SECRET>/terraform/<leaf>/terraform.tfstate"
+   RCLONE_CONFIG_R2_ENDPOINT="https://$CLOUDFLARE_PROVIDER_ACCOUNT_ID.eu.r2.cloudflarestorage.com" \
+   RCLONE_CONFIG_R2_ACCESS_KEY_ID="$TERRAFORM_STATE_ACCESS_KEY_ID" \
+   RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="$TERRAFORM_STATE_ACCESS_KEY" \
+   rclone copyto --s3-no-check-bucket <scratch file> "r2:$TERRAFORM_STATE_BUCKET_NAME/terraform/<leaf>/terraform.tfstate"
    ```
 
 4. **Plan, then clean up.** Clear the leaf's `.terragrunt-cache`, then run
@@ -107,13 +108,13 @@ def call(url, token, body):
 
 leaf = sys.argv[1].strip("/")
 key = f"{leaf}/terraform.tfstate"
-basic = base64.b64encode(f"{os.environ['BACKBLAZE_APPLICATION_KEY_ID']}:{os.environ['BACKBLAZE_APPLICATION_KEY']}".encode()).decode()
+basic = base64.b64encode(f"{os.environ['BACKBLAZE_PROVIDER_ACCESS_KEY_ID']}:{os.environ['BACKBLAZE_PROVIDER_ACCESS_KEY']}".encode()).decode()
 auth = json.load(urllib.request.urlopen(urllib.request.Request(
     "https://api.backblazeb2.com/b2api/v4/b2_authorize_account", headers={"Authorization": "Basic " + basic})))
 api = auth["apiInfo"]["storageApi"]
 token, base = auth["authorizationToken"], api["apiUrl"] + "/b2api/v4/"
 
-bucket_name = os.environ["TERRAFORM_STATE_BACKUP_B2_BUCKET_NAME"]
+bucket_name = os.environ["TERRAFORM_STATE_BACKUP_BUCKET_NAME"]
 buckets = call(base + "b2_list_buckets", token, {"accountId": auth["accountId"], "bucketName": bucket_name})["buckets"]
 if not buckets:
     sys.exit(f"no bucket named {bucket_name}")

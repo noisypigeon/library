@@ -18,10 +18,14 @@ nothing that is deployed:
   asking git, so it works wherever the consuming site fetched it to (ADR-0154).
 - `terragrunt/root-hcl/` — the spokes' `root.hcl` template, tagged
   `terragrunt/root-hcl/vX.Y.Z` (LIB-0003). `.github/scripts/resolve-root-hcl.sh`
-  copies it to a spoke's root at the version the spoke's `spoke.hcl` pins, and
-  the template reads the spoke's instance values (its state-bucket secret name,
-  and the `providers` map that turns each provider on, LIB-0005) back out of
-  `spoke.hcl`. The spoke **commits** that generated copy, because
+  copies it, with the `secrets-schema.json` it reads from beside itself, to a
+  spoke's root at the version the spoke's `spoke.hcl` pins. The template reads
+  the spoke's instance values back out of `spoke.hcl`: its `state_backend`, and
+  the `providers` map that turns each provider on (LIB-0005). Secrets have fixed
+  names, the same in every spoke, and which are required follows from those two
+  values; the schema says so, and both the template and
+  `.github/scripts/check-secrets.sh` enforce it (LIB-0010). The spoke
+  **commits** those generated copies, because
   Terragrunt's git filter plans inside worktrees where only tracked files exist,
   and its CI runs the script with `--check` to fail on drift. Copied, never
   symlinked or included, because a leaf's state key is relative to `root.hcl`'s
@@ -44,7 +48,7 @@ nothing that is deployed:
   finds the clone it was fetched into rather than the site's repo, and
   `--content-root`, which only the caller knows.
 
-These scripts, and `resolve-root-hcl.sh`, live under `.github/scripts/` so the
+These scripts, `resolve-root-hcl.sh` and `check-secrets.sh` live under `.github/scripts/` so the
 `workflows/vX.Y.Z` track covers them: a spoke pins one version and gets the
 reusable workflows and every script at that version, which is what invariant 2
 asks for.
@@ -119,7 +123,7 @@ release needs a changed `.tf` under `terraform/<provider>/<module>/`, and a
 theme release needs a change under `zola-site/templates/`, `zola-site/static/`
 or `zola-site/theme.toml`, a CI release a change to `.github/workflows/*.yml` or
 `.github/scripts/`, and a template release a change to
-`terragrunt/root-hcl/root.hcl`, and a dashboard release a changed
+`terragrunt/root-hcl/root.hcl` or `terragrunt/root-hcl/secrets-schema.json`, and a dashboard release a changed
 `grafana-dashboards/<set>/*.json`. A README- or CHANGELOG-only change releases
 nothing. `root-changelog.yml` duplicates all five predicates to stand down for a
 releasing PR — change one and you must change its twin (#301).

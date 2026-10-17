@@ -24,7 +24,14 @@
 # in Cloudflare R2 instead of Scaleway Object Storage.
 #
 # Since v2.2.0 (LIB-0008) a zone leaf -- terraform/cloudflare/<zone>/<module>/
-# <instance>/ -- gets its zone as local.cloudflare_zone and local.cloudflare_zone_id.
+# <instance>/ -- gets its zone as local.cloudflare_zone.
+#
+# Since v3.0.0 (LIB-0010) every secret has one fixed name, required according
+# to what spoke.hcl enables and checked against secrets-schema.json, which
+# resolve-root-hcl.sh copies beside this file. spoke.hcl no longer names the
+# state bucket's key, and any ENV_<NAME> key becomes local.<name> in every
+# leaf. The zone ID left with it: dns-record v1 looks the zone up by apex
+# (LIB-0011).
 
 locals {
   # The spoke's instance values. Missing spoke.hcl is a hard error, which is
@@ -32,7 +39,7 @@ locals {
   spoke = read_terragrunt_config("${get_parent_terragrunt_dir()}/spoke.hcl")
 
   # The providers this spoke uses, and how (LIB-0005). Required: a spoke.hcl
-  # without it is a hard error, like a missing state_bucket_secret.
+  # without it is a hard error.
   #
   #   providers = {
   #     cloudflare = {}
@@ -71,15 +78,13 @@ locals {
   guard_prefixes     = alltrue([for p in local.provider_prefixes : endswith(p, "/")]) ? true : file("spoke.hcl providers: every leaves prefix must end in a slash, or it matches sibling paths too")
   guard_backend      = contains(local.known_state_backend, local.state_backend) ? true : file("spoke.hcl state_backend is ${local.state_backend}; known: ${join(", ", local.known_state_backend)}")
   guard_grafana      = local.grafana_enabled && !local.scaleway_enabled ? file("providers.grafana is on for ${path_relative_to_include()} but providers.scaleway is not; its data source needs the Scaleway provider") : true
+  guard_bucket_key   = contains(keys(local.spoke.locals), "state_bucket_secret") ? file("spoke.hcl sets state_bucket_secret: root.hcl v3 reads the state bucket from TERRAFORM_STATE_BUCKET_NAME (LIB-0010); rename the key in secrets.enc and delete state_bucket_secret") : true
+  guard_r2_account   = local.state_backend == "cloudflare" && !contains(keys(local.providers), "cloudflare") ? file("spoke.hcl state_backend is cloudflare but providers has no cloudflare; the R2 endpoint is built from CLOUDFLARE_PROVIDER_ACCOUNT_ID (LIB-0010)") : true
 
   # extra_required_providers: { <name> = { source = "...", version = "..." } },
   # appended to the one required_providers block (LIB-0003 v1.1.0). A
   # provider's configuration, if it needs any, lives in the leaf that uses it.
   extra_required_providers = lookup(local.spoke.locals, "extra_required_providers", {})
-
-  # Name of the secrets.enc key (or environment variable) holding the spoke's
-  # own Terraform state bucket name, e.g. NOISYPIGEON_COM_R2_TERRAFORM_STATE_BUCKET_NAME.
-  state_bucket_secret = local.spoke.locals.state_bucket_secret
 
   # Where that bucket lives (LIB-0007): "scaleway" (the default) or
   # "cloudflare", an EU-jurisdiction R2 bucket (LIB-0006). One backend per
@@ -106,22 +111,52 @@ locals {
     && can(regex("^([^=]+)=(.*)$", trimspace(line)))
   ] : trimspace(pair[0]) => trimspace(pair[1]) }
 
-  cloudflare_api_token  = get_env("CLOUDFLARE_TOKEN", lookup(local.secrets, "CLOUDFLARE_TOKEN", ""))
-  cloudflare_account_id = get_env("CLOUDFLARE_ACCOUNT_ID", lookup(local.secrets, "CLOUDFLARE_ACCOUNT_ID", ""))
+  # Every value has one name, read from the environment first and then
+  # secrets.enc (LIB-0010 §1). The state reads only TERRAFORM_STATE_*, and each
+  # provider only its own <PROVIDER>_PROVIDER_*; the one overlap is the R2
+  # endpoint, which needs the Cloudflare account ID (guard_r2_account).
+  terraform_state_bucket_name   = get_env("TERRAFORM_STATE_BUCKET_NAME", lookup(local.secrets, "TERRAFORM_STATE_BUCKET_NAME", ""))
+  terraform_state_access_key_id = get_env("TERRAFORM_STATE_ACCESS_KEY_ID", lookup(local.secrets, "TERRAFORM_STATE_ACCESS_KEY_ID", ""))
+  terraform_state_access_key    = get_env("TERRAFORM_STATE_ACCESS_KEY", lookup(local.secrets, "TERRAFORM_STATE_ACCESS_KEY", ""))
 
-  scaleway_access_key      = get_env("SCALEWAY_ACCESS_KEY", lookup(local.secrets, "SCALEWAY_ACCESS_KEY", ""))
-  scaleway_secret_key      = get_env("SCALEWAY_SECRET_KEY", lookup(local.secrets, "SCALEWAY_SECRET_KEY", ""))
-  scaleway_organization_id = get_env("SCALEWAY_ORGANIZATION_ID", lookup(local.secrets, "SCALEWAY_ORGANIZATION_ID", ""))
-  scaleway_project_id      = get_env("SCALEWAY_PROJECT_ID", lookup(local.secrets, "SCALEWAY_PROJECT_ID", ""))
+  cloudflare_account_id = get_env("CLOUDFLARE_PROVIDER_ACCOUNT_ID", lookup(local.secrets, "CLOUDFLARE_PROVIDER_ACCOUNT_ID", ""))
+  cloudflare_api_token  = get_env("CLOUDFLARE_PROVIDER_TOKEN", lookup(local.secrets, "CLOUDFLARE_PROVIDER_TOKEN", ""))
 
-  # R2's S3-compatible keys, for the state backend only (LIB-0007). Cloudflare
-  # has no Terraform resource for them, so they are created by hand in the
-  # dashboard. Read whether or not the cloudflare provider is on for the leaf.
-  cloudflare_r2_access_key_id     = get_env("CLOUDFLARE_R2_ACCESS_KEY_ID", lookup(local.secrets, "CLOUDFLARE_R2_ACCESS_KEY_ID", ""))
-  cloudflare_r2_secret_access_key = get_env("CLOUDFLARE_R2_SECRET_ACCESS_KEY", lookup(local.secrets, "CLOUDFLARE_R2_SECRET_ACCESS_KEY", ""))
+  scaleway_access_key      = get_env("SCALEWAY_PROVIDER_ACCESS_KEY_ID", lookup(local.secrets, "SCALEWAY_PROVIDER_ACCESS_KEY_ID", ""))
+  scaleway_secret_key      = get_env("SCALEWAY_PROVIDER_ACCESS_KEY", lookup(local.secrets, "SCALEWAY_PROVIDER_ACCESS_KEY", ""))
+  scaleway_organization_id = get_env("SCALEWAY_PROVIDER_ORGANIZATION_ID", lookup(local.secrets, "SCALEWAY_PROVIDER_ORGANIZATION_ID", ""))
+  scaleway_project_id      = get_env("SCALEWAY_PROVIDER_PROJECT_ID", lookup(local.secrets, "SCALEWAY_PROVIDER_PROJECT_ID", ""))
 
-  backblaze_application_key_id = get_env("BACKBLAZE_APPLICATION_KEY_ID", lookup(local.secrets, "BACKBLAZE_APPLICATION_KEY_ID", ""))
-  backblaze_application_key    = get_env("BACKBLAZE_APPLICATION_KEY", lookup(local.secrets, "BACKBLAZE_APPLICATION_KEY", ""))
+  backblaze_application_key_id = get_env("BACKBLAZE_PROVIDER_ACCESS_KEY_ID", lookup(local.secrets, "BACKBLAZE_PROVIDER_ACCESS_KEY_ID", ""))
+  backblaze_application_key    = get_env("BACKBLAZE_PROVIDER_ACCESS_KEY", lookup(local.secrets, "BACKBLAZE_PROVIDER_ACCESS_KEY", ""))
+
+  # The schema (LIB-0010 §4), copied beside this file by resolve-root-hcl.sh.
+  # A key is required when its condition holds -- "always", the spoke's
+  # "backend.<state_backend>", or "provider.<name>" for each provider in the
+  # map, whichever leaves it is scoped to -- and must then be non-empty in the
+  # environment or secrets.enc. Any other key in secrets.enc must be listed
+  # under some condition or match an allowed pattern; that catches typos and
+  # names left behind by a rename. The guards name keys, never values. Only
+  # secrets.enc's keys are checked for being known: the environment holds far
+  # more than secrets.
+  secrets_schema = jsondecode(file("${get_parent_terragrunt_dir()}/secrets-schema.json"))
+  secret_conditions = concat(
+    ["always", "backend.${local.state_backend}"],
+    [for name in keys(local.providers) : "provider.${name}"],
+  )
+  required_secrets = distinct(flatten([
+    for condition, names in local.secrets_schema.required : names if contains(local.secret_conditions, condition)
+  ]))
+  missing_secrets = [
+    for name in local.required_secrets : name if get_env(name, lookup(local.secrets, name, "")) == ""
+  ]
+  schema_secrets = distinct(flatten(values(local.secrets_schema.required)))
+  unknown_secrets = sort([
+    for name in keys(local.secrets) : name
+    if !contains(local.schema_secrets, name) && !anytrue([for pattern in local.secrets_schema.allowed_patterns : can(regex(pattern, name))])
+  ])
+  guard_missing_secrets = length(local.missing_secrets) > 0 ? file("secrets.enc and the environment lack, or leave empty, ${join(", ", local.missing_secrets)}, required by this spoke's state_backend and providers (LIB-0010; see secrets-schema.json)") : true
+  guard_unknown_secrets = length(local.unknown_secrets) > 0 ? file("secrets.enc has keys outside secrets-schema.json: ${join(", ", local.unknown_secrets)}; rename or delete them (LIB-0010)") : true
 
   # Enforce the terraform/<leaf> convention (ADR-0092, ADR-0096): anything this
   # root is included from outside <spoke>/terraform/ is excluded.
@@ -139,15 +174,9 @@ locals {
   )
   cloudflare_zone = local.is_zone_leaf ? local.path_segments[2] : ""
 
-  # The zone's ID comes from ENV_CF_ZONE_ID_<ZONE>, the zone uppercased with
-  # "." and "-" turned into "_" (noisypigeon.com -> ENV_CF_ZONE_ID_NOISYPIGEON_COM).
-  cloudflare_zone_id_key = "ENV_CF_ZONE_ID_${upper(replace(replace(local.cloudflare_zone, ".", "_"), "-", "_"))}"
-  cloudflare_zone_id     = local.is_zone_leaf ? get_env(local.cloudflare_zone_id_key, lookup(local.secrets, local.cloudflare_zone_id_key, "")) : ""
-  guard_zone             = local.is_zone_leaf && local.cloudflare_zone_id == "" ? file("${path_relative_to_include()} is a zone leaf for ${local.cloudflare_zone} but ${local.cloudflare_zone_id_key} is not set in secrets.enc or the environment (LIB-0008)") : true
-
-  # Appended to cloudflare_ids_generated.tf for a zone leaf only, so every other
-  # leaf's file is byte-identical to v2.1.0's.
-  cloudflare_zone_locals = local.is_zone_leaf ? "\n  cloudflare_zone    = \"${local.cloudflare_zone}\"\n  cloudflare_zone_id = \"${local.cloudflare_zone_id}\"" : ""
+  # Appended to cloudflare_ids_generated.tf for a zone leaf only. The zone's ID
+  # is no longer here: dns-record v1 looks it up from this apex (LIB-0011).
+  cloudflare_zone_locals = local.is_zone_leaf ? "\n  cloudflare_zone    = \"${local.cloudflare_zone}\"" : ""
 
   # Scaleway region/zone for the provider. The state backend below is always
   # fr-par regardless.
@@ -223,19 +252,12 @@ EOF
   # the leaf's .terragrunt-cache.
   provider_off = "# Not enabled for this leaf -- see spoke.hcl's providers map (LIB-0005).\n"
 
-  # Injected secrets/sensitive values: any secrets.enc key prefixed ENV_SW_ or
-  # ENV_CF_ is exposed as a local named after the rest of the key (ADR-0006).
-  env_scaleway_secrets = {
-    for k, v in local.secrets : "${lower(trimprefix(k, "ENV_SW_"))}" => get_env(k, v)
-    if startswith(k, "ENV_SW_")
+  # Leaf values (LIB-0010 §3): any secrets.enc key ENV_<NAME> is exposed to
+  # every leaf, whatever its providers, as local.<name> (ADR-0006).
+  env_secrets = {
+    for k, v in local.secrets : lower(trimprefix(k, "ENV_")) => get_env(k, v)
+    if startswith(k, "ENV_")
   }
-
-  env_cloudflare_secrets = {
-    for k, v in local.secrets : "${lower(trimprefix(k, "ENV_CF_"))}" => get_env(k, v)
-    if startswith(k, "ENV_CF_")
-  }
-
-  terraform_state_bucket_name = get_env(local.state_bucket_secret, lookup(local.secrets, local.state_bucket_secret, ""))
 
   # The key is the same whichever backend holds it (LIB-0001 invariant 4), so
   # moving a spoke between backends moves objects, never keys.
@@ -253,8 +275,8 @@ EOF
     skip_region_validation      = true
     skip_requesting_account_id  = true
 
-    access_key = local.scaleway_access_key
-    secret_key = local.scaleway_secret_key
+    access_key = local.terraform_state_access_key_id
+    secret_key = local.terraform_state_access_key
   }
 
   # R2 has no bucket versioning (LIB-0007), so Terragrunt must not try to
@@ -275,8 +297,8 @@ EOF
     skip_bucket_versioning      = true
     disable_bucket_update       = true
 
-    access_key = local.cloudflare_r2_access_key_id
-    secret_key = local.cloudflare_r2_secret_access_key
+    access_key = local.terraform_state_access_key_id
+    secret_key = local.terraform_state_access_key
   }
 }
 
@@ -285,14 +307,24 @@ exclude {
   actions = ["all_except_output"]
 }
 
+# Every ENV_ key, in every leaf (LIB-0010 §3).
+generate "env_secrets" {
+  path      = "env_secrets_generated.tf"
+  if_exists = "overwrite"
+  contents  = length(local.env_secrets) == 0 ? "# No ENV_ keys in secrets.enc (LIB-0010).\n" : <<EOF
+locals {
+${join("\n", [for k, v in local.env_secrets : "  ${k} = \"${v}\""])}
+}
+EOF
+}
+
+# What v2 named env_scaleway_secrets_generated.tf. Still written, as a comment,
+# so a copy an earlier version left in a leaf or its .terragrunt-cache can't
+# define the same locals twice.
 generate "env_scaleway_secrets" {
   path      = "env_scaleway_secrets_generated.tf"
   if_exists = "overwrite"
-  contents  = !local.scaleway_enabled ? local.provider_off : <<EOF
-  locals {
-  ${join("\n", [for k, v in local.env_scaleway_secrets : "  ${k} = \"${v}\""])}
-  }
-  EOF
+  contents  = "# Moved to env_secrets_generated.tf (LIB-0010).\n"
 }
 
 generate "cloudflare_ids" {
@@ -300,8 +332,7 @@ generate "cloudflare_ids" {
   if_exists = "overwrite"
   contents  = !local.cloudflare_enabled ? local.provider_off : <<EOF
 locals {
-  cloudflare_account_id              = "${local.cloudflare_account_id}"
-  ${join("\n", [for k, v in local.env_cloudflare_secrets : "  ${k} = \"${v}\""])}${local.cloudflare_zone_locals}
+  cloudflare_account_id              = "${local.cloudflare_account_id}"${local.cloudflare_zone_locals}
 }
 EOF
 }

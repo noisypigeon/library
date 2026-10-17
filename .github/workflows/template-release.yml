@@ -83,15 +83,16 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # The spokes' root.hcl template (LIB-0003). Only the template itself is a
-      # release; its README.md and CHANGELOG.md are not, as with the theme.
+      # The spokes' root.hcl template (LIB-0003). Only the template itself and
+      # the secrets schema it reads (LIB-0010) are a release; its README.md and
+      # CHANGELOG.md are not, as with the theme.
       - name: Determine root.hcl template change
         id: root_hcl
         env:
           MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
         run: |
           CHANGED_FILES=$(git diff --name-only "${MERGE_SHA}~1" "$MERGE_SHA")
-          if echo "$CHANGED_FILES" | grep -qE '^terragrunt/root-hcl/root\.hcl$'; then
+          if echo "$CHANGED_FILES" | grep -qE '^terragrunt/root-hcl/(root\.hcl|secrets-schema\.json)$'; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"

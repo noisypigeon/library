@@ -18,6 +18,12 @@
 #
 # A spoke on state_backend = "cloudflare" calls this from terragrunt-apply.yml
 # (a job after apply) and from a scheduled caller, which picks up local applies.
+#
+# Since v2.0.0 every name is fixed (LIB-0010): the R2 side reads
+# TERRAFORM_STATE_{BUCKET_NAME,ACCESS_KEY_ID,ACCESS_KEY} and builds its endpoint
+# from CLOUDFLARE_PROVIDER_ACCOUNT_ID, exactly as root.hcl's backend does, and
+# the B2 side reads TERRAFORM_STATE_BACKUP_{BUCKET_NAME,ACCESS_KEY_ID,ACCESS_KEY}.
+# There are no inputs naming them any more.
 name: State backup
 
 on:
@@ -28,25 +34,6 @@ on:
         type: string
         required: false
         default: "terraform/secrets.enc"
-      state_bucket_secret:
-        description: "Secrets key holding the R2 state bucket's name -- the spoke.hcl state_bucket_secret."
-        type: string
-        required: true
-      backup_bucket_secret:
-        description: "Secrets key holding the B2 backup bucket's name."
-        type: string
-        required: false
-        default: "TERRAFORM_STATE_BACKUP_B2_BUCKET_NAME"
-      backup_key_id_secret:
-        description: "Secrets key holding the B2 application key ID (listBuckets, listFiles, writeFiles only); used through B2's S3-compatible API."
-        type: string
-        required: false
-        default: "TERRAFORM_STATE_BACKUP_B2_KEY_ID"
-      backup_key_secret:
-        description: "Secrets key holding the B2 application key."
-        type: string
-        required: false
-        default: "TERRAFORM_STATE_BACKUP_B2_KEY"
     secrets:
       SOPS_AGE_KEY:
         required: true
@@ -79,10 +66,6 @@ jobs:
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
           SECRETS_FILES: ${{ inputs.secrets_files }}
-          STATE_BUCKET_SECRET: ${{ inputs.state_bucket_secret }}
-          BACKUP_BUCKET_SECRET: ${{ inputs.backup_bucket_secret }}
-          BACKUP_KEY_ID_SECRET: ${{ inputs.backup_key_id_secret }}
-          BACKUP_KEY_SECRET: ${{ inputs.backup_key_secret }}
         run: |
           declare -A secrets
           for file in $SECRETS_FILES; do
@@ -93,15 +76,16 @@ jobs:
             done < <(sops --decrypt --input-type dotenv --output-type dotenv "$file")
           done
 
-          for key in CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_R2_ACCESS_KEY_ID CLOUDFLARE_R2_SECRET_ACCESS_KEY \
-                     "$STATE_BUCKET_SECRET" "$BACKUP_BUCKET_SECRET" "$BACKUP_KEY_ID_SECRET" "$BACKUP_KEY_SECRET"; do
+          for key in CLOUDFLARE_PROVIDER_ACCOUNT_ID \
+                     TERRAFORM_STATE_BUCKET_NAME TERRAFORM_STATE_ACCESS_KEY_ID TERRAFORM_STATE_ACCESS_KEY \
+                     TERRAFORM_STATE_BACKUP_BUCKET_NAME TERRAFORM_STATE_BACKUP_ACCESS_KEY_ID TERRAFORM_STATE_BACKUP_ACCESS_KEY; do
             if [ -z "${secrets[$key]:-}" ]; then
               echo "::error::$key is missing from $SECRETS_FILES"
               exit 1
             fi
           done
 
-          b2_s3_endpoint=$(curl -fsS -u "${secrets[$BACKUP_KEY_ID_SECRET]}:${secrets[$BACKUP_KEY_SECRET]}" \
+          b2_s3_endpoint=$(curl -fsS -u "${secrets[TERRAFORM_STATE_BACKUP_ACCESS_KEY_ID]}:${secrets[TERRAFORM_STATE_BACKUP_ACCESS_KEY]}" \
             https://api.backblazeb2.com/b2api/v4/b2_authorize_account | jq -r '.apiInfo.storageApi.s3ApiUrl')
           if [ -z "$b2_s3_endpoint" ] || [ "$b2_s3_endpoint" = null ]; then
             echo "::error::Could not read the B2 S3 endpoint from b2_authorize_account"
@@ -111,16 +95,16 @@ jobs:
           {
             echo "RCLONE_CONFIG_R2_TYPE=s3"
             echo "RCLONE_CONFIG_R2_PROVIDER=Cloudflare"
-            echo "RCLONE_CONFIG_R2_ENDPOINT=https://${secrets[CLOUDFLARE_ACCOUNT_ID]}.eu.r2.cloudflarestorage.com"
-            echo "RCLONE_CONFIG_R2_ACCESS_KEY_ID=${secrets[CLOUDFLARE_R2_ACCESS_KEY_ID]}"
-            echo "RCLONE_CONFIG_R2_SECRET_ACCESS_KEY=${secrets[CLOUDFLARE_R2_SECRET_ACCESS_KEY]}"
+            echo "RCLONE_CONFIG_R2_ENDPOINT=https://${secrets[CLOUDFLARE_PROVIDER_ACCOUNT_ID]}.eu.r2.cloudflarestorage.com"
+            echo "RCLONE_CONFIG_R2_ACCESS_KEY_ID=${secrets[TERRAFORM_STATE_ACCESS_KEY_ID]}"
+            echo "RCLONE_CONFIG_R2_SECRET_ACCESS_KEY=${secrets[TERRAFORM_STATE_ACCESS_KEY]}"
             echo "RCLONE_CONFIG_B2_TYPE=s3"
             echo "RCLONE_CONFIG_B2_PROVIDER=Other"
             echo "RCLONE_CONFIG_B2_ENDPOINT=$b2_s3_endpoint"
-            echo "RCLONE_CONFIG_B2_ACCESS_KEY_ID=${secrets[$BACKUP_KEY_ID_SECRET]}"
-            echo "RCLONE_CONFIG_B2_SECRET_ACCESS_KEY=${secrets[$BACKUP_KEY_SECRET]}"
-            echo "STATE_BUCKET=${secrets[$STATE_BUCKET_SECRET]}"
-            echo "BACKUP_BUCKET=${secrets[$BACKUP_BUCKET_SECRET]}"
+            echo "RCLONE_CONFIG_B2_ACCESS_KEY_ID=${secrets[TERRAFORM_STATE_BACKUP_ACCESS_KEY_ID]}"
+            echo "RCLONE_CONFIG_B2_SECRET_ACCESS_KEY=${secrets[TERRAFORM_STATE_BACKUP_ACCESS_KEY]}"
+            echo "STATE_BUCKET=${secrets[TERRAFORM_STATE_BUCKET_NAME]}"
+            echo "BACKUP_BUCKET=${secrets[TERRAFORM_STATE_BACKUP_BUCKET_NAME]}"
             echo "RCLONE_S3_NO_CHECK_BUCKET=true"
           } >> "$GITHUB_ENV"
 

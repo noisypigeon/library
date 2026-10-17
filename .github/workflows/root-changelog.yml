@@ -49,7 +49,7 @@ jobs:
           if echo "$CHANGED_FILES" | grep -qE '^terraform/[^/]+/[^/]+/.*\.tf$' \
             || echo "$CHANGED_FILES" | grep -qE '^zola-site/(templates/|static/|theme\.toml$)' \
             || echo "$CHANGED_FILES" | grep -qE '^\.github/(workflows/[^/]+\.yml|scripts/)' \
-            || echo "$CHANGED_FILES" | grep -qE '^terragrunt/root-hcl/root\.hcl$' \
+            || echo "$CHANGED_FILES" | grep -qE '^terragrunt/root-hcl/(root\.hcl|secrets-schema\.json)$' \
             || echo "$CHANGED_FILES" | grep -qE '^grafana-dashboards/[^/]+/[^/]+\.json$'; then
             echo "This PR releases a unit; template-release.yml writes its root entry."
             echo "skip=true" >> "$GITHUB_OUTPUT"
