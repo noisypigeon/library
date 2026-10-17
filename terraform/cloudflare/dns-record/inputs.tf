@@ -1,6 +1,6 @@
-variable "zone_id" {
+variable "zone" {
   type        = string
-  description = "Cloudflare zone ID the record belongs to"
+  description = "Apex domain of the Cloudflare zone the record belongs to, e.g. \"example.com\". The zone ID is looked up from it"
 }
 
 variable "name" {

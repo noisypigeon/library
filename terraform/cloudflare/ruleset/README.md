@@ -1,5 +1,13 @@
 # ruleset
 
+> **End-of-life.** This module gets no further releases. Its existing tags stay
+> resolvable, so a leaf pinned to one keeps working, but its only use was
+> redirects, and those now use
+> [`cloudflare/apex-redirect`](../apex-redirect/README.md), one leaf that owns
+> the placeholder records and the ruleset together (LIB-0011). A future
+> non-redirect use of `cloudflare_ruleset` gets its own module rather than a
+> revived `ruleset`.
+
 A thin wrapper around a single `cloudflare_ruleset`. It adds no behaviour: the
 `rules` list goes to the provider exactly as given, and `description` left
 `null` stays unset. It exists so that a leaf managing a ruleset calls a
