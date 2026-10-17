@@ -129,4 +129,34 @@ Permanent boundaries, with no issue:
 
 ## Verification
 
-Recorded as §5 lands.
+1. **The release** (#59) cut `terragrunt/root-hcl/v3.0.0` and `workflows/v2.0.0`.
+   Before merging, all 34 leaves in the three spokes were rendered under v2.2.1
+   and v3.0.0, using fake values under the new names, encrypted to a throwaway
+   age key. The backend config, inputs and provider files were byte-identical.
+   The only differences were the dropped zone-ID locals and the `ENV_` locals'
+   new file, whose contents matched v2's `ENV_SW_` set exactly.
+2. **The guards.** Each one fired on its case: a missing key, an unknown key, a
+   leftover `state_bucket_secret`, and a `cloudflare` backend without the
+   provider. Each message named the key and no value. `check-secrets.sh` passed
+   on the renamed copies and failed on all three spokes' unrenamed files, with no
+   `SOPS_AGE_KEY` and no sops installed.
+3. **garden** (noisypigeon/garden#47). `check-secrets.sh` passed on 10 keys, and
+   CI planned and applied `No changes.` on 4/4 leaves. The post-apply backup
+   copied to B2 under the new names.
+4. **blog** (noisypigeon/blog#38, with LIB-0011 §4). `check-secrets.sh` passed on
+   10 keys, and CI planned `No changes.` on 14 units, the removed redirect leaves
+   included. The apply was a no-op, and the backup succeeded.
+5. **willowgraysen** (noisypigeon/willowgraysen#16) passed `check-secrets.sh` on
+   27 keys, and its 18 `ENV_SW_` keys became `ENV_` with no leaf change.
+   - The first plan failed on every leaf, correctly. The bucket name and state
+     keys had gone into `TERRAFORM_STATE_BACKUP_*`, leaving `TERRAFORM_STATE_*`
+     empty. The render guard named the three empty keys and printed no value.
+   - Once the values were moved, CI ran 18/18 units `No changes.`, and the apply
+     was a no-op.
+   - That mistake shows a gap in `check-secrets.sh`. It can't see an empty value,
+     and it allows a schema key whose condition doesn't apply. Here that was
+     `TERRAFORM_STATE_BACKUP_*` on a Scaleway backend. The render guard caught
+     the first, and nothing flags the second.
+6. **The sweep.** Afterwards, no spoke's `secrets.enc` key names, `spoke.hcl` or
+   workflows used an old name. noisypigeon/garden#48 and noisypigeon/blog#39
+   updated the output descriptions that still named the old keys.
