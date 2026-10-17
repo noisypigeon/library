@@ -39,6 +39,13 @@
 # decrypts only the files it needs. spoke.hcl's state_backup says whether the
 # state is backed up, and an env.enc key <NAME> becomes local.<name>, without
 # v3's ENV_ prefix.
+#
+# Since v4.1.0 (LIB-0014) a provider's entry may set breakglass = { leaves =
+# [...] }. Only those leaves decrypt terraform/secrets/<provider>_breakglass.enc,
+# a hand-made key Terraform never manages, and read the provider's credentials
+# -- and the state backend's, when state_backend is that provider -- from it
+# instead. Which keys it stands in for is the schema's `replaces` and
+# `replaces_state`.
 
 locals {
   # The spoke's instance values. Missing spoke.hcl is a hard error, which is
@@ -62,7 +69,7 @@ locals {
   providers         = local.spoke.locals.providers
   known_providers   = ["cloudflare", "scaleway", "backblaze", "grafana"]
   unknown_providers = setsubtract(keys(local.providers), local.known_providers)
-  provider_prefixes = flatten([for name, cfg in local.providers : try(cfg.leaves, [])])
+  provider_prefixes = flatten([for name, cfg in local.providers : concat(try(cfg.leaves, []), try(cfg.breakglass.leaves, []))])
 
   leaf = "${path_relative_to_include()}/"
   provider_on = {
@@ -77,6 +84,20 @@ locals {
   backblaze_enabled  = local.provider_on.backblaze
   grafana_enabled    = local.provider_on.grafana
 
+  # Breakglass (LIB-0014): a provider's entry may set
+  #
+  #   scaleway = { breakglass = { leaves = ["terraform/scaleway/terraform-deployer-iam/"] } }
+  #
+  # and a leaf under one of those prefixes, with the provider on, then reads
+  # that provider's credentials from <provider>_breakglass.enc. There is no
+  # "every leaf" default: a breakglass key every leaf reads is just a second
+  # provider key, so leaves is required.
+  breakglass_providers = [for name in local.known_providers : name if can(local.providers[name].breakglass)]
+  breakglass_on = {
+    for name in local.known_providers : name => local.provider_on[name] && contains(local.breakglass_providers, name) &&
+    anytrue([for prefix in try(local.providers[name].breakglass.leaves, []) : startswith(local.leaf, prefix)])
+  }
+
   # Misconfigurations fail the run rather than silently dropping a provider.
   # Terragrunt has no assert, so each guard reads a file whose name is the
   # message when its condition fails.
@@ -87,6 +108,8 @@ locals {
   guard_grafana      = local.grafana_enabled && !local.scaleway_enabled ? file("providers.grafana is on for ${path_relative_to_include()} but providers.scaleway is not; its data source needs the Scaleway provider") : true
   guard_bucket_key   = contains(keys(local.spoke.locals), "state_bucket_secret") ? file("spoke.hcl sets state_bucket_secret: root.hcl v3 reads the state bucket from TERRAFORM_STATE_BUCKET_NAME (LIB-0010) in terraform/secrets/terraform.enc; delete state_bucket_secret") : true
   guard_r2_account   = local.state_backend == "cloudflare" && !contains(keys(local.providers), "cloudflare") ? file("spoke.hcl state_backend is cloudflare but providers has no cloudflare; the R2 endpoint is built from CLOUDFLARE_PROVIDER_ACCOUNT_ID in terraform/secrets/cloudflare.enc (LIB-0010, LIB-0012)") : true
+  guard_breakglass_leaves = alltrue([for name in local.breakglass_providers : length(try(local.providers[name].breakglass.leaves, [])) > 0]) ? true : file("spoke.hcl providers sets breakglass without leaves for ${join(", ", [for name in local.breakglass_providers : name if length(try(local.providers[name].breakglass.leaves, [])) == 0])}; breakglass must list the leaves allowed to use it (LIB-0014)")
+  guard_breakglass_file   = alltrue([for name in local.breakglass_providers : contains(keys(local.secret_files), "${name}_breakglass")]) ? true : file("spoke.hcl providers sets breakglass for ${join(", ", [for name in local.breakglass_providers : name if !contains(keys(local.secret_files), "${name}_breakglass")])}, which has no <provider>_breakglass file in secrets-schema.json (LIB-0014)")
   guard_r2_backup    = local.state_backend == "cloudflare" && local.state_backup != true ? file("spoke.hcl state_backend is cloudflare but state_backup is not true; R2 can't version objects, so its state must be backed up to B2 (LIB-0007, LIB-0012)") : true
 
   # extra_required_providers: { <name> = { source = "...", version = "..." } },
@@ -127,6 +150,7 @@ locals {
   leaf_conditions = concat(
     ["always", "backend.${local.state_backend}"],
     [for name in local.known_providers : "provider.${name}" if local.provider_on[name]],
+    [for name in local.known_providers : "breakglass.${name}" if local.breakglass_on[name]],
     local.state_backup ? ["state_backup"] : [],
   )
   secret_file_path     = { for name, f in local.secret_files : name => "${local.secrets_dir}/${name}.enc" }
@@ -220,20 +244,39 @@ locals {
   secrets_backblaze  = lookup(local.secrets_by_file, "backblaze", {})
   secrets_env        = lookup(local.secrets_by_file, "env", {})
 
+  # Breakglass (LIB-0014): for each breakglass file this leaf decrypts, the
+  # canonical key it stands in for => its own key, from the schema's
+  # `replaces`, plus `replaces_state` while state_backend is its provider.
+  # Every credential below looks itself up here first; a key nothing replaces
+  # finds no entry and falls through to its own file. The environment, under
+  # the canonical name, still overrides both.
+  breakglass_files = [
+    for name in local.secret_file_needed : name
+    if length(try(local.secret_files[name].replaces, {})) + length(try(local.secret_files[name].replaces_state, {})) > 0
+  ]
+  breakglass_replace = merge({}, flatten([for name in local.breakglass_files : [
+    try(local.secret_files[name].replaces, {}),
+    anytrue([
+      for c in local.secret_files[name].required_when :
+      startswith(c, "breakglass.") && contains(local.leaf_conditions, "backend.${trimprefix(c, "breakglass.")}")
+    ]) ? try(local.secret_files[name].replaces_state, {}) : {},
+  ]])...)
+  breakglass_values = merge({}, [for name in local.breakglass_files : lookup(local.secrets_by_file, name, {})]...)
+
   terraform_state_bucket_name   = get_env("TERRAFORM_STATE_BUCKET_NAME", lookup(local.secrets_terraform, "TERRAFORM_STATE_BUCKET_NAME", ""))
-  terraform_state_access_key_id = get_env("TERRAFORM_STATE_ACCESS_KEY_ID", lookup(local.secrets_terraform, "TERRAFORM_STATE_ACCESS_KEY_ID", ""))
-  terraform_state_access_key    = get_env("TERRAFORM_STATE_ACCESS_KEY", lookup(local.secrets_terraform, "TERRAFORM_STATE_ACCESS_KEY", ""))
+  terraform_state_access_key_id = get_env("TERRAFORM_STATE_ACCESS_KEY_ID", lookup(local.breakglass_values, lookup(local.breakglass_replace, "TERRAFORM_STATE_ACCESS_KEY_ID", ""), lookup(local.secrets_terraform, "TERRAFORM_STATE_ACCESS_KEY_ID", "")))
+  terraform_state_access_key    = get_env("TERRAFORM_STATE_ACCESS_KEY", lookup(local.breakglass_values, lookup(local.breakglass_replace, "TERRAFORM_STATE_ACCESS_KEY", ""), lookup(local.secrets_terraform, "TERRAFORM_STATE_ACCESS_KEY", "")))
 
   cloudflare_account_id = get_env("CLOUDFLARE_PROVIDER_ACCOUNT_ID", lookup(local.secrets_cloudflare, "CLOUDFLARE_PROVIDER_ACCOUNT_ID", ""))
-  cloudflare_api_token  = get_env("CLOUDFLARE_PROVIDER_TOKEN", lookup(local.secrets_cloudflare, "CLOUDFLARE_PROVIDER_TOKEN", ""))
+  cloudflare_api_token  = get_env("CLOUDFLARE_PROVIDER_TOKEN", lookup(local.breakglass_values, lookup(local.breakglass_replace, "CLOUDFLARE_PROVIDER_TOKEN", ""), lookup(local.secrets_cloudflare, "CLOUDFLARE_PROVIDER_TOKEN", "")))
 
-  scaleway_access_key      = get_env("SCALEWAY_PROVIDER_ACCESS_KEY_ID", lookup(local.secrets_scaleway, "SCALEWAY_PROVIDER_ACCESS_KEY_ID", ""))
-  scaleway_secret_key      = get_env("SCALEWAY_PROVIDER_ACCESS_KEY", lookup(local.secrets_scaleway, "SCALEWAY_PROVIDER_ACCESS_KEY", ""))
+  scaleway_access_key      = get_env("SCALEWAY_PROVIDER_ACCESS_KEY_ID", lookup(local.breakglass_values, lookup(local.breakglass_replace, "SCALEWAY_PROVIDER_ACCESS_KEY_ID", ""), lookup(local.secrets_scaleway, "SCALEWAY_PROVIDER_ACCESS_KEY_ID", "")))
+  scaleway_secret_key      = get_env("SCALEWAY_PROVIDER_ACCESS_KEY", lookup(local.breakglass_values, lookup(local.breakglass_replace, "SCALEWAY_PROVIDER_ACCESS_KEY", ""), lookup(local.secrets_scaleway, "SCALEWAY_PROVIDER_ACCESS_KEY", "")))
   scaleway_organization_id = get_env("SCALEWAY_PROVIDER_ORGANIZATION_ID", lookup(local.secrets_scaleway, "SCALEWAY_PROVIDER_ORGANIZATION_ID", ""))
   scaleway_project_id      = get_env("SCALEWAY_PROVIDER_PROJECT_ID", lookup(local.secrets_scaleway, "SCALEWAY_PROVIDER_PROJECT_ID", ""))
 
-  backblaze_application_key_id = get_env("BACKBLAZE_PROVIDER_ACCESS_KEY_ID", lookup(local.secrets_backblaze, "BACKBLAZE_PROVIDER_ACCESS_KEY_ID", ""))
-  backblaze_application_key    = get_env("BACKBLAZE_PROVIDER_ACCESS_KEY", lookup(local.secrets_backblaze, "BACKBLAZE_PROVIDER_ACCESS_KEY", ""))
+  backblaze_application_key_id = get_env("BACKBLAZE_PROVIDER_ACCESS_KEY_ID", lookup(local.breakglass_values, lookup(local.breakglass_replace, "BACKBLAZE_PROVIDER_ACCESS_KEY_ID", ""), lookup(local.secrets_backblaze, "BACKBLAZE_PROVIDER_ACCESS_KEY_ID", "")))
+  backblaze_application_key    = get_env("BACKBLAZE_PROVIDER_ACCESS_KEY", lookup(local.breakglass_values, lookup(local.breakglass_replace, "BACKBLAZE_PROVIDER_ACCESS_KEY", ""), lookup(local.secrets_backblaze, "BACKBLAZE_PROVIDER_ACCESS_KEY", "")))
 
   # Enforce the terraform/<leaf> convention (ADR-0092, ADR-0096): anything this
   # root is included from outside <spoke>/terraform/ is excluded.
