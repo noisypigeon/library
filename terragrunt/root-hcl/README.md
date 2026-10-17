@@ -8,9 +8,10 @@ lives in its `spoke.hcl`; everything else is this one template.
 
 For every leaf under a spoke's `terraform/`:
 
-- decrypts the spoke's `terraform/secrets.enc` in memory with sops/age (no
-  plaintext on disk), checks its keys against `secrets-schema.json`, and
-  exposes every `ENV_*` key as a local (LIB-0010);
+- decrypts, in memory with sops/age (no plaintext on disk), only the
+  `terraform/secrets/<concern>.enc` files that leaf needs, checks their keys
+  against `secrets-schema.json`, and exposes every `env.enc` key as a local
+  (LIB-0010, LIB-0012);
 - generates the providers `spoke.hcl`'s `providers` map turns on for that leaf
   (Cloudflare, Scaleway, Backblaze B2, Scaleway Cockpit Grafana; LIB-0005);
 - excludes anything not under `terraform/`;
@@ -28,10 +29,14 @@ A spoke commits a `spoke.hcl` at its repo root:
 ```hcl
 locals {
   # Template version to materialize: "X.Y.Z", or "main" for the working tree.
-  root_hcl_version = "3.0.0"
+  root_hcl_version = "4.0.0"
 
   # Where state lives (LIB-0007): "scaleway" (the default) or "cloudflare".
   state_backend = "cloudflare"
+
+  # Whether state-backup.yml copies the state to B2 (v4.0.0, LIB-0012). The
+  # default is false; a cloudflare backend requires true.
+  state_backup = true
 
   # Which providers this spoke's leaves get (v2.0.0, LIB-0005). See below.
   providers = {
@@ -65,8 +70,8 @@ include "root" {
 ```
 
 In CI, the reusable `terragrunt-run.yml` runs the resolver and the secrets
-check through its `prepare_cmd` input, with `secrets_files:
-terraform/secrets.enc`:
+check through its `prepare_cmd` input. From `workflows/v3.0.0` it masks every
+`terraform/secrets/*.enc` by default, so a spoke passes no `secrets_files`:
 
 ```yaml
 prepare_cmd: ./fetch-lib.sh && .lib-src/.github/scripts/resolve-root-hcl.sh --check && .lib-src/.github/scripts/check-secrets.sh
@@ -79,51 +84,105 @@ Locally, the same check is a mise task:
 run = ["./fetch-lib.sh", ".lib-src/.github/scripts/check-secrets.sh"]
 ```
 
-## Secrets (v3.0.0, LIB-0010)
+## Secrets (v4.0.0, LIB-0012)
 
-Every value has one fixed name, the same in every spoke. Each is read from the
-environment first, then from `terraform/secrets.enc`, so an environment variable
-still overrides the file. Which names are required follows from `spoke.hcl`:
+Every value has one fixed name, the same in every spoke (LIB-0010), and lives in
+the one sops dotenv file for its concern, under the spoke's
+`terraform/secrets/`. Which files a spoke needs follows from `spoke.hcl`:
 
-| Name | Required when | Feeds |
-| --- | --- | --- |
-| `TERRAFORM_STATE_BUCKET_NAME`, `TERRAFORM_STATE_ACCESS_KEY_ID`, `TERRAFORM_STATE_ACCESS_KEY` | always | the state backend, either one |
-| `TERRAFORM_STATE_BACKUP_BUCKET_NAME`, `TERRAFORM_STATE_BACKUP_ACCESS_KEY_ID`, `TERRAFORM_STATE_BACKUP_ACCESS_KEY` | `state_backend = "cloudflare"` | `state-backup.yml`'s B2 copy (LIB-0007) |
-| `CLOUDFLARE_PROVIDER_ACCOUNT_ID`, `CLOUDFLARE_PROVIDER_TOKEN` | `providers.cloudflare` is set | `provider "cloudflare"`, `local.cloudflare_account_id`, and the R2 endpoint |
-| `SCALEWAY_PROVIDER_ACCESS_KEY_ID`, `SCALEWAY_PROVIDER_ACCESS_KEY`, `SCALEWAY_PROVIDER_ORGANIZATION_ID`, `SCALEWAY_PROVIDER_PROJECT_ID` | `providers.scaleway` is set | `provider "scaleway"`, `local.scaleway_organization_id` and `local.scaleway_project_id` |
-| `BACKBLAZE_PROVIDER_ACCESS_KEY_ID`, `BACKBLAZE_PROVIDER_ACCESS_KEY` | `providers.backblaze` is set | `provider "b2"` |
-| `ENV_<NAME>` | optional | `local.<name>` in every leaf |
+| File | Required when | Keys, exactly | Feeds |
+| --- | --- | --- | --- |
+| `terraform.enc` | always | `TERRAFORM_STATE_BUCKET_NAME`, `TERRAFORM_STATE_ACCESS_KEY_ID`, `TERRAFORM_STATE_ACCESS_KEY`; plus `TERRAFORM_STATE_BACKUP_BUCKET_NAME`, `TERRAFORM_STATE_BACKUP_ACCESS_KEY_ID`, `TERRAFORM_STATE_BACKUP_ACCESS_KEY` if and only if `state_backup = true` | the state backend, either one; `state-backup.yml`'s B2 copy (LIB-0007) |
+| `cloudflare.enc` | `providers.cloudflare` is set | `CLOUDFLARE_PROVIDER_ACCOUNT_ID`, `CLOUDFLARE_PROVIDER_TOKEN` | `provider "cloudflare"`, `local.cloudflare_account_id`, and the R2 endpoint |
+| `scaleway.enc` | `providers.scaleway` is set | `SCALEWAY_PROVIDER_ACCESS_KEY_ID`, `SCALEWAY_PROVIDER_ACCESS_KEY`, `SCALEWAY_PROVIDER_ORGANIZATION_ID`, `SCALEWAY_PROVIDER_PROJECT_ID` | `provider "scaleway"`, `local.scaleway_organization_id` and `local.scaleway_project_id` |
+| `backblaze.enc` | `providers.backblaze` is set | `BACKBLAZE_PROVIDER_ACCESS_KEY_ID`, `BACKBLAZE_PROVIDER_ACCESS_KEY` | `provider "b2"` |
+| `env.enc` | optional | any key matching `^[A-Z][A-Z0-9_]*$` | `local.<lowercased key>` in every leaf |
 
-A provider's keys are required as soon as it's in the `providers` map, however
-its `leaves` scope it.
+The contract:
 
-- **State never borrows a provider's key.** A Scaleway-backed spoke whose state
-  key is also its provider key holds the value twice, under both names. The one
-  overlap is deliberate: an R2 backend builds its endpoint from
-  `CLOUDFLARE_PROVIDER_ACCOUNT_ID`, so `state_backend = "cloudflare"` requires
-  `providers.cloudflare`.
-- **`ENV_<NAME>` becomes `local.<name>`**, lowercased, in every leaf whatever
-  its providers, all in `env_secrets_generated.tf`. `ENV_COCKPIT_LOGS_URL` is
-  `local.cockpit_logs_url`.
-- **Zone IDs aren't secrets any more.** A zone leaf gets only
-  `local.cloudflare_zone`, its apex, and `cloudflare/dns-record` v1 looks the
-  zone up from it (LIB-0011).
+- **A required file must exist, and hold exactly its keys, each non-empty.** A
+  key that isn't its file's own is an error: a Cloudflare key in
+  `scaleway.enc`, or a backup key in `terraform.enc` while `state_backup` is
+  off. A provider's file is required as soon as the provider is in the
+  `providers` map, however its `leaves` scope it.
+- **A file whose condition doesn't hold is ignored.** It's neither required nor
+  decrypted, so a spoke can keep a disabled provider's file.
+- **`env.enc` is open-ended.** `COCKPIT_LOGS_URL` becomes
+  `local.cockpit_logs_url`, in every leaf whatever its providers, all in
+  `env_secrets_generated.tf`. The file is the namespace, so v3's `ENV_` prefix
+  is gone. A key is an error if its local would shadow a generated one
+  (`cloudflare_account_id`, `cloudflare_zone`, `scaleway_organization_id`,
+  `scaleway_project_id`, `scaleway_s3_provider_name`, `grafana_auth_token`), or
+  if another file owns that name, which would put a provider's value in the
+  wrong file.
+- **Grafana has no file.** Its token is a leaf local (ADR-0135).
+- **The environment still wins.** Each value is read with `get_env(NAME, …)`,
+  so an environment variable overrides the file's value, and fills an empty one.
+  It can't stand in for a missing file or key: those still fail.
+
+### A leaf decrypts only what it needs
+
+Each leaf runs `sops` on:
+
+- `terraform.enc`, always;
+- `cloudflare.enc`, when the backend is `cloudflare`, because the R2 endpoint is
+  built from `CLOUDFLARE_PROVIDER_ACCOUNT_ID`;
+- each provider's file, when that provider is on **for this leaf**, honouring
+  `leaves`;
+- `env.enc`, when it exists.
+
+So a Grafana leaf scoped away from Backblaze decrypts `terraform.enc`,
+`scaleway.enc` and `env.enc`, never `backblaze.enc`.
+
+### `spoke.hcl`'s `state_backup`
+
+`state_backup = true` says the state is copied to B2. It makes the three backup
+keys part of `terraform.enc`, and it's what `state-backup.yml` checks before it
+does anything. It defaults to `false`. A `cloudflare` backend requires it,
+because R2 can't version objects (LIB-0007), and still requires
+`providers.cloudflare`, for the endpoint's account ID.
 
 ### The schema
 
-`secrets-schema.json` holds the table above as data: `required` maps each
-condition (`always`, `backend.<state_backend>`, `provider.<name>`) to its keys,
-and `allowed_patterns` lists what any other key must match (`^ENV_[A-Z0-9_]+$`).
-It's enforced twice, and both name keys and never print a value:
+`secrets-schema.json` holds the table above as data. `files.<name>` has
+`required_when`, a list of conditions any one of which requires the file
+(`always`, `backend.<state_backend>`, `provider.<name>`), `keys`, and
+`keys_when`, extra keys under a condition (`state_backup`). `files.env` has no
+`required_when`, which makes it optional, plus its `pattern` and `reserved`
+local names. It's enforced twice, and both name the file and key, never a
+value:
 
-- **At render time, by `root.hcl`.** It reads the schema from beside itself and
-  fails when a required key is missing or empty in both the environment and
-  `secrets.enc`, or when `secrets.enc` holds a key outside the schema.
-- **Before anything decrypts, by `.github/scripts/check-secrets.sh`.** sops
-  dotenv keeps key names in plaintext, so it reads them straight out of
-  `terraform/secrets.enc`, reads `state_backend` and `providers` out of
-  `spoke.hcl`, and exits 1 listing missing and unknown keys. It needs no
-  `SOPS_AGE_KEY`. It can't see an empty value; the render check can.
+- **At render time, by `root.hcl`,** per leaf, for the files that leaf
+  decrypts. A missing file, a missing or empty key, a key outside its file, or
+  a reserved `env.enc` name fails the render.
+- **Before anything decrypts, by `.github/scripts/check-secrets.sh`,**
+  spoke-wide. sops dotenv keeps key names in plaintext, so it reads them
+  straight out of each file, reads `state_backend`, `state_backup` and
+  `providers` out of `spoke.hcl`, and exits 1 on a missing required file, a
+  file that doesn't hold exactly its keys, a `.enc` the schema doesn't know, or
+  a leftover v3 `terraform/secrets.enc`. It reports an ignored file without
+  failing. It needs no `SOPS_AGE_KEY`, and can't see an empty value; the
+  render check can.
+
+### Editing
+
+One `.sops.yaml` rule covers every file:
+
+```yaml
+creation_rules:
+  - path_regex: ^terraform/secrets/[a-z]+\.enc$
+    age: <the spoke's recipient>
+```
+
+and the mise task takes a file name, so an edit opens one concern:
+
+```toml
+[tasks.secrets-edit]
+usage = 'arg "<file>" help="terraform, cloudflare, scaleway, backblaze or env"'
+run = "sops --input-type dotenv --output-type dotenv terraform/secrets/{{arg(name=\"file\")}}.enc"
+```
+
+`mise run secrets-edit cloudflare` edits `terraform/secrets/cloudflare.enc`.
 
 ### Why copied and committed, not included, symlinked or gitignored
 
@@ -178,8 +237,9 @@ provider is off for the leaf, the file holds one comment line.
 
 The template fails the run, rather than silently dropping a provider, on an
 unknown key, a prefix without its trailing `/`, Grafana without Scaleway, a
-`cloudflare` state backend without the Cloudflare provider, a leftover v1
-`backblaze`/`grafana` bool, or a leftover v2 `state_bucket_secret`.
+`cloudflare` state backend without the Cloudflare provider or without
+`state_backup = true`, a leftover v1 `backblaze`/`grafana` bool, or a leftover
+v2 `state_bucket_secret`.
 
 `extra_required_providers` (v1.1.0) still appends `{ source, version }` entries
 to `required_providers`, for a provider the leaf configures itself.
@@ -229,6 +289,41 @@ v3 renames every secret, so a spoke moves in one PR whose every leaf plans
    callers. Append `&& .lib-src/.github/scripts/check-secrets.sh` to
    `prepare_cmd`.
 4. Check that every leaf plans `No changes.`
+
+### Migrating from v3
+
+v4 moves every secret into the file for its concern, so a spoke moves in one PR
+whose every leaf plans `No changes.` — the values don't change, and neither do
+their names, apart from `env.enc` losing `ENV_`.
+
+1. **The owner splits the file.** With the hub fetched at `workflows/v3.0.0` or
+   later, from the spoke's root:
+
+   ```sh
+   .lib-src/.github/scripts/split-secrets.sh
+   ```
+
+   It writes each `terraform/secrets/<file>.enc` from `terraform/secrets.enc`,
+   piping `sops -d` through a filter into `sops -e`, so only ciphertext lands on
+   disk and no value is printed. Each file is encrypted to the old file's own
+   age recipients, whatever `.sops.yaml` says. Every key goes to the file that
+   owns it, `ENV_<NAME>` becomes `env.enc`'s `<NAME>`, and a key no file owns
+   stops it before anything is written. It refuses to overwrite a file, and
+   ends by running `check-secrets.sh`, which says what `spoke.hcl` still lacks
+   — on an R2 spoke, `state_backup = true`, so it fails until step 2 sets it.
+2. **The PR:**
+   - `git rm terraform/secrets.enc`, and add `terraform/secrets/*.enc`;
+   - set `.sops.yaml`'s rule to `path_regex: ^terraform/secrets/[a-z]+\.enc$`;
+   - make `mise run secrets-edit` take a file name, as above;
+   - on an R2 spoke, set `state_backup = true` in `spoke.hcl`;
+   - set `root_hcl_version = "4.0.0"`, with `/.lib-version` at
+     `workflows/v3.0.0`, rerun `resolve-root-hcl.sh`, and commit both
+     generated files;
+   - pin the reusable workflows at `workflows/v3.0.0`, and delete
+     `secrets_files: terraform/secrets.enc` from every caller, since the
+     default now finds the split files. `state-backup.yml`'s callers can stay:
+     it does nothing without `state_backup = true`.
+3. Check that every leaf plans `No changes.`
 
 ## Two pins, deliberately
 

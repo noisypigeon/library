@@ -21,10 +21,16 @@ nothing that is deployed:
   copies it, with the `secrets-schema.json` it reads from beside itself, to a
   spoke's root at the version the spoke's `spoke.hcl` pins. The template reads
   the spoke's instance values back out of `spoke.hcl`: its `state_backend`, and
-  the `providers` map that turns each provider on (LIB-0005). Secrets have fixed
-  names, the same in every spoke, and which are required follows from those two
-  values; the schema says so, and both the template and
-  `.github/scripts/check-secrets.sh` enforce it (LIB-0010). The spoke
+  the `providers` map that turns each provider on (LIB-0005), and its
+  `state_backup`. Secrets have fixed names, the same in every spoke (LIB-0010),
+  each in the one sops file for its concern under the spoke's
+  `terraform/secrets/` (`terraform`, `cloudflare`, `scaleway`, `backblaze`,
+  `env`; LIB-0012). Which files are required, and exactly which keys each
+  holds, follows from those values; the schema says so, and both the template
+  (per leaf, decrypting only the files that leaf needs) and
+  `.github/scripts/check-secrets.sh` (spoke-wide, from key names alone)
+  enforce it. `.github/scripts/split-secrets.sh` is the one-time v3→v4
+  migration a spoke's owner runs. The spoke
   **commits** those generated copies, because
   Terragrunt's git filter plans inside worktrees where only tracked files exist,
   and its CI runs the script with `--check` to fail on drift. Copied, never
@@ -48,7 +54,7 @@ nothing that is deployed:
   finds the clone it was fetched into rather than the site's repo, and
   `--content-root`, which only the caller knows.
 
-These scripts, `resolve-root-hcl.sh` and `check-secrets.sh` live under `.github/scripts/` so the
+These scripts, `resolve-root-hcl.sh`, `check-secrets.sh` and `split-secrets.sh` live under `.github/scripts/` so the
 `workflows/vX.Y.Z` track covers them: a spoke pins one version and gets the
 reusable workflows and every script at that version, which is what invariant 2
 asks for.

@@ -1,8 +1,10 @@
 # Restore Terraform state from the B2 backup
 
 For a spoke on `state_backend = "cloudflare"`, where Terraform state lives in R2
-and `state-backup.yml` copies it to a versioned Backblaze B2 bucket
-([LIB-0007](../adr/LIB-0007-terraform-state-on-r2-with-offsite-backup.md) §4).
+and, with `state_backup = true` in `spoke.hcl`, `state-backup.yml` copies it to
+a versioned Backblaze B2 bucket
+([LIB-0007](../adr/LIB-0007-terraform-state-on-r2-with-offsite-backup.md) §4,
+[LIB-0012](../adr/LIB-0012-per-concern-secrets-files.md) §2).
 This puts one leaf's state back into R2 from a version B2 kept.
 
 ## When to use it
@@ -30,22 +32,24 @@ Anything written to R2 after the last copy isn't in B2.
 
 ## What you need
 
-All of it is in the spoke's `terraform/secrets.enc`, under the fixed names
-LIB-0010 gives every spoke. Load it into the environment of one shell, and never
-onto disk or the screen.
+All of it is in the spoke's `terraform/secrets/` files, under the fixed names
+LIB-0010 gives every spoke, one file per concern (LIB-0012). Load it into the
+environment of one shell, and never onto disk or the screen.
 
-| Key | For |
-| --- | --- |
-| `BACKBLAZE_PROVIDER_ACCESS_KEY_ID`, `BACKBLAZE_PROVIDER_ACCESS_KEY` | the admin B2 key that reads the backup |
-| `TERRAFORM_STATE_BACKUP_BUCKET_NAME` | the backup bucket |
-| `CLOUDFLARE_PROVIDER_ACCOUNT_ID`, `TERRAFORM_STATE_ACCESS_KEY_ID`, `TERRAFORM_STATE_ACCESS_KEY` | writing the state back to R2 |
-| `TERRAFORM_STATE_BUCKET_NAME` | the R2 state bucket's name |
+| File | Key | For |
+| --- | --- | --- |
+| `backblaze.enc` | `BACKBLAZE_PROVIDER_ACCESS_KEY_ID`, `BACKBLAZE_PROVIDER_ACCESS_KEY` | the admin B2 key that reads the backup |
+| `terraform.enc` | `TERRAFORM_STATE_BACKUP_BUCKET_NAME` | the backup bucket |
+| `cloudflare.enc`, `terraform.enc` | `CLOUDFLARE_PROVIDER_ACCOUNT_ID`, `TERRAFORM_STATE_ACCESS_KEY_ID`, `TERRAFORM_STATE_ACCESS_KEY` | writing the state back to R2 |
+| `terraform.enc` | `TERRAFORM_STATE_BUCKET_NAME` | the R2 state bucket's name |
 
 ```bash
 cd <spoke checkout>
-eval "$(sops --decrypt --input-type dotenv --output-type dotenv terraform/secrets.enc \
-  | grep -E '^(BACKBLAZE_PROVIDER_ACCESS_KEY(_ID)?|CLOUDFLARE_PROVIDER_ACCOUNT_ID|TERRAFORM_STATE_(BUCKET_NAME|ACCESS_KEY_ID|ACCESS_KEY|BACKUP_BUCKET_NAME))=' \
-  | sed 's/^/export /')"
+for f in backblaze cloudflare terraform; do
+  eval "$(sops --decrypt --input-type dotenv --output-type dotenv "terraform/secrets/$f.enc" \
+    | grep -E '^(BACKBLAZE_PROVIDER_ACCESS_KEY(_ID)?|CLOUDFLARE_PROVIDER_ACCOUNT_ID|TERRAFORM_STATE_(BUCKET_NAME|ACCESS_KEY_ID|ACCESS_KEY|BACKUP_BUCKET_NAME))=' \
+    | sed 's/^/export /')"
+done
 ```
 
 ## Steps
