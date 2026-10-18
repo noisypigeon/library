@@ -3,6 +3,21 @@
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-17.
 - **Status**: Accepted.
+- **Amended 2026-10-18**: §4 as it was run, in four ways:
+  - **Step 3 for R2** reads the old bucket with the token in the committed
+    `terraform.enc` and writes the new one with the new token. Each token
+    reaches only one bucket, so the copy passes through the machine running
+    it instead of staying server-side.
+  - **Step 5 is checked locally.** CI's change detection finds no units in a
+    PR that changes only `terraform.enc`, so that PR's plan proves nothing.
+  - **The R2 spokes' secret switch and step 6's leaf changes shipped in one
+    PR,** then a second PR carried the new `TERRAFORM_STATE_BACKUP_*`. Until
+    that second PR merges, `state-backup.yml` fails with a 401. The old key
+    was destroyed when it was replaced, and the backup job that follows an
+    apply reads `main`'s secrets, so it fails even on the PR that fixes them.
+    That PR has to be merged by hand, and the backup dispatched once after.
+  - **The old R2 tokens aren't revoked yet** (step 4). That's a dashboard step,
+    and it's still open.
 
 ## Context
 
@@ -119,8 +134,8 @@ for the run.
 ## Consequences
 
 - **Three hand-run migrations,** each with a short no-apply window (§4 steps
-  3–5). Each is that spoke's own PR. Its plan must show the new bucket created
-  and nothing destroyed.
+  3–5). Each runs as that spoke's own PRs, two for runway and three for each
+  R2 spoke. No plan may destroy a bucket.
 - **Each spoke holds two sets of buckets** until the old ones are retired. That
   costs storage only, and these are a few small files.
 - **Rollback history is split** across the old and new B2 buckets (and
@@ -147,3 +162,39 @@ for the run.
   and LIB-0015.
 - **State locking.** Still noisypigeon/noisypigeon#315, unchanged by a new
   bucket.
+
+## Verification
+
+1. **The module.** library#73 released `terraform/backblaze/bucket/v0.2.0`
+   with `exact_name`. A `moved` block keeps existing callers' suffixes.
+2. **runway** moved from `willowgraysen-com-qgjrnp-terraform-state` to
+   `runway-sv98qu-terraform-state`.
+   - runway#23 planned and applied 2 to add, 0 to destroy.
+   - All 62 `terraform/**` objects copied, and each matched by SHA-256,
+     serial and lineage.
+   - runway#24 switched the secret. All 20 leaves planned `No changes.`
+     locally, and the deployer keys didn't change.
+3. **garden** moved from `dev-2j1cmn-terraform-state` to
+   `garden-jniyjc-terraform-state`.
+   - garden#53 planned and applied 2 to add, 0 to destroy.
+   - All 6 objects copied and matched.
+   - garden#54 switched the state secret and the new R2 token, and all 4
+     leaves planned `No changes.` locally. It also created
+     `garden-jniyjc-terraform-state-backup` (1 to add, 0 to destroy) and
+     replaced the key as `garden-terraform-state-backup`.
+   - garden#55 carried the backup secrets. A dispatched `state-backup.yml`
+     then reported "R2: 6 files, B2: 6 files".
+4. **blog** moved from `com-mhp7ix-terraform-state` to
+   `blog-zo7b9c-terraform-state`.
+   - blog#43 planned and applied 2 to add, 0 to destroy.
+   - All 21 objects copied and matched.
+   - blog#44 switched the state secret and the new R2 token, and all 10
+     leaves planned `No changes.` locally. It also created
+     `blog-zo7b9c-terraform-state-backup` (1 to add, 0 to destroy) and
+     replaced the key as `blog-terraform-state-backup`.
+   - blog#45 carried the backup secrets. A dispatched `state-backup.yml`
+     then reported "R2: 21 files, B2: 21 files".
+5. **The old buckets** (`willowgraysen-com-qgjrnp-terraform-state`,
+   `dev-2j1cmn-terraform-state`, `dev-65bctm-terraform-state-backup`,
+   `com-mhp7ix-terraform-state` and `com-000mqm-terraform-state-backup`) are
+   in no leaf's state and are still there unchanged. No plan destroyed one.
