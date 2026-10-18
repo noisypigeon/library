@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-17
 
+- [adr] LIB-0016 records the rollout ([#74](https://github.com/noisypigeon/library/pull/74))
 - [backblaze/bucket] Add exact_name input to backblaze/bucket ([#73](https://github.com/noisypigeon/library/pull/73))
 - [adr] LIB-0016: state bucket names follow the repo names ([#72](https://github.com/noisypigeon/library/pull/72))
 - [adr] docs(adr): LIB-0015 records the rollout ([#71](https://github.com/noisypigeon/library/pull/71))
