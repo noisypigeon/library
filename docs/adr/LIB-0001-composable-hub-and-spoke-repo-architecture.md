@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-13.
-- **Status**: Accepted; amended 2026-10-15 (see `## Amendments`).
+- **Status**: Accepted; amended 2026-10-15 and 2026-10-17 (see `## Amendments`). Invariant 5 is reversed for garden, blog and runway by LIB-0017.
 
 ## Context
 
@@ -564,3 +564,159 @@ describes what is actually true.
    - Found while verifying step 3, and new: the Terragrunt apply flow's
      auto-merge has never worked, because the job token lacks
      `contents: write`. Tracked as noisypigeon/noisypigeon#310.
+
+### 2026-10-17: LIB-0017 reverses invariant 5 for garden, blog and runway
+
+LIB-0017 decides that `garden`, `blog` and `runway` hold no ADRs. They are
+spokes, and the design standards they follow are this repo's. That reverses
+three things above:
+
+- **Invariant 5** ("Each spoke owns its own `docs/adr/`") for those three
+  spokes. `pigeon-cli` keeps its own `docs/adr/` (LIB-0017 §5).
+- **The `docs/adr/` entries** for `pigeon.dev`, `noisypigeon.com` and
+  `willowgraysen.com` in §2's role table.
+- **Item 1 of the 2026-10-15 amendment**, which recorded the spokes' flat
+  `adr/` homes and their `COM-` and `RUN-` domains.
+
+A decision about one of those spokes is now filed here. The `DEV-` corpus is
+archived verbatim under [`archive/`](archive/README.md). The `COM-` and `RUN-`
+records, and the four `DEV-` records written after this hub existed
+(DEV-0162 to DEV-0165), are folded into the `LIB-` records whose standards
+they apply, as amendments whose headings carry their IDs. No new `DEV-`,
+`COM-`, `RUN-` or `NPC-` number will be issued.
+
+The three entries below fold in the records that belong to this ADR: the two
+spoke bootstraps, and the blog's ADR and changelog layout.
+
+### 2026-10-17: COM-0000, bootstrap the `noisypigeon.com` repo (folded from `noisypigeon/blog`)
+
+Filed 2026-10-13 as `NPC-0000` in `noisypigeon/noisypigeon.com`, the day
+before this record. Accepted.
+
+**Why.** DEV-0159 moved the blog's source into its own repo and stopped there.
+The repo held four non-content files and no `CLAUDE.md`, `README.md`,
+`.gitignore` or `.mise.toml`. Zola's version was pinned only in the monorepo,
+the build tasks pointed at a path the new repo didn't have, and the generated
+`.templates-src/`, theme symlink and `public/` had no ignore rule. The reusable
+`blog-changelog.yml` also wrote a root rollup line the repo had no file for,
+so its next content PR would have failed.
+
+**Decision.**
+
+1. **A prefixed ADR domain.** `adr/noisypigeon.com/` opened with `NPC-` IDs
+   numbered from `0000`. It was the first per-repo prefixed domain, the
+   precedent DEV-0160 generalized and §1 above used. Prefixing an existing
+   domain was declared out of bounds.
+2. **The rollup became optional.** `blog-changelog.yml` gained an optional
+   `changelog_path`. `root_changelog_tag` defaulted to empty, meaning no
+   rollup, and the rollup gained the create-if-missing guard it lacked.
+3. **The changelog moved to the repo root,** byte for byte. Its five-line
+   header is structural, because CI splices on `head -n 5`.
+4. **The repo became buildable from a clean clone.** `.mise.toml` pins
+   `zola = "0.23.6"` and runs the hub fetch as a `postinstall` hook, so
+   `mise install` alone is enough. `.gitignore` covers the three generated
+   paths, and `CLAUDE.md` and `README.md` say where every dependency lives.
+
+**Still true.** The blog's long-form changelog keeps its inherited monorepo
+history, deliberately not rewritten. `mise install` needs the network.
+
+**Later.** COM-0001 renamed the domain `COM-`, moved the site to `web/`, and
+adopted DEV-0160's one-line root changelog. COM-0002 flattened the ADRs to
+`adr/`, and LIB-0017 removed them. Its out-of-scope issues were
+noisypigeon/noisypigeon#292 (the flatten, answered by COM-0001's `web/`),
+#293 (`adr-new.sh`), #294 (stale ADR pointers) and #295 (branch protection,
+partly resolved by the spoke rulesets in LIB-0003's amendments).
+
+Original: [COM-0000](https://github.com/noisypigeon/blog/blob/a25084ae1e8f70afcd6eb72fadb88815b48b15f1/adr/COM-0000-bootstrap-noisypigeon-com-repo.md).
+
+### 2026-10-17: COM-0002, flat `adr/` and the reusable root changelog (folded from `noisypigeon/blog`)
+
+Filed 2026-10-15. Accepted.
+
+**Decision.**
+
+1. **ADRs moved to `adr/`.** `docs/adr/` became `adr/` (noisypigeon.com#11) as
+   a pure move, as DEV-0161 did for `pigeon.dev`. That is the layout item 1 of
+   the 2026-10-15 amendment records, and LIB-0017 has since removed it.
+2. **`root-changelog.yml` became a thin caller** of the hub's
+   `spoke-root-changelog.yml` (pigeon-lib#14, `workflows/v1.2.0`). The
+   reusable takes the tag precedence as ordered `<ERE>=<tag>` lines, first
+   match wins, plus a `fallback_tag` that defaults to `repo`. The blog passes
+   `^web/=blog`, `^adr/=adr` and `^\.github/=ci`. The caller keeps only what
+   cannot live in the hub: the trigger, the merged-only gate, permissions,
+   concurrency and the precedence. With that, `fetch-lib.sh` is invariant 1's
+   only exception (item 3 of the 2026-10-15 amendment). It closed
+   noisypigeon/noisypigeon#306.
+3. **The root writer got its own concurrency group.** It moved to
+   `main-writer-rollup`, and `blog-changelog.yml` stays in `main-writer`. A
+   shared group keeps at most one pending run and cancels the earlier one,
+   which lost a hub release before (pigeon-lib#9). The reusable instead
+   retries a rejected push five times, rebasing each time, and fails outright
+   on a rebase conflict.
+
+**Still true.** Changing a spoke's precedence is a one-line caller edit.
+Changing how precedence is interpreted is a hub PR and a pin bump. A blog
+PR's two bot commits can now race for `main`, and the retry absorbs that.
+
+**Later.** COM-0003 added `terraform` tagging. Since LIB-0017, the `^adr/=adr`
+line matches nothing.
+
+Original: [COM-0002](https://github.com/noisypigeon/blog/blob/a25084ae1e8f70afcd6eb72fadb88815b48b15f1/adr/COM-0002-flatten-adr-and-call-the-reusable-root-changelog.md).
+
+### 2026-10-17: RUN-0000, bootstrap the `willowgraysen.com` repo (folded from `noisypigeon/runway`)
+
+Filed 2026-10-15 in `noisypigeon/willowgraysen.com`, which was later renamed
+`willowgraysen` and then `runway` (LIB-0013). This is the first half of §7
+step 5. Accepted.
+
+**Context.** This spoke differs from the other two in three ways:
+
+- It has no website. The domain's HTTPS endpoint was a redirect to
+  `noisypigeon.com`, so there is no `web/`, no Pages deploy and no
+  blog-changelog.
+- It is a namespace for what *runs*, `pigeon-cli` and the data-ops projects,
+  rather than a site.
+- It is the family's most sensitive account. Its secrets include third-party
+  storage credentials, and its buckets hold custodial and archival data.
+
+**Decision.**
+
+1. **Public, deliberately.**
+   - Costs accepted: every Terraform plan is posted publicly (values masked,
+     structure visible), the imported history is public in a second place,
+     and the repo shares one age key with the other spokes.
+   - Private was rejected because a ruleset on a private repo needs a paid
+     plan on a personal account, which would have made the `terragrunt/apply`
+     merge gate advisory.
+   - Mitigations: `CLAUDE.md` opens with the sensitivity rules (everything
+     pushed is public and permanent, no resource names in prose, read the
+     whole plan before applying). Records describe resources by role, not by
+     name, and **that rule now binds any `LIB-` record about this spoke**.
+     The repo also has a `contributors_only` interaction limit, RUN-0001's
+     comment-gated apply, and the ruleset.
+2. **A `RUN-` domain,** named for what the namespace holds rather than for the
+   domain.
+3. **Everything but the Terraform.** `fetch-lib.sh` and `.lib-version`
+   (`workflows/v1.3.1` then), `.mise.toml`, a `.gitignore` that does not
+   ignore `root.hcl`, a thin root-changelog caller, a thin
+   `interaction-limits-renew.yml` caller, `CLAUDE.md` and `README.md`. The
+   Terraform was RUN-0001's.
+4. **The provisioning checklist,** recorded because no runbook had one and
+   LIB-0002 found a new repo's first runs fail without it:
+   - repo secrets `BOT_GITHUB_TOKEN`, `GH_ADMIN_TOKEN` and `SOPS_AGE_KEY`,
+     each with the same value as `noisypigeon`'s;
+   - the bot account as a write collaborator, invitation accepted;
+   - the interaction limit, applied once by dispatching
+     `interaction-limits-renew.yml` and renewed monthly after that;
+   - merge commits enabled only until the Terraform import merges.
+
+**Out of scope, and still permanent for now.**
+
+- A dedicated age key and credential rotation. The existing ciphertext is
+  already public under the shared key, so real isolation would also mean
+  rotating the credentials.
+- Further Actions hardening: required approval for fork-PR workflows, and
+  read-only default token permissions. Fork PRs get no secrets either way, and
+  every workflow declares its own permissions.
+
+Original: [RUN-0000](https://github.com/noisypigeon/runway/blob/2ab560c516d76c90482ad963c62525f800e923fe/adr/RUN-0000-bootstrap-willowgraysen-com-repo-and-open-the-run-domain.md).

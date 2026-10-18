@@ -1,0 +1,84 @@
+# DEV-0089: auto-mount attached volume, and inline the `pigeon-cli` bootstrap script
+
+- **Author**: Willow Finch ([@noisypigeon](https://github.com/noisypigeon)).
+- **Date**: 2026-10-02.
+- **Status**: Accepted.
+
+## Context
+
+Two follow-ups to `scaleway/compute-instance`, requested together.
+
+**Auto-mount the attached volume.** `additional_volume_ids` (ADR-0085) attaches a pre-created `scaleway/block-volume` to an instance, but does nothing to make it usable — the user had to manually format and mount it. On a real instance with one volume attached (observed device `/dev/sdb`), this worked:
+
+```
+mkfs.ext4 -L data /dev/sdb
+mkdir -p /mnt/data
+mount /dev/sdb /mnt/data
+UUID=$(blkid -s UUID -o value /dev/sdb)
+echo "UUID=$UUID /mnt/data ext4 defaults,nofail 0 2" >> /etc/fstab
+mount -a && df -h /mnt/data
+```
+
+They want this automated via cloud-init rather than a manual post-boot step.
+
+**Fix `pigeon-cli`: inline the bootstrap script instead of an env var.** ADR-0088 had `pigeon-cli` export a `BOOTSTRAP` env var, meant to be invoked as `eval $BOOTSTRAP`. The user reports this didn't work in practice. Rather than keep debugging the env var indirection, they want the bootstrap script to just run directly on first boot — no manual step at all.
+
+**Aside (not part of this ADR, answered directly):** AWS EFS isn't available on Scaleway — it's AWS-specific. For one instance with one directly-attached block volume, local `ext4` is the right call; a network filesystem (EFS, or Scaleway's own File Storage) only pays for itself with concurrent multi-instance access, which isn't this use case.
+
+## Decision
+
+### Auto-mount, gated on `additional_volume_ids`
+
+A new `runcmd` block, gated on `length(var.additional_volume_ids) > 0`, placed first — before the `mise` install and any profile-specific provisioning:
+
+```hcl
+    runcmd:
+    %{~if length(var.additional_volume_ids) > 0~}
+      - mkfs.ext4 -L data /dev/sdb
+      - mkdir -p /mnt/data
+      - mount /dev/sdb /mnt/data
+      - UUID=$(blkid -s UUID -o value /dev/sdb)
+      - echo "UUID=$UUID /mnt/data ext4 defaults,nofail 0 2" >> /etc/fstab
+      - mount -a
+    %{~endif~}
+      - curl -fsSL https://mise.run | sh
+      ...
+```
+
+No new module variable — `additional_volume_ids` already exists and doubles as the gate. The trailing `&& df -h /mnt/data` from the user's manual session is dropped; it's a diagnostic step for a human watching the terminal, not provisioning.
+
+**Scope: exactly one volume, fixed device path.** This assumes `/dev/sdb` — the first non-root block device on this module's default `STARDUST1-S` instance type, matching the user's actual observed setup. `additional_volume_ids` stays `list(string)` (multiple volumes can still be attached), but auto-mount only activates for, and only handles, the first one. Supporting N volumes at N mount points would need device enumeration (e.g. `lsblk`-based discovery) rather than a hardcoded path; deferred until actually needed.
+
+**Mount path and label are hardcoded** (`/mnt/data`, `data`), matching the user's script exactly — no new `volume_mount_path`/`volume_label` variables.
+
+**Known, deliberate risk: `mkfs.ext4` is unconditional.** This module already force-replaces the instance on any cloud-init content change (ADR-0084) — and this ADR is itself a cloud-init change, so **every existing instance with an attached volume gets rebuilt, and its volume reformatted from scratch, on the next `terragrunt apply` after upgrading.** The same applies to any future scenario where a non-empty volume is attached to a fresh instance (e.g. deliberately moving a volume between instances). This was raised explicitly with the user, who confirmed: proceed with the unconditional `mkfs.ext4` exactly as pasted, no "format only if unformatted" guard (which cloud-init's native `fs_setup` module would have provided via its `overwrite: false` default). This is a conscious tradeoff for simplicity, not an oversight — anyone attaching a volume with existing data to this module needs to know it will be wiped.
+
+### `pigeon-cli`: direct execution instead of an env var
+
+```hcl
+    %{~if var.profile == "pigeon-cli"~}
+      - curl -fsSL https://gist.githubusercontent.com/noisypigeon/1e96e8ef94380f913f6ae02782965149/raw/pigeon.sh | bash
+    %{~endif~}
+```
+
+Replaces ADR-0088's `echo "export BOOTSTRAP='...'" >> ~/.bashrc` line. The bootstrap pipeline now runs automatically on first boot, superseding ADR-0088's `BOOTSTRAP`/`eval $BOOTSTRAP` approach, which the user confirmed didn't work as intended. `profile`'s description is updated to drop the now-inaccurate `eval $BOOTSTRAP` wording.
+
+No change to `terraform_data.cloud_init`'s md5-hash + `replace_triggered_by` force-replace mechanism (ADR-0084) — it already covers any change to the rendered string, regardless of which branch produced it.
+
+### No manual `README.md`/`CHANGELOG.md` edits
+
+Same as every prior change to this module — both regenerated by `module-docs.yml`/`module-release.yml` on merge.
+
+## Consequences
+
+- `release:minor` — no input/output interface changes at all (`additional_volume_ids` and `profile` already existed), but this is a real behavior change to what every instance with an attached volume or `profile = "pigeon-cli"` does on boot, so it's flagged as minor rather than patch, consistent with CHANGELOG 0.5.0/0.6.0 precedent ("unconditional provisioning change, no interface change → still minor").
+- **Data-loss risk, accepted deliberately (see above):** any existing instance with an attached, non-empty volume gets that volume reformatted on its next apply after this ships, because this cloud-init change forces instance replacement (ADR-0084) and the new `mkfs.ext4` runs unconditionally.
+- `pigeon-cli` instances now self-bootstrap on first boot with no manual step; the `BOOTSTRAP` env var from ADR-0088 no longer exists for new instances built with this version.
+- Auto-mount only works correctly for exactly one attached volume at `/dev/sdb`; attaching more than one volume via `additional_volume_ids` still works for instance-attachment purposes, but only the first gets formatted/mounted — the rest are attached but inert until handled manually or in a future ADR.
+
+## Out of scope
+
+- Multi-volume auto-mount (device enumeration, per-volume mount points) — add when a real use case needs more than one auto-mounted volume.
+- A "format only if unformatted" safety guard (e.g. cloud-init's native `fs_setup` with `overwrite: false`) — explicitly rejected by the user for this ADR; revisit if the data-loss risk above causes an actual incident.
+- Configurable mount path/label (`volume_mount_path`/`volume_label` variables) — explicitly rejected by the user; hardcoded to match their script.
+- Debugging why the ADR-0088 `BOOTSTRAP` env var didn't work — superseded rather than root-caused, since direct execution sidesteps the problem entirely.

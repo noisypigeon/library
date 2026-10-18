@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-13.
-- **Status**: Accepted.
+- **Status**: Accepted; amended 2026-10-17 (see `## Amendments`).
 
 ## Context
 
@@ -203,3 +203,111 @@ above, and never shipped. `grep` finds nothing.
    shape, Release created, unit `CHANGELOG.md` written, root rollup written, both
    dispatches fired, and the new version's redirect page, overview entry and
    release post live on `pigeon.dev`.
+
+## Amendments
+
+### 2026-10-17: the spokes' side of this record, folded in by LIB-0017
+
+This record created the hub and named the end state for `pigeon.dev`. The two
+records below say what each content spoke actually did to reach it. They were
+filed in the spokes' own repos and are folded in here because LIB-0017 gives
+spokes no ADRs of their own.
+
+### 2026-10-17: DEV-0162, `pigeon.dev` becomes a content-only spoke (folded from `noisypigeon/garden`)
+
+Filed 2026-10-15 in `noisypigeon/pigeon.dev`, now `noisypigeon/garden`.
+Accepted. The full text is also kept verbatim in the archive, as
+[`archive/DEV-0162`](archive/DEV-0162-make-pigeon-dev-a-content-only-spoke.md).
+
+**Context.** DEV-0154 and DEV-0156 had deliberately made `pigeon.dev` hold the
+templates and the site side by side. That was right for a repo that owned the
+templates, and wrong for a spoke. The one thing that had to stay was the
+module short URL, a stable public interface (DEV-0109, DEV-0110) that belongs
+to the domain rather than to the code.
+
+**Decision.**
+
+1. **The hub is consumed by pin.** `.lib-version` names a hub ref, and
+   `fetch-lib.sh` materializes it, blobless and with tags, into a gitignored
+   `.lib-src/`. Setting `LIB_SRC` points it at a local checkout, which is how
+   to iterate against an unreleased hub change. `fetch-lib.sh` is the one
+   script a spoke keeps, because a spoke cannot fetch its own fetcher.
+2. **Two thin workflows remain.**
+   - The Pages caller stays in the spoke, because `actions/deploy-pages`
+     always deploys the *calling* repo's site.
+   - `root-changelog.yml` keeps DEV-0160's contract and runs the hub's script.
+     It lost its stand-down block: with `template-release.yml` gone, that
+     block's predicate matched exactly the diff that deleted the modules, and
+     would have silently dropped the entry.
+
+   Deleted: `template-release.yml`, `module-docs.yml`, the six reusables
+   (whose callers already pointed at the hub), the `release-pr` skill and the
+   vendored `root-changelog.sh`.
+3. **`templates/` was deleted and its 53 tags kept.** That is DEV-0154's
+   boundary: no superseded tag is ever deleted. The tags are now unreferenced.
+4. **`pigeon.dev/src` became `web/`,** as a pure rename separate from the
+   deletion, per DEV-0110's "pure rename first, rewiring second".
+
+**Still true.**
+
+- A change spanning hub and spoke is two PRs, hub first.
+- A spoke has no releasable unit and carries no `release:*` labels.
+- A local build costs a blobless clone, unless `LIB_SRC` is set.
+- **The Pages deploy has one unmitigated failure mode.** `actions/deploy-pages`
+  gives up after a hard 600000 ms ceiling. If that expires while Pages still
+  reports `updating_pages`, it cancels a deployment the service still holds.
+  Every later deploy then fails with `due to in progress deployment` until a
+  server-side reaper clears it, which took about 45 minutes in the one
+  incident recorded. No client-side API shortens that wait.
+
+**Verification facts worth keeping.**
+
+- The deletion was proven inert before it happened: a rebuild with
+  `templates/` moved aside was byte-identical.
+- `module-docs.yml` had to be removed first, because it triggers on `push`.
+- DEV-0154 §9's claim that a `pull_request` workflow runs from the base ref is
+  wrong: it runs from the head ref.
+
+Original: [DEV-0162](https://github.com/noisypigeon/garden/blob/13bcee9a79c86a3a0054ebda7cd6d7fa7c238df2/adr/DEV-0162-make-pigeon-dev-a-content-only-spoke.md).
+
+### 2026-10-17: COM-0001, `noisypigeon.com` becomes a content-only spoke (folded from `noisypigeon/blog`)
+
+Filed 2026-10-15. This is the content half of LIB-0001 §7 step 4. Accepted.
+
+**Decision.**
+
+1. **Hub first.** pigeon-lib#13 added an optional `src_dir` input to
+   `blog-changelog.yml` (`workflows/v1.1.0`, additive). The workflow refuses a
+   call passing both `src_dir` and `site_dir`, or neither, or `src_dir`
+   without `changelog_path`. The spoke's pin bump landed alone before the
+   rename, so any regression would show on its own.
+2. **`noisypigeon.com/src` became `web/`** (noisypigeon.com#8), a pure rename.
+   `fetch-lib.sh` moved to the repo root to match `pigeon.dev`. `web/` was
+   chosen over the repo root for parity between the spokes, which pass the same
+   inputs to the same reusables, and to keep Zola's directories apart from the
+   repo's.
+3. **DEV-0160's two-tier changelog.**
+   - The PR-body long form moved to `web/CHANGELOG.md`, five-line header
+     byte-identical. Zola ignores loose files in the site root, so it is not
+     published.
+   - The root `CHANGELOG.md` gets one line per merged PR, backfilled by hand
+     for the earlier PRs (noisypigeon.com#9). `blog-changelog.yml` keeps
+     `root_changelog_tag` empty, so the root file has one writer.
+4. **`NPC-` became `COM-`.** `NPC-0000` was renamed `COM-0000`, file and H1
+   only. Existing `NPC-` citations are aliases and are never rewritten, which
+   is DEV-0160's method for `ADR-`.
+
+**Still true.**
+
+- A blog PR produces two bot commits: the long form and digest, then the root
+  line.
+- A content PR that also touches `.github/` is tagged `blog`, because the
+  first match wins.
+
+**Verification fact.** The rename was proven inert by building both trees with
+`SITE_COMMIT_SHA` pinned: `diff -r` printed nothing across 66 pages.
+
+**Later.** COM-0002 made the root writer a thin caller, closing
+noisypigeon/noisypigeon#306. COM-0003 hoisted the Terraform.
+
+Original: [COM-0001](https://github.com/noisypigeon/blog/blob/a25084ae1e8f70afcd6eb72fadb88815b48b15f1/adr/COM-0001-make-noisypigeon-com-a-content-only-spoke.md).

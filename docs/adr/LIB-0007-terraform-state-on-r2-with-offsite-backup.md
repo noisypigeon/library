@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-15.
-- **Status**: Accepted.
+- **Status**: Accepted; amended 2026-10-17 (see `## Amendments`).
 - **Amended 2026-10-16**: §4 now describes the copy as it ships since
   `workflows/v1.5.2` and `v1.5.3` (#44, #45), over B2's S3-compatible API. It
   also links the restore runbook, and Out of scope links its issues.
@@ -164,3 +164,84 @@ habits. A spoke on Scaleway doesn't need it: its bucket versions in place.
    carries `release:minor`, so its merge should cut
    `terragrunt/root-hcl/v2.1.0`. `state-backup.yml` shipped in its own PR (#40) as
    `workflows/v1.5.0`.
+
+## Amendments
+
+### 2026-10-17: COM-0004, `noisypigeon.com`'s state moves to R2 (folded from `noisypigeon/blog`)
+
+Filed 2026-10-15. This was the first spoke to adopt this record. Accepted, and
+amended 2026-10-16 when COM-0005 retired its Scaleway rollback copy.
+
+**Decision.**
+
+1. **Three new leaves** (noisypigeon.com#19):
+   - the R2 state bucket, EU jurisdiction (LIB-0006);
+   - a B2 backup bucket with no lifecycle rules, so B2 keeps every version;
+   - a B2 key with `listBuckets`, `listFiles` and `writeFiles` on that bucket
+     only, never expiring.
+
+   The first apply ran each new leaf twice, concurrently, and orphaned a B2
+   bucket and key. Both were deleted by hand, and pigeon-lib#41
+   (`workflows/v1.5.1`) fixed the cause before the re-apply.
+2. **The cutover.** `spoke.hcl` takes `root_hcl_version = "2.1.0"`,
+   `state_backend = "cloudflare"` and the R2 bucket's secret name. The R2 S3
+   keys are a hand-made R2 API token with *Object Read & Write* scoped to the
+   state bucket, because Cloudflare has no Terraform resource for them.
+3. **Objects are copied, not pushed.** Each leaf's state object went across
+   with `rclone copyto`, byte for byte, using `--s3-no-check-bucket` because
+   the bucket-scoped token can't create buckets. `terraform state push` was
+   tried first, and **into a freshly initialized R2 backend it kept the new
+   remote's lineage**. A straight copy keeps serial and lineage, which is what
+   makes the move checkable. Old keys left behind by the LIB-0004 renames were
+   not copied.
+4. **Backups run after every apply,** through a `backup` job in
+   `terragrunt-apply.yml` that runs even after a failed apply, and daily and on
+   demand through a `state-backup.yml` caller, which also picks up local
+   applies.
+
+**Still true.**
+
+- State costs nothing to keep or read: it fits well within R2's free tier,
+  and R2 has no egress fees.
+- After a CI apply, B2 holds the state from just before it; after a local
+  apply, a copy at most a day old.
+- The R2 bucket leaf's state lives in the bucket it manages, so destroying it
+  would destroy every leaf's state.
+
+**Later.** COM-0005 retired the Scaleway bucket that §3 of the original kept as
+a rollback copy, so recovery is now a restore from B2.
+
+Original: [COM-0004](https://github.com/noisypigeon/blog/blob/a25084ae1e8f70afcd6eb72fadb88815b48b15f1/adr/COM-0004-terraform-state-on-r2.md).
+
+### 2026-10-17: DEV-0164, `pigeon.dev`'s state moves to R2, then Scaleway is retired (folded from `noisypigeon/garden`)
+
+Filed 2026-10-16. Accepted. The full text is also archived as
+[`archive/DEV-0164`](archive/DEV-0164-terraform-state-on-r2-and-retire-scaleway.md).
+
+**Decision.**
+
+1. **The same move as COM-0004:** three new leaves, the Backblaze provider
+   turned on for `terraform/backblaze/`, hand-made R2 keys, a byte-for-byte
+   `rclone copyto --s3-no-check-bucket` checked by serial, lineage and
+   resource count, and the cutover with both backup callers.
+2. **Then Scaleway was retired in COM-0005's order:**
+   - the bucket, by `force_destroy` and then leaf removal;
+   - the project, in its own PR;
+   - `scaleway` dropped from `providers` (LIB-0005), with the five Scaleway
+     secrets removed;
+   - finally `state/iam`'s deploy key, destroyed in `noisypigeon`.
+3. **The Scaleway bucket's version history was let go.**
+
+**Still true.**
+
+- The domain runs on Cloudflare and Backblaze only.
+- Recovery is a restore from B2.
+- DEV-0163's `state/iam` arrangement ended, settling
+  noisypigeon/noisypigeon#308 for this spoke by retirement.
+
+**Verification.** Every step's apply count is recorded in the archived text.
+The account ended with no `pigeon-dev` project, and no
+`pigeon-dev-terraform-deploy` application. `mise run plan` showed
+`No changes.` on 5/5 leaves without installing the Scaleway provider.
+
+Original: [DEV-0164](https://github.com/noisypigeon/garden/blob/13bcee9a79c86a3a0054ebda7cd6d7fa7c238df2/adr/DEV-0164-terraform-state-on-r2-and-retire-scaleway.md).

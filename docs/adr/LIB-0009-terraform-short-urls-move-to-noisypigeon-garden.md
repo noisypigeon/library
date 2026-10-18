@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-16.
-- **Status**: Accepted.
+- **Status**: Accepted; amended 2026-10-17 (see `## Amendments`).
 - **Amended 2026-10-16**: §5 step 6 and §6 named the wrong redirect target.
   `pigeon.dev` redirects to `https://noisypigeon.com`, because it was the
   blog's home before noisypigeon.com and it's an alias of the identity, like
@@ -182,3 +182,52 @@ By §5's steps:
      Fastmail MX and DKIM records still resolved.
    - garden's four emptied state objects were deleted from R2. Earlier
      versions of each remain in its B2 backup.
+
+## Amendments
+
+### 2026-10-17: DEV-0165, `pigeon.dev` becomes `noisypigeon.garden` (folded from `noisypigeon/garden`)
+
+Filed 2026-10-16. This was garden's side of this record and of LIB-0008.
+Accepted, and amended the same day with the redirect-target correction this
+record's own Status note carries: `pigeon.dev` redirects to
+`https://noisypigeon.com` (noisypigeon/noisypigeon.com#33). The full text is
+also archived as
+[`archive/DEV-0165`](archive/DEV-0165-pigeon-dev-becomes-noisypigeon-garden.md).
+
+**Decision.**
+
+1. **The repo is `noisypigeon/garden`,** renamed from `noisypigeon/pigeon.dev`.
+   `pigeon-dev-pages.yml` became `garden-pages.yml`, and the hub's dispatch
+   followed (§4). The repo ID carries the Pages site, secrets, ruleset and the
+   bot token's grant.
+2. **Zone leaves, by LIB-0008.** `spoke.hcl` takes `root.hcl` v2.2.0.
+   - `fastmail` and `github-pages` moved under
+     `terraform/cloudflare/pigeon.dev/`, within the repo's own R2 bucket.
+   - A new `terraform/cloudflare/noisypigeon.garden/dns-record/github-pages`
+     leaf holds DNS-only CNAMEs for `@` and `www` to `noisypigeon.github.io`,
+     plus the Pages domain-verification TXT record once it is verified.
+   - `ENV_CF_ZONE_ID_NOISYPIGEON_GARDEN` was added to the secrets.
+3. **The site moved.** The custom domain is `noisypigeon.garden`, with HTTPS
+   enforced. `base_url` and the title changed, and `web/content/modules/`
+   became `web/content/terraform/` to match the generator (§3).
+4. **The `pigeon.dev` zone left for the blog repo.** `fastmail` moved with its
+   state by COM-0006's pattern, and `github-pages` was destroyed to free the
+   apex for the blog repo's placeholders and redirect ruleset.
+   `ENV_CF_ZONE_ID_PIGEON_DEV` left garden's secrets.
+
+**Still true.**
+
+- garden has one zone, `noisypigeon.garden`, plus account-level leaves.
+- **A failed garden deploy breaks every module consumer's `terraform init`.**
+- Renaming the `DEV-` prefix, the `PIGEON_DEV_*` secrets or the state bucket
+  was a permanent boundary at filing. LIB-0016 later renamed the state
+  buckets, and LIB-0017 closed the `DEV-` sequence without renaming it.
+
+**Verification.**
+
+- `mise run garden-build` produced 170 pages, none under `/modules/`.
+- `terraform init` resolved a `noisypigeon.garden/terraform/…` URL.
+- Both moved state objects matched by SHA-256, serial, lineage and count.
+- The `pigeon.dev` Fastmail MX and DKIM records still resolved afterwards.
+
+Original: [DEV-0165](https://github.com/noisypigeon/garden/blob/13bcee9a79c86a3a0054ebda7cd6d7fa7c238df2/adr/DEV-0165-pigeon-dev-becomes-noisypigeon-garden.md).
