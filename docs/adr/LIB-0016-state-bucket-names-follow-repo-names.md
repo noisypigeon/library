@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-17.
-- **Status**: Accepted.
+- **Status**: Accepted; amended 2026-10-17 (see `## Amendments`).
 - **Amended 2026-10-18**: §4 as it was run, in four ways:
   - **Step 3 for R2** reads the old bucket with the token in the committed
     `terraform.enc` and writes the new one with the new token. Each token
@@ -198,3 +198,39 @@ for the run.
    `dev-2j1cmn-terraform-state`, `dev-65bctm-terraform-state-backup`,
    `com-mhp7ix-terraform-state` and `com-000mqm-terraform-state-backup`) are
    in no leaf's state and are still there unchanged. No plan destroyed one.
+
+## Amendments
+
+### 2026-10-17: COM-0007, rename the repo to `noisypigeon/blog` (folded from `noisypigeon/blog`)
+
+Filed 2026-10-16. This is one of the spoke renames this record's Context
+starts from. Accepted. garden's rename is DEV-0165 §1, folded into LIB-0009,
+and runway's is LIB-0013.
+
+**Decision.**
+
+1. **Repos are named for their role.** `noisypigeon/noisypigeon.com` became
+   `noisypigeon/blog`. The site is still published at
+   `https://noisypigeon.com`, the canonical identity (LIB-0008).
+2. **The Pages workflow became `blog-pages.yml`,** to match
+   `garden-pages.yml`. `blog-changelog.yml`'s `deploy_workflow` followed, and
+   so did the hub's dispatch (`gh workflow run blog-pages.yml -R
+   noisypigeon/blog`). The dispatch was changed rather than left to GitHub's
+   rename redirect, because a workflow-dispatch POST shouldn't depend on it.
+3. **What didn't change:**
+   - the `COM-` prefix, which names the domain (LIB-0017 has since closed it);
+   - the domain, its zones and the Pages custom domain;
+   - the state and secret identifiers, whose bucket names this record later
+     changed;
+   - links in old posts and changelogs, which GitHub redirects.
+4. **Order.** Rename the repo, then the spoke PR, then the hub PR. Hub releases
+   were frozen between the last two, because a theme release in that window
+   would have dispatched a workflow file that no longer existed. **Any future
+   rename of a dispatch target needs the same freeze.**
+
+**Verification.** The rename kept the repo ID, ruleset, secrets and Pages
+settings, and `https://noisypigeon.com` kept returning 200. A manual dispatch
+of `blog-pages.yml` deployed cleanly. pigeon-lib#56 cut `workflows/v1.6.2`
+with the new dispatch.
+
+Original: [COM-0007](https://github.com/noisypigeon/blog/blob/a25084ae1e8f70afcd6eb72fadb88815b48b15f1/adr/COM-0007-rename-the-repo-to-blog.md).

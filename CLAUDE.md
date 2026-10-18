@@ -82,11 +82,21 @@ the repo whose site it deploys (DEV-0156 — a constraint, not a style choice).
 
 ## Where the decisions live
 
-ADRs for this repo live at `docs/adr/LIB-NNNN-<slug>.md`, numbered from `0001`
-within that directory. `LIB-0001` defines the architecture; `LIB-0002` created
-this repo. Sibling domains live in their own repos, flat in each one's `adr/`:
-`DEV-` in `noisypigeon/garden`, `COM-` in `noisypigeon/blog`, and
-`RUN-` in `noisypigeon/runway`; `pigeon-cli` keeps its own unprefixed
+ADRs live at `docs/adr/LIB-NNNN-<slug>.md`, numbered from `0001` within that
+directory. `LIB-0001` defines the architecture; `LIB-0002` created this repo.
+
+**This is also where the spokes' decisions live.** garden, blog and runway hold
+no ADRs (LIB-0017): a decision about one of them is an amendment on the `LIB-`
+record whose standard it applies, or a new `LIB-` record. Their old records
+are all here:
+
+- `DEV-` (garden's, mostly the family's pre-hub history) verbatim in
+  `docs/adr/archive/`. That domain is frozen and closed; see its `README.md`.
+- `COM-` (blog's) and `RUN-` (runway's), plus DEV-0162 to DEV-0165, as
+  amendments whose headings carry the ID. LIB-0017 §2 says which record each
+  one went into.
+
+`pigeon-cli` is the exception (LIB-0017 §5): it keeps its own unprefixed
 `docs/adr/`.
 
 Filing one, by hand:
@@ -97,11 +107,13 @@ Filing one, by hand:
 - **Sections**: `## Context` / `## Decision` / `## Consequences` /
   `## Out of scope`, optionally then `## Verification`. No YAML frontmatter and
   no index — there isn't one.
-- Cite `LIB-NNNN` for this domain and `DEV-NNNN`/`COM-NNNN`/`RUN-NNNN` for the others (`NPC-NNNN` in older prose is an alias for `COM-`).
-  Bare `ADR-NNNN` in older prose means the `DEV-` corpus (DEV-0160 grandfathered
-  those citations).
-- Genuinely-deferred `## Out of scope` items get a GitHub issue against
-  `noisypigeon/noisypigeon` (ADR-0031); permanent design boundaries do not.
+- Cite `LIB-NNNN`. Older IDs stay valid and are never rewritten: `DEV-NNNN`
+  (bare `ADR-NNNN` in older prose is an alias, DEV-0160), `COM-NNNN` (`NPC-NNNN`
+  is an alias) and `RUN-NNNN`. No new number is issued in any of those.
+- Genuinely-deferred `## Out of scope` items get a GitHub issue in this repo,
+  labelled `out-of-scope` (DEV-0031, LIB-0017 §6); permanent design boundaries
+  do not. The `noisypigeon/noisypigeon#NNN` links in older records point at the
+  deleted monorepo and no longer resolve.
 
 ## Runbooks
 

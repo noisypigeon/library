@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-15.
-- **Status**: Accepted.
+- **Status**: Accepted; amended 2026-10-17 (see `## Amendments`).
 
 ## Context
 
@@ -212,3 +212,56 @@ Its plan must show `No changes.` on every leaf.
    carries `release:major`, so its merge should cut
    `terragrunt/root-hcl/v2.0.0` and write one `[terragrunt/root-hcl]` root
    line.
+
+## Amendments
+
+### 2026-10-17: COM-0005, retire `noisypigeon.com`'s Scaleway resources (folded from `noisypigeon/blog`)
+
+Filed 2026-10-16. Accepted. This was the first spoke to turn a provider *off*
+through this record's map. DEV-0164 then did the same for garden (see
+LIB-0007's amendments).
+
+**Context.** After COM-0004 moved the state to R2, the domain had three
+Scaleway pieces left:
+
+- the old state bucket, kept as a frozen rollback copy that nothing read;
+- the project, whose Object Storage held nothing else across fr-par, nl-ams
+  and pl-waw;
+- `state/iam`'s deploy key, still in `noisypigeon`.
+
+R2 had by then run cleanly through three applies, each followed by a
+successful B2 backup (noisypigeon/noisypigeon#317).
+
+**Decision.**
+
+1. **Retire in dependency order, one PR per step.**
+   1. Apply `force_destroy = true` to the bucket on its own first. A destroy
+      only empties a versioned bucket if that setting is already in state.
+   2. Remove the bucket leaf, and CI destroys the bucket with every version.
+   3. Remove the project in a separate PR. A removed leaf can't declare a
+      dependency, and the project can't go while it holds a bucket.
+   4. Destroy the deploy key last, in `noisypigeon`, because every destroy
+      above authenticated with it.
+2. **The old bucket's version history is let go,** not exported. Current
+   state lives in R2, and every write since COM-0004 is versioned in B2.
+3. **Scaleway is off through this record's map.** `spoke.hcl` drops
+   `scaleway` from `providers`, with no template change. Every leaf's Scaleway
+   generated files become a one-line comment, and the template's Scaleway
+   backend is built but never selected.
+4. **The Scaleway secrets are removed,** along with the old bucket's name.
+
+**Still true.**
+
+- Recovering state means a restore from B2
+  (`docs/runbooks/restore-terraform-state-from-b2.md`).
+- `state/iam` was settled for this spoke by retirement: there is no deploy key
+  left to bootstrap.
+- Emptied state objects of removed leaves stay in R2 and B2, harmless.
+- Re-adding Scaleway would be a new decision (a new key, the provider back in
+  the map, new leaves), not a deferral.
+
+**Verification.** The bucket apply destroyed two resources and a listing then
+returned no buckets. The project apply destroyed one. With Scaleway off,
+`mise run plan` showed `No changes.` on all seven remaining leaves.
+
+Original: [COM-0005](https://github.com/noisypigeon/blog/blob/a25084ae1e8f70afcd6eb72fadb88815b48b15f1/adr/COM-0005-retire-scaleway.md).

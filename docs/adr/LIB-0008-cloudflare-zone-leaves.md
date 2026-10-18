@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-16.
-- **Status**: Accepted.
+- **Status**: Accepted; amended 2026-10-17 (see `## Amendments`).
 
 ## Context
 
@@ -198,3 +198,52 @@ Permanent boundaries, with no issue:
    `github-pages` was destroyed rather than moved. The redirect targets
    `https://noisypigeon.garden`. `noisypigeon.garden` adopted the layout in its
    own repo from its first leaf (garden#40).
+
+## Amendments
+
+### 2026-10-17: COM-0006, the blog repo owns the `willowgraysen.com` redirect (folded from `noisypigeon/blog`)
+
+Filed 2026-10-16. This was the first domain to move into the canonical
+identity's repo under this record's layout (noisypigeon/noisypigeon#320).
+Accepted, and amended the same day when `pigeon.dev` followed the same
+pattern (DEV-0165, LIB-0009).
+
+**Decision.**
+
+1. **Two leaves move under the zone.**
+   - `cloudflare/dns-record/redirect` holds the proxied placeholder records
+     for the apex and `www`, so Cloudflare intercepts the traffic.
+   - `cloudflare/ruleset/noisypigeon-com-redirect` holds a 301 to
+     `https://noisypigeon.com`.
+
+   Both move to `terraform/cloudflare/willowgraysen.com/…`. They were copied,
+   not imported with history, so the PR merges through the apply like any
+   other. Each leaf's only change is `zone_id = local.cloudflare_zone_id`.
+2. **State is copied across buckets and backends.** This is §3 between two
+   repos: `rclone copyto` from the source spoke's Scaleway bucket to this
+   spoke's R2 bucket, byte for byte. Both remotes are configured from each
+   repo's secrets by environment variables. Nothing is pushed, so serial and
+   lineage survive (COM-0004). After this spoke plans `No changes.`, the
+   source empties its old keys with `state rm`, removes the leaves, and turns
+   its Cloudflare provider off.
+3. **One new secret,** `ENV_CF_ZONE_ID_WILLOWGRAYSEN_COM`, the same value the
+   source held. Without it, the render of both leaves fails.
+
+The repo holding the source leaves had just been renamed from
+`willowgraysen.com` to `willowgraysen`, and later became `runway`
+(LIB-0013). Nothing depended on the name: the repo ID carries the secrets and
+the ruleset, and no state key contains a repo name.
+
+**Still true.**
+
+- The blog repo holds the identity's zone and every redirecting zone, so a bad
+  Terraform merge there can break a redirect as well as the site.
+- The B2 backup covers the moved keys.
+- The redirects' behaviour moved unchanged, permanently for that record.
+
+**Verification.** The rename kept the repo ID, ruleset and secrets. Each R2
+object's SHA-256 matched its source. Pulls matched in serial, lineage and
+resource count (3 instances). The new secret hashed equal to the old one, and
+both leaves planned `No changes.`.
+
+Original: [COM-0006](https://github.com/noisypigeon/blog/blob/a25084ae1e8f70afcd6eb72fadb88815b48b15f1/adr/COM-0006-own-willowgraysen-com-redirect.md).

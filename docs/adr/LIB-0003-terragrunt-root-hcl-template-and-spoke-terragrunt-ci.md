@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-15.
-- **Status**: Accepted; amended 2026-10-15, three times (see `## Amendments`). The per-leaf `*_config.hcl` opt-ins its amendments added are superseded by LIB-0005.
+- **Status**: Accepted; amended 2026-10-15, three times, and 2026-10-17 (see `## Amendments`). The per-leaf `*_config.hcl` opt-ins its amendments added are superseded by LIB-0005.
 
 ## Context
 
@@ -219,3 +219,172 @@ Verified by rendering every leaf of all three spokes (24 leaves) under its
 committed `root.hcl` and under `v1.2.0`. The only differences are added `generate`
 entries with `disable: true`: `provider_grafana` everywhere, plus `provider_backblaze`
 on the two spokes still at `v1.0.1`. State keys are equal throughout.
+
+### 2026-10-17: the three spoke hoists, folded in by LIB-0017
+
+Each spoke consumed this template by hoisting its Terraform out of
+`noisypigeon/noisypigeon`. The three records below were filed in the spokes
+and are folded in here. They share one recipe, stated once:
+
+1. **`state/iam` stays behind** (LIB-0001 §8, option 1). A bootstrap root
+   would have copied the organisation-level shared deployer credentials into
+   the spoke. Accepting the self-reference would have reversed
+   DEV-0130/0133's rule and moved state between buckets. Leaving the leaf
+   where it was moves neither. All three spokes chose this, which settled the
+   choice in noisypigeon/noisypigeon#308.
+2. **The other leaves move with their history.** One `git filter-repo` pass
+   over a fresh clone does it:
+   - keep the domain's own paths;
+   - rename `…/terraform/` to `terraform/`, and `…/secrets.enc` to
+     `terraform/secrets.enc`;
+   - drop `terraform/state/iam/`, after dropping tags.
+
+   The result merges with `--allow-unrelated-histories`, byte-identical to the
+   source. sops metadata does not encode the file's path.
+3. **State does not move.** With `root.hcl` at the repo root and the leaves
+   under `terraform/`, every key stays `terraform/<leaf>/terraform.tfstate` in
+   the same bucket (LIB-0001 invariant 4). Each spoke wrote this out per leaf
+   rather than asserting it.
+4. **`root.hcl` is generated and committed,** pinned in `spoke.hcl` and checked
+   with `--check`, as the first amendment above requires. Each leaf was
+   rendered under the old root and the template before any PR.
+5. **CI and the gate.**
+   - Thin callers of `terragrunt-detect.yml`/`terragrunt-run.yml` with
+     `leaf_pattern` (`^terraform/`, `root.hcl`, `spoke.hcl`, `.sops.yaml`),
+     `secrets_files` and a `prepare_cmd` that fetches the hub and runs
+     `--check`.
+   - `SOPS_AGE_KEY` is the family's shared age key, and `.sops.yaml` has one
+     rule.
+   - `main` gets `noisypigeon`'s ruleset (DEV-0129): no force-push, a required
+     `terragrunt/apply` status, and the owner and bot as bypass actors. It is
+     created after the import merges. A non-Terraform PR gets the status
+     straight away from the detect job.
+   - `root-changelog.yml` tags `terraform/`, `root.hcl`, `spoke.hcl` and
+     `.sops.yaml` changes as `terraform`.
+6. **The deletion in the source repo is never applied. This is the hazard
+   that matters for any future hoist.**
+   - The PR that deletes the moved leaves from the source repo plans destroys
+     against the very bucket and keys the spoke now owns. It merges through
+     the ruleset's owner bypass, and `terragrunt apply` is never commented on
+     it.
+   - DEV-0130's "empty the old location's state" must **not** be followed
+     here. It assumes the old and new locations differ, and here they are the
+     same object, so a `state rm` would orphan live resources from their only
+     owner.
+7. **The import merges as a merge commit, once,** to keep its history, after
+   CI shows `No changes.` everywhere. The apply is skipped, because it would be
+   a no-op whose only effect is a squash.
+
+Since then, LIB-0012 split `terraform/secrets.enc` into per-concern files
+under `terraform/secrets/`, and LIB-0007 moved the spokes' state to R2. So
+the secret paths and buckets in the entries below are as of filing.
+
+### 2026-10-17: DEV-0163, hoist `pigeon.dev`'s Terraform (folded from `noisypigeon/garden`)
+
+Filed 2026-10-15. This was LIB-0001 §7 step 3, the first hoist. Accepted, and
+amended 2026-10-16 when DEV-0164 retired its `state/iam` arrangement. The full
+text is also archived as
+[`archive/DEV-0163`](archive/DEV-0163-hoist-pigeon-dev-terraform.md).
+
+- **Scope.**
+  - Five leaves at `noisypigeon@ff2f4e2`. Four moved: `fastmail/dns`,
+    `project`, `state/bucket`, `wiki/dns`.
+  - The import was 15 files and 12 commits, starting at noisypigeon#195.
+- **Template.** `1.0.1`, with zero differing render keys (Verification 2
+  above). It was the dry run of this hoist that found the worktree problem
+  the first amendment records.
+- **Workflows.** `workflows/v1.3.1`. The ruleset partly resolved
+  noisypigeon/noisypigeon#295.
+- **One-time merge commit.** The repo allowed only squash merges, so merge
+  commits were enabled for this PR alone and then disabled again.
+- **Still true.**
+  - A template bump is a three-part diff: `spoke.hcl`, `root.hcl` and the
+    replan of every leaf.
+  - Between a hoist merging and the source deletion merging, two repos can
+    plan the same state. The backend lock covers a concurrent apply but not
+    the confusion over ownership, so the deletion follows straight away.
+  - Imported commits cite `noisypigeon` PR numbers, which GitHub autolinks
+    against the wrong repo.
+- **Later.** DEV-0164 retired `state/iam`'s deploy key, so key rotation by a
+  `noisypigeon` PR followed by `mise run secrets-edit` no longer applies here.
+
+Original: [DEV-0163](https://github.com/noisypigeon/garden/blob/13bcee9a79c86a3a0054ebda7cd6d7fa7c238df2/adr/DEV-0163-hoist-pigeon-dev-terraform.md).
+
+### 2026-10-17: COM-0003, hoist `noisypigeon.com`'s Terraform (folded from `noisypigeon/blog`)
+
+Filed 2026-10-15. This is the Terraform half of LIB-0001 §7 step 4. Accepted.
+
+- **Scope.**
+  - Seven leaves at `noisypigeon@87a5089`. Six moved: the GitHub Pages CNAMEs
+    that put the site online, **every mail record for the domain**, two
+    verification-TXT leaves, `project` and `state/bucket`.
+  - The import was 21 files and 7 commits, starting at noisypigeon#208.
+- **Template.** `1.0.1`, with zero differing render keys and literally equal
+  state keys.
+- **Workflows.** All six workflow refs and `.lib-version` moved from
+  `v1.2.0` to `v1.3.1`, which changed nothing the Pages and changelog callers
+  use.
+- **Hazard specifics.** Applying the source deletion would have taken the blog
+  offline and broken the domain's email.
+- **Merge.** The repo already allowed merge commits, so no settings toggle was
+  needed.
+- **Still true.**
+  - Every blog PR gets a `terragrunt/apply` status that turns green without
+    running anything. A failing detect job would therefore block a post.
+  - The apply flow's auto-merge never worked
+    (noisypigeon/noisypigeon#310), so an applied Terraform PR is merged by
+    hand until that is fixed.
+- **Later.** COM-0004 moved the state to R2, and COM-0005 retired the
+  Scaleway pieces, including `state/iam`'s deploy key.
+
+Original: [COM-0003](https://github.com/noisypigeon/blog/blob/a25084ae1e8f70afcd6eb72fadb88815b48b15f1/adr/COM-0003-hoist-noisypigeon-com-terraform.md).
+
+### 2026-10-17: RUN-0001, hoist `willowgraysen.com`'s Terraform (folded from `noisypigeon/runway`)
+
+Filed 2026-10-15. This is the second half of LIB-0001 §7 step 5, and the last
+hoist. Accepted. Described by role, per RUN-0000's rule.
+
+- **Scope.**
+  - Fifteen leaves at `noisypigeon@219706e`. Fourteen moved: cold-storage
+    buckets, `pigeon-cli`'s job and report buckets, its cluster,
+    observability and IAM application, the redirect, `project` and
+    `state/bucket`.
+  - The import was 52 files and 26 commits, starting at noisypigeon#209.
+- **Template.** `1.1.0`, the version that added this spoke's needs:
+  `backblaze = true` and a `grafana` entry in `extra_required_providers`.
+  Rendered against the old root, each leaf differed in one key: whitespace in
+  the generated provider file, where the old root left a blank line for the
+  Backblaze entry. Every state key matched.
+- **Apply gate.** The apply is gated on a fixed comment from an OWNER, MEMBER
+  or COLLABORATOR. Merge commits were disabled after the import merged.
+- **Hazard specifics.** Applying the source deletion would have destroyed the
+  cold-storage buckets, **whose contents are custodial and unrecoverable**.
+  It would also have taken the job and report buckets, observability, the
+  IAM application, the redirect, the project and the state bucket.
+- **State ahead of config: caught up, not destroyed.**
+  - One `pigeon-cli` bucket leaf's state held three resources that no
+    committed config described: an IAM policy, an API key and the key's
+    `time_static`. An uncommitted worktree had applied them, and a running
+    job was using that key.
+  - Planned as orphans, they would have been destroyed, revoking that job's
+    credentials. The fix was configuration, not `import`, because the
+    resources were already in state.
+  - The leaf gained `iam.tf` (`iam-policy/v4.0.0` and `iam-api-key/v0.2.0`)
+    and a sensitive `outputs.tf`, and then planned `No changes.`.
+  - Identifiers come from existing secrets, so nothing is written into the
+    public repo. The key expires after the module's default 30 days, and
+    renewing it is a replace of `module.iam_api_key`.
+  - **The general lesson: in a hoist, a planned destroy of resources nothing
+    describes means state is ahead of config. Describe them; never let them
+    go.**
+- **Verification.** One observability leaf planned an in-place dashboard
+  update that it also planned under the old layout. It was pre-existing drift,
+  left for its own PR. No leaf planned a destroy.
+- **Out of scope.**
+  - Documenting the redirect (noisypigeon/noisypigeon#309); COM-0006 later
+    moved it.
+  - Re-enabling the cluster module, which is `pigeon-cli`'s decision.
+- **Later.** The repo was renamed `noisypigeon/runway` (LIB-0013), and its
+  state bucket name follows the repo (LIB-0016).
+
+Original: [RUN-0001](https://github.com/noisypigeon/runway/blob/2ab560c516d76c90482ad963c62525f800e923fe/adr/RUN-0001-hoist-willowgraysen-com-terraform.md).
