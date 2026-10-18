@@ -44,6 +44,10 @@ ADR-0154 and ADR-0084 each made before it.
 
 <!-- entries below; newest first -->
 
+## 2026-10-18
+
+- [adr] LIB-0017: spokes don't get their own ADRs ([#76](https://github.com/noisypigeon/library/pull/76))
+
 ## 2026-10-17
 
 - [adr] LIB-0016 records the rollout ([#74](https://github.com/noisypigeon/library/pull/74))
