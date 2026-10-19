@@ -4,6 +4,25 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.2.0] - 2026-10-19
+
+### Add a reusable Rust crate release workflow
+
+Adds `rust-crate-release.yml`, a reusable workflow that releases a Rust crate on every push to its `main`, and the scripts it runs. They are hoisted from `pigeon-cli` by its [CLI-0161](https://github.com/noisypigeon/pigeon-cli/pull/133), which is their first consumer.
+
+On each run, the release job checks formatting and lint with the caller's `mise run fmt-check`/`lint`. It then bumps the patch version and cuts `CHANGELOG.md`'s `[Unreleased]`. It commits, tags and pushes **before** publishing to crates.io, so a merge that races the run defers the release instead of burning a version. The publish is skipped if the version is already on the sparse index. Finally it cuts a GitHub Release. A matrix job then builds, smoke-tests and attaches one binary tarball per target.
+
+- **New scripts.** `.github/scripts/crate-release.sh`, `crate-cut-release.sh`, `crate-build-release.sh` and `adr-issue.sh`. Every crate-specific value is an argument: `--crate` (the sparse-index path is derived from it), `--bin` and `--codesign-id`. `crate-release.sh` finds its sibling relative to its own location, so it works wherever `fetch-lib.sh` put the library.
+- **`adr-issue.sh`** files an ADR's out-of-scope bullet as an issue and links it back into the ADR. It gains `--repo` and `--label-meta FILE`, so each repo keeps its own `area:*` label taxonomy, and its in-place edit no longer depends on BSD `sed`.
+- **Callers.** A caller passes `crate`, `bin`, `codesign_id`, a JSON `targets` matrix and the `CARGO_REGISTRY_TOKEN` secret. It keeps the push trigger, the `chore(release): v` loop guard, `permissions: contents: write` and concurrency, and must have a `fetch-lib.sh`.
+- **Tags stay with the caller.** The caller writes its own `vX.Y.Z` tags, an exception to LIB-0001 §4 recorded in its 2026-10-19 amendment.
+
+No existing workflow changes.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#81](https://github.com/noisypigeon/library/pull/81)
+
 ## [3.1.1] - 2026-10-17
 
 ### Name the hub noisypigeon/library

@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-19
 
+- [workflows] Add a reusable Rust crate release workflow ([#81](https://github.com/noisypigeon/library/pull/81))
 - [adr] Amend LIB-0001 and LIB-0017 for pigeon-cli's hub alignment (CLI-0161) ([#80](https://github.com/noisypigeon/library/pull/80))
 - [scaleway/pigeon-cluster] Take pigeon-cli's keyring shape and repin compute-instance-config to v1.0.0 ([#79](https://github.com/noisypigeon/library/pull/79))
 - [scaleway/compute-instance-config] Write secrets into keyring.toml and stop rendering rclone.conf in compute-instance-config ([#78](https://github.com/noisypigeon/library/pull/78))
