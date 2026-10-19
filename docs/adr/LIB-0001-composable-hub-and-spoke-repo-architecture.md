@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-13.
-- **Status**: Accepted; amended 2026-10-15 and 2026-10-17 (see `## Amendments`). Invariant 5 is reversed for garden, blog and runway by LIB-0017.
+- **Status**: Accepted; amended 2026-10-15, 2026-10-17 and 2026-10-19 (see `## Amendments`). Invariant 5 is reversed for garden, blog and runway by LIB-0017.
 
 ## Context
 
@@ -720,3 +720,36 @@ step 5. Accepted.
   every workflow declares its own permissions.
 
 Original: [RUN-0000](https://github.com/noisypigeon/runway/blob/2ab560c516d76c90482ad963c62525f800e923fe/adr/RUN-0000-bootstrap-willowgraysen-com-repo-and-open-the-run-domain.md).
+
+### 2026-10-19: pigeon-cli consumes the hub (CLI-0161)
+
+§2's pigeon-cli row ("Already conformant; consumes nothing from the hub
+today") is no longer true. [CLI-0161](https://github.com/noisypigeon/pigeon-cli/blob/5aecb66458f766946fe1f976d249b2c91e9b522a/docs/adr/0161-align-with-hub-and-spoke.md) aligns pigeon-cli with this
+architecture:
+
+- Its release workflow body and all four of its scripts move here, as the
+  reusable `rust-crate-release.yml` and `.github/scripts/crate-*.sh` plus
+  `adr-issue.sh`, on the `workflows/vX.Y.Z` track. pigeon-cli keeps a thin
+  caller and pins the library through `fetch-lib.sh` and `.lib-version`, the
+  same way blog and runway do.
+- Its local observability stack moves here as `observability/pigeon-cli/`,
+  versioned as `observability/pigeon-cli/vX.Y.Z`, and loads
+  `grafana-dashboards/pigeon-cli` instead of keeping its own copy.
+- Its `analyze-job-run` skill moves here as a Claude Code plugin,
+  `claude-plugins/pigeon-cli/`, versioned as `claude-plugins/pigeon-cli/vX.Y.Z`.
+- Its corpus moves to a flat `adr/` with the prefix **`CLI-`**.
+
+The row now reads: **`pigeon-cli`** holds source, `adr/` (`CLI-`), a thin
+release caller, `fetch-lib.sh` and `.lib-version`. It is a spoke that consumes
+the hub's workflows, scripts, observability stack and skills plugin.
+
+pigeon-cli departs from this record in exactly these ways, recorded in
+CLI-0161 §6:
+
+- **It writes its own tags.** §4 says "a spoke never writes a tag", but a crate's
+  `vX.Y.Z` tags must point at the crate's own commits. Its release commit,
+  `CHANGELOG.md` bump and crates.io publish stay there too. The hub provides
+  the mechanism, and the release act is the spoke's.
+- **It keeps its own ADRs, changelog convention and `Dockerfile`** (LIB-0017's
+  2026-10-19 amendment).
+

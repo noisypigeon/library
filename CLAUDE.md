@@ -96,8 +96,9 @@ are all here:
   amendments whose headings carry the ID. LIB-0017 §2 says which record each
   one went into.
 
-`pigeon-cli` is the exception (LIB-0017 §5): it keeps its own unprefixed
-`docs/adr/`.
+`pigeon-cli` is the exception (LIB-0017 §5, amended by CLI-0161): it keeps
+its own ADRs, as `CLI-` records in a flat `adr/`. A bare pigeon-cli `ADR-NNNN`
+cited here reads as `CLI-NNNN`.
 
 Filing one, by hand:
 
