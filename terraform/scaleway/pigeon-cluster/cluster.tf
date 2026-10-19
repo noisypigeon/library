@@ -173,7 +173,9 @@ module "job_self_delete_key" {
 # ADR-0144: merge cluster_config.shared_keyring under each job's own keyring
 # (job-specific alias wins on collision), then default any kind = "bucket"
 # entry's access_key_id/secret_key to this job's own API key above when the
-# entry doesn't specify its own.
+# entry doesn't specify its own. Email entries pass through unchanged, secret
+# included (LIB-0018); compute-instance-config validates each kind's required
+# fields, so a bucket entry has to be complete by the time it leaves here.
 locals {
   effective_keyring = {
     for job_key, job in local.jobs_by_name : job_key => {
@@ -206,7 +208,7 @@ module "job_block_volume" {
 # rather than a new version of the module that owns the live server.
 module "job_config" {
   for_each = local.jobs_by_name
-  source   = "https://noisypigeon.garden/terraform/scaleway/compute-instance-config/v0.1.0"
+  source   = "https://noisypigeon.garden/terraform/scaleway/compute-instance-config/v1.0.0"
 
   keyring            = values(local.effective_keyring[each.key])
   cockpit            = var.cluster_config.cockpit
@@ -278,7 +280,7 @@ resource "scaleway_instance_private_nic" "job" {
 # what it got before, when it passed no instance_config at all.
 module "bastion_config" {
   count  = var.cluster_config.enable_bastion ? 1 : 0
-  source = "https://noisypigeon.garden/terraform/scaleway/compute-instance-config/v0.1.0"
+  source = "https://noisypigeon.garden/terraform/scaleway/compute-instance-config/v1.0.0"
 }
 
 module "bastion" {

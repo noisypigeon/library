@@ -9,25 +9,24 @@ variable "cluster_config" {
       scrape_port      = optional(number, 9091)
     }))
     shared_keyring = optional(map(object({
-      kind = string
+      # LIB-0018: compute-instance-config's keyring shape, which mirrors
+      # pigeon-cli's keyring.toml, minus alias -- the map key is the alias.
+      kind = string # "email" | "bucket"
 
-      # kind = "email"
+      # kind = "email" -- pigeon-cli's Identity
       email                = optional(string)
-      provider             = optional(string)
+      provider             = optional(string) # gmail | fastmail | icloud | proton | custom
       host                 = optional(string)
       port                 = optional(number)
+      secret               = optional(string)
       max_imap_connections = optional(number)
 
-      # kind = "bucket" -- also generates an rclone.conf remote; access_key_id/secret_key
+      # kind = "bucket" -- pigeon-cli's BucketConfig; access_key_id/secret_key
       # default to the consuming job's own API key when omitted (see `jobs`)
-      endpoint             = optional(string)
-      bucket               = optional(string)
-      access_key_id        = optional(string)
-      secret_key           = optional(string)
-      encryption_key_alias = optional(string)
-
-      # kind = "encryption-key"
-      created_at = optional(string)
+      endpoint      = optional(string)
+      bucket        = optional(string)
+      access_key_id = optional(string)
+      secret_key    = optional(string)
     })), {})
     shared_permission_sets = optional(list(string), [])
     # ADR-0146: default false -- no bastion is created. true provisions one
@@ -79,24 +78,22 @@ variable "jobs" {
     block_volume_size = optional(number)
     block_volume_iops = optional(number, 15000)
     keyring = optional(map(object({
-      kind = string
+      # LIB-0018: same shape as cluster_config.shared_keyring.
+      kind = string # "email" | "bucket"
 
-      # kind = "email"
+      # kind = "email" -- pigeon-cli's Identity
       email                = optional(string)
-      provider             = optional(string)
+      provider             = optional(string) # gmail | fastmail | icloud | proton | custom
       host                 = optional(string)
       port                 = optional(number)
+      secret               = optional(string)
       max_imap_connections = optional(number)
 
-      # kind = "bucket" -- also generates an rclone.conf remote
-      endpoint             = optional(string)
-      bucket               = optional(string)
-      access_key_id        = optional(string)
-      secret_key           = optional(string)
-      encryption_key_alias = optional(string)
-
-      # kind = "encryption-key"
-      created_at = optional(string)
+      # kind = "bucket" -- pigeon-cli's BucketConfig
+      endpoint      = optional(string)
+      bucket        = optional(string)
+      access_key_id = optional(string)
+      secret_key    = optional(string)
     })), {})
     extra_permission_sets = optional(list(string), [])
     # ADR-0149: default true preserves today's behavior -- this job attaches
