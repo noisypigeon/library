@@ -9,6 +9,8 @@ on:
       - "zola-site/**"
       - "terragrunt/**"
       - "grafana-dashboards/**"
+      - "observability/**"
+      - "claude-plugins/**"
       - ".github/**"
 
 permissions:
@@ -98,16 +100,26 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # Versioned Grafana dashboard JSON (LIB-0004's willowgraysen.com adoption):
-      # grafana-dashboards/<set>/*.json, one release track per set, consumed by
-      # URL at its tag. Only the JSON is a release; README/CHANGELOG are not.
-      - name: Determine changed grafana-dashboards sets
+      # Per-set release tracks, one per <root>/<set>/ directory, each tagged
+      # <root>/<set>/vX.Y.Z:
+      #   - grafana-dashboards/<set>/*.json (LIB-0004's willowgraysen.com
+      #     adoption), consumed by URL at its tag. Only the JSON is a release.
+      #   - observability/<set>/ (pigeon-cli's CLI-0161), a local Docker
+      #     Compose stack, consumed by checking out its tag.
+      #   - claude-plugins/<set>/ (pigeon-cli's CLI-0161), a Claude Code
+      #     plugin listed in /.claude-plugin/marketplace.json, consumed by
+      #     pinning the marketplace to its tag.
+      # A set's README.md/CHANGELOG.md are never a release on their own.
+      - name: Determine changed per-set release tracks
         id: dashboards
         env:
           MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
         run: |
           CHANGED_FILES=$(git diff --name-only "${MERGE_SHA}~1" "$MERGE_SHA")
-          SETS=$(echo "$CHANGED_FILES" | grep -E '^grafana-dashboards/[^/]+/[^/]+\.json$' | cut -d/ -f1-2 | sort -u | tr '\n' ' ')
+          SETS=$(echo "$CHANGED_FILES" \
+            | grep -E '^grafana-dashboards/[^/]+/[^/]+\.json$|^(observability|claude-plugins)/[^/]+/.+' \
+            | grep -vE '^(observability|claude-plugins)/[^/]+/(README|CHANGELOG)\.md$' \
+            | cut -d/ -f1-2 | sort -u | tr '\n' ' ')
           echo "changed=${SETS% }" >> "$GITHUB_OUTPUT"
 
       # The spokes call the reusable workflows and fetch root-changelog.sh, so
@@ -346,7 +358,7 @@ jobs:
 
           echo "tag=${DIR}/v${NEXT}" >> "$GITHUB_OUTPUT"
 
-      - name: Update grafana-dashboards changelogs and compute versions
+      - name: Update per-set changelogs and compute versions
         id: dashboards_version
         if: steps.dashboards.outputs.changed != ''
         env:
@@ -381,7 +393,7 @@ jobs:
               cat > "$CHANGELOG" <<'HEADER'
           # Changelog
 
-          All notable changes to this dashboard set are documented in this file.
+          All notable changes to this release unit are documented in this file.
 
           The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
           HEADER

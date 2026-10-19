@@ -28,6 +28,7 @@
         "query": "label_values(node_cpu_seconds_total, instance)",
         "label": "Instance",
         "includeAll": true,
+        "allValue": ".*",
         "multi": true,
         "current": {}
       }

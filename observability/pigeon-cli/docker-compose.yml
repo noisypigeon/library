@@ -1,0 +1,58 @@
+# pigeon-cli's local observability stack: Prometheus scrapes a bare-metal
+# `pigeon` run's /metrics, Promtail ships its JSONL log to Loki, and Grafana
+# renders grafana-dashboards/pigeon-cli over both. Hoisted from pigeon-cli by
+# its CLI-0161 (the stack itself is its CLI-0128); versioned as
+# observability/pigeon-cli/vX.Y.Z. Run it from a checkout of that tag -- the
+# dashboard mount is relative to this file.
+
+# Pinned, not derived from this directory's name: the stack lived in
+# pigeon-cli's observability/ before CLI-0161, so its named volumes are
+# observability_prom-data and observability_grafana-data. Keeping the project
+# name keeps that history across the move.
+name: observability
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prom-data:/prometheus
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:latest
+    volumes:
+      - ./promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - "${HOME}/Library/Application Support/pigeon/logs:/var/log/pigeon:ro"
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      # The dashboard is the library's versioned grafana-dashboards/pigeon-cli,
+      # read from the same checkout rather than kept as a second copy here.
+      - ../../grafana-dashboards/pigeon-cli:/var/lib/grafana-dashboards/pigeon-cli:ro
+    depends_on:
+      - prometheus
+      - loki
+    restart: unless-stopped
+
+volumes:
+  prom-data:
+  grafana-data:

@@ -45,6 +45,16 @@ nothing that is deployed:
   tag's raw URL (`raw.githubusercontent.com/noisypigeon/library/refs/tags/<tag>/<path>`),
   which is what `grafana/dashboard`'s `url` input does, so the same
   pinned file can feed both Terraform and anything else that ships it.
+- `observability/<set>/` — a local Docker Compose observability stack, tagged
+  `observability/<set>/vX.Y.Z` per set. `pigeon-cli` is the one set (its
+  CLI-0161). Its Grafana mounts `grafana-dashboards/<set>/` from the same
+  checkout rather than keeping a copy.
+- `claude-plugins/<set>/` — Claude Code plugins, tagged
+  `claude-plugins/<set>/vX.Y.Z` per plugin and listed in
+  `/.claude-plugin/marketplace.json` (marketplace name `library`). A consumer
+  pins the whole marketplace to one plugin's tag in its `.claude/settings.json`
+  and enables `<plugin>@library`. `pigeon-cli` is the one plugin (its
+  CLI-0161).
 - `.github/workflows/` — the reusable CI the spokes call, tagged
   `workflows/vX.Y.Z`. Reusable workflows must live in `.github/workflows/`, so
   they sit beside this repo's own release automation rather than under a
