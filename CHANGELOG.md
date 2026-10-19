@@ -46,6 +46,10 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-19
 
+- [workflows] Add pigeon-cli's observability stack and Claude Code plugin ([#82](https://github.com/noisypigeon/library/pull/82))
+- [observability/pigeon-cli] Add pigeon-cli's observability stack and Claude Code plugin ([#82](https://github.com/noisypigeon/library/pull/82))
+- [grafana-dashboards/pigeon-cli] Add pigeon-cli's observability stack and Claude Code plugin ([#82](https://github.com/noisypigeon/library/pull/82))
+- [claude-plugins/pigeon-cli] Add pigeon-cli's observability stack and Claude Code plugin ([#82](https://github.com/noisypigeon/library/pull/82))
 - [workflows] Add a reusable Rust crate release workflow ([#81](https://github.com/noisypigeon/library/pull/81))
 - [adr] Amend LIB-0001 and LIB-0017 for pigeon-cli's hub alignment (CLI-0161) ([#80](https://github.com/noisypigeon/library/pull/80))
 - [scaleway/pigeon-cluster] Take pigeon-cli's keyring shape and repin compute-instance-config to v1.0.0 ([#79](https://github.com/noisypigeon/library/pull/79))
