@@ -51,6 +51,13 @@ nothing that is deployed:
   templates convention (DEV-0155).
 - `.github/scripts/root-changelog.sh` — the one implementation of DEV-0160's
   root-changelog contract, used by this repo and fetched by the spokes.
+- `.github/workflows/rust-crate-release.yml` and `.github/scripts/crate-*.sh`,
+  `adr-issue.sh` — the Rust crate release pipeline and ADR out-of-scope issue
+  filer, hoisted from `pigeon-cli` by its CLI-0161. Run in the *caller's* repo
+  after its `fetch-lib.sh`; the caller writes its own `vX.Y.Z` tags and
+  publishes to crates.io (LIB-0001's 2026-10-19 amendment). Every
+  crate-specific value (`--crate`, `--bin`, `--codesign-id`, the target
+  matrix) is an input.
 - `.github/scripts/generate-module-redirects.sh` — generates the `noisypigeon.garden` site's module
   redirect pages, overview pages, theme-version pages and release posts from
   this repo's tags, READMEs and CHANGELOGs. Runs in a *consuming* site's build,

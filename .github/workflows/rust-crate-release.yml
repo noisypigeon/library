@@ -1,0 +1,163 @@
+# Reusable: releases a Rust crate on every push to its main. It bumps the
+# patch version, cuts CHANGELOG.md's [Unreleased], commits, tags, pushes,
+# publishes to crates.io, cuts a GitHub Release, then builds and attaches
+# one binary per target.
+#
+# Hoisted from pigeon-cli by its CLI-0161. The release mechanics are its
+# CLI-0117 and CLI-0150 (push before publish, idempotent publish); see
+# .github/scripts/crate-release.sh.
+#
+# Unlike every other spoke, the caller writes its own tags (LIB-0001's
+# 2026-10-19 amendment): a crate's vX.Y.Z must point at its own commits. This
+# workflow runs in the caller's context, so the checkout, the release
+# commit, the tag and the push are all the caller's.
+#
+# The caller keeps what cannot live here: the push trigger, the
+# `chore(release): v` loop guard, permissions (contents: write) and
+# concurrency. Its repo must have mise configured (`jdx/mise-action`) with
+# `fmt-check` and `lint` tasks, and a `fetch_script` that materializes this
+# library into `.lib-src/` at the version the caller pins.
+name: Rust crate release
+
+on:
+  workflow_call:
+    inputs:
+      crate:
+        description: "The crate's name on crates.io, e.g. pigeon-cli."
+        type: string
+        required: true
+      bin:
+        description: "The binary's name, e.g. pigeon."
+        type: string
+        required: true
+      codesign_id:
+        description: "Identifier for the macOS ad-hoc codesign, e.g. dev.pigeon.cli."
+        type: string
+        required: true
+      targets:
+        description: |
+          JSON array of build targets, each
+          {"runner": "...", "triple": "...", "smoke_test": true|false}.
+        type: string
+        required: true
+      package_files:
+        description: "Extra files from the repo root to add to each binary tarball."
+        type: string
+        required: false
+        default: "LICENSE.md"
+      fetch_script:
+        description: "Script (relative to the caller's repo root) that materializes library at the version the caller pins."
+        type: string
+        required: false
+        default: "fetch-lib.sh"
+      scripts_dir:
+        description: "Path (relative to the caller's repo root) to the library's .github/scripts, as left by fetch_script."
+        type: string
+        required: false
+        default: ".lib-src/.github/scripts"
+    secrets:
+      CARGO_REGISTRY_TOKEN:
+        required: true
+    outputs:
+      version:
+        description: "The version this run released."
+        value: ${{ jobs.release.outputs.version }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jdx/mise-action@v2
+
+      - name: Install rustfmt/clippy components
+        run: rustup component add rustfmt clippy
+
+      - name: Configure release commit identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - run: mise run fmt-check
+      - run: mise run lint
+
+      - name: Fetch library
+        env:
+          FETCH_SCRIPT: ${{ inputs.fetch_script }}
+        run: '"./$FETCH_SCRIPT"'
+
+      - name: Cut release and publish
+        id: release
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          SCRIPTS_DIR: ${{ inputs.scripts_dir }}
+          CRATE: ${{ inputs.crate }}
+        run: |
+          output="$("./$SCRIPTS_DIR/crate-release.sh" --crate "$CRATE")"
+          echo "$output"
+          new_version="$(echo "$output" | tail -1 | sed 's/^NEW_VERSION=//')"
+          echo "version=${new_version}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --notes "See CHANGELOG.md for details."
+
+  build-binaries:
+    needs: release
+    strategy:
+      matrix:
+        include: ${{ fromJSON(inputs.targets) }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.release.outputs.version }}
+
+      - uses: jdx/mise-action@v2
+
+      - name: Fetch library
+        env:
+          FETCH_SCRIPT: ${{ inputs.fetch_script }}
+        run: '"./$FETCH_SCRIPT"'
+
+      - name: Build
+        env:
+          SCRIPTS_DIR: ${{ inputs.scripts_dir }}
+          BIN: ${{ inputs.bin }}
+          CODESIGN_ID: ${{ inputs.codesign_id }}
+          TRIPLE: ${{ matrix.triple }}
+        run: |
+          "./$SCRIPTS_DIR/crate-build-release.sh" \
+            --bin "$BIN" --codesign-id "$CODESIGN_ID" --target "$TRIPLE"
+
+      - name: Smoke test
+        if: matrix.smoke_test
+        run: target/${{ matrix.triple }}/release/${{ inputs.bin }} --version
+
+      - name: Package binary
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+          TRIPLE: ${{ matrix.triple }}
+          BIN: ${{ inputs.bin }}
+          PACKAGE_FILES: ${{ inputs.package_files }}
+        run: |
+          # shellcheck disable=SC2086 # PACKAGE_FILES is a space-separated list.
+          tar czf "${BIN}-v${VERSION}-${TRIPLE}.tar.gz" \
+            -C "target/${TRIPLE}/release" "$BIN" \
+            -C "$GITHUB_WORKSPACE" $PACKAGE_FILES
+
+      - name: Upload release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.release.outputs.version }}
+          TRIPLE: ${{ matrix.triple }}
+          BIN: ${{ inputs.bin }}
+        run: gh release upload "v${VERSION}" "${BIN}-v${VERSION}-${TRIPLE}.tar.gz"
