@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-19
 
+- [scaleway/compute-instance-config] Write secrets into keyring.toml and stop rendering rclone.conf in compute-instance-config ([#78](https://github.com/noisypigeon/library/pull/78))
 - [adr] docs(adr): LIB-0018 pigeon instances use pigeon-cli's keyring and rclone config ([#77](https://github.com/noisypigeon/library/pull/77))
 
 ## 2026-10-18
