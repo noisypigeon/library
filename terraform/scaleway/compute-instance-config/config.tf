@@ -59,11 +59,6 @@ locals {
         permissions: '0600'
         defer: true
         content: |
-          %{~for entry in var.keyring~}
-          %{~if entry.secret_key != null~}
-          export PIGEON_SECRET_${upper(replace(entry.alias, "-", "_"))}="${entry.secret_key}"
-          %{~endif~}
-          %{~endfor~}
           %{~if var.cockpit != null~}
           export PIGEON_LOG_DIR="/var/log/pigeon"
           %{~endif~}
@@ -72,60 +67,37 @@ locals {
         defer: true
         append: true
         content: |
-          %{~for entry in var.keyring~}
-          %{~if entry.secret_key != null~}
-          PIGEON_SECRET_${upper(replace(entry.alias, "-", "_"))}="${entry.secret_key}"
-          %{~endif~}
-          %{~endfor~}
           %{~if var.cockpit != null~}
           PIGEON_LOG_DIR="/var/log/pigeon"
           %{~endif~}
-      - path: /root/.config/rclone/rclone.conf
-        permissions: '0600'
-        defer: true
-        content: |
-          %{~for entry in var.keyring~}
-          %{~if entry.kind == "bucket"~}
-          [${entry.alias}]
-          type = alias
-          remote = ${entry.bucket}:${entry.bucket}
-          [${entry.bucket}]
-          type = s3
-          provider = ${entry.provider}
-          access_key_id = ${entry.access_key_id}
-          secret_access_key = ${entry.secret_key}
-          endpoint = ${entry.endpoint}
-          acl = private
-          no_check_bucket = true
-          %{~endif~}
-          %{~endfor~}
+      # LIB-0018: pigeon-cli's own schema, secrets included (pigeon-cli
+      # ADR-0135). No rclone.conf is rendered: pigeon generates its own beside
+      # this file on every rclone-backed job. jsonencode() because a JSON
+      # string literal is also a valid TOML basic string, so a quote or
+      # backslash in a secret can't break the file.
       - path: /root/.config/pigeon/keyring.toml
         permissions: '0600'
         defer: true
         content: |
           %{~for entry in var.keyring~}
           [[entries]]
-          kind = "${entry.kind}"
-          alias = "${entry.alias}"
+          kind = ${jsonencode(entry.kind)}
+          alias = ${jsonencode(entry.alias)}
           %{~if entry.kind == "email"~}
-          email = "${entry.email}"
-          provider = "${entry.provider}"
-          host = "${entry.host}"
+          email = ${jsonencode(entry.email)}
+          provider = ${jsonencode(entry.provider)}
+          host = ${jsonencode(entry.host)}
           port = ${entry.port}
+          secret = ${jsonencode(entry.secret)}
           %{~if entry.max_imap_connections != null~}
           max_imap_connections = ${entry.max_imap_connections}
           %{~endif~}
           %{~endif~}
           %{~if entry.kind == "bucket"~}
-          endpoint = "${entry.endpoint}"
-          bucket = "${entry.bucket}"
-          access_key_id = "${entry.access_key_id}"
-          %{~if entry.encryption_key_alias != null~}
-          encryption_key_alias = "${entry.encryption_key_alias}"
-          %{~endif~}
-          %{~endif~}
-          %{~if entry.kind == "encryption-key"~}
-          created_at = "${entry.created_at}"
+          endpoint = ${jsonencode(entry.endpoint)}
+          bucket = ${jsonencode(entry.bucket)}
+          access_key_id = ${jsonencode(entry.access_key_id)}
+          secret_key = ${jsonencode(entry.secret_key)}
           %{~endif~}
 
           %{~endfor~}
