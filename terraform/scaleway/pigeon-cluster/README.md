@@ -6,7 +6,7 @@ Scales a fleet of `pigeon-cli` job instances to the number of pending jobs (ADR-
 
 ```hcl
 module "pigeon_jobs" {
-  source = "https://noisypigeon.garden/terraform/scaleway/pigeon-cluster/v1.0.0"
+  source = "https://noisypigeon.garden/terraform/scaleway/pigeon-cluster/v4.0.0"
 
   cluster_config = {
     name_prefix = "pigeon-cli"
