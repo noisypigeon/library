@@ -4,34 +4,32 @@
 # release here instead of in the module that owns the live server.
 
 variable "keyring" {
+  # LIB-0018: mirrors pigeon-cli's keyring.toml schema field for field.
   type = list(object({
-    kind  = string
+    kind  = string # "email" | "bucket"
     alias = string
 
-    # kind = "email"
+    # kind = "email" -- pigeon-cli's Identity
     email                = optional(string)
-    provider             = optional(string)
+    provider             = optional(string) # gmail | fastmail | icloud | proton | custom
     host                 = optional(string)
     port                 = optional(number)
+    secret               = optional(string)
     max_imap_connections = optional(number)
 
-    # kind = "bucket" -- also generates an rclone.conf remote
-    endpoint             = optional(string)
-    bucket               = optional(string)
-    access_key_id        = optional(string)
-    secret_key           = optional(string)
-    encryption_key_alias = optional(string)
-
-    # kind = "encryption-key"
-    created_at = optional(string)
+    # kind = "bucket" -- pigeon-cli's BucketConfig
+    endpoint      = optional(string)
+    bucket        = optional(string)
+    access_key_id = optional(string)
+    secret_key    = optional(string)
   }))
-  description = "pigeon-cli keyring.toml entries. kind = \"bucket\" entries also generate an rclone.conf remote; any entry with secret_key set also exports PIGEON_SECRET_<ALIAS> on the instance. secret_key is never written into keyring.toml itself."
+  description = "pigeon-cli keyring.toml entries, written to /root/.config/pigeon/keyring.toml (0600) with each secret in it: secret on an email identity, secret_key on a bucket (LIB-0018). Email entries require email, provider, host, port and secret; bucket entries require endpoint, bucket, access_key_id and secret_key. No rclone.conf is rendered and no PIGEON_SECRET_<ALIAS> is exported: pigeon-cli generates its own rclone.conf beside the keyring from the bucket entries."
   default     = []
   sensitive   = true
 
   validation {
-    condition     = alltrue([for e in var.keyring : contains(["email", "bucket", "encryption-key"], e.kind)])
-    error_message = "keyring.kind must be one of \"email\", \"bucket\", \"encryption-key\"."
+    condition     = alltrue([for e in var.keyring : contains(["email", "bucket"], e.kind)])
+    error_message = "keyring.kind must be one of \"email\", \"bucket\"."
   }
 
   validation {
@@ -42,6 +40,25 @@ variable "keyring" {
   validation {
     condition     = length(var.keyring) == length(distinct([for e in var.keyring : e.alias]))
     error_message = "keyring aliases must be unique."
+  }
+
+  validation {
+    condition = alltrue([for e in var.keyring : e.kind != "email" || (
+      e.email != null && e.provider != null && e.host != null && e.port != null && e.secret != null
+    )])
+    error_message = "keyring email entries require email, provider, host, port and secret."
+  }
+
+  validation {
+    condition     = alltrue([for e in var.keyring : e.kind != "email" || contains(["gmail", "fastmail", "icloud", "proton", "custom"], coalesce(e.provider, "custom"))])
+    error_message = "keyring email provider must be one of \"gmail\", \"fastmail\", \"icloud\", \"proton\", \"custom\"."
+  }
+
+  validation {
+    condition = alltrue([for e in var.keyring : e.kind != "bucket" || (
+      e.endpoint != null && e.bucket != null && e.access_key_id != null && e.secret_key != null
+    )])
+    error_message = "keyring bucket entries require endpoint, bucket, access_key_id and secret_key."
   }
 }
 
