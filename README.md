@@ -78,4 +78,4 @@ depend on this repo for their design standards
 ([LIB-0017](docs/adr/LIB-0017-spokes-do-not-get-their-own-adrs.md)). The older
 `DEV-` records are archived verbatim in [`docs/adr/archive/`](docs/adr/archive),
 and the `COM-` and `RUN-` records (`NPC-` is an alias for `COM-`) are amendments
-on the `LIB-` records they applied. `pigeon-cli` keeps its own `docs/adr/`.
+on the `LIB-` records they applied. `pigeon-cli` keeps its own ADRs, as `CLI-` records in its `adr/`.

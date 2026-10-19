@@ -3,7 +3,8 @@
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-17.
 - **Status**: Accepted. Amends LIB-0001 (invariant 5, §2, and its 2026-10-15
-  amendment's item 1), and DEV-0031's filing target (§6).
+  amendment's item 1), and DEV-0031's filing target (§6). Amended
+  2026-10-19 (see `## Amendments`): §5's boundary is lifted for CLI-0161.
 
 ## Context
 
@@ -173,3 +174,30 @@ what was deferred.
 4. **The spokes have no `adr/`.**
    `gh api repos/noisypigeon/<spoke>/contents/adr` returns 404 for garden, blog
    and runway, and each spoke's `CLAUDE.md` names this record.
+
+## Amendments
+
+### 2026-10-19: pigeon-cli moves and re-prefixes its corpus (CLI-0161)
+
+[CLI-0161](https://github.com/noisypigeon/pigeon-cli/blob/5aecb66458f766946fe1f976d249b2c91e9b522a/docs/adr/0161-align-with-hub-and-spoke.md) lifts the second `## Out of scope` boundary ("moving or
+re-prefixing pigeon-cli's ADRs") and narrows §5.
+
+- **pigeon-cli still keeps its own ADRs.** §5's reasoning holds: they are
+  decisions about its own code, not applications of this repo's standards.
+  §1's rule still does not apply to it.
+- **They move to a flat `adr/`, with the prefix `CLI-`**, as
+  `adr/CLI-NNNN-<slug>.md`, numbered on from the existing sequence. This is
+  the layout every other spoke used before this record.
+- **pigeon-cli rewrites its own citations, against §3.** Every `ADR-NNNN` in
+  that repo becomes `CLI-NNNN`, and its two citations of the old monorepo's
+  ADR-0037 and ADR-0052 become `DEV-0037` and `DEV-0052`. The corpus is still
+  live and its source code cites it over a thousand times, so CLI-0161 chose a
+  one-time rewrite over a permanent reading rule. §3 is unchanged for every
+  other corpus. Citations of pigeon-cli's records **in this repo** are not
+  rewritten: a bare pigeon-cli `ADR-NNNN` here is read as `CLI-NNNN`.
+- **§5's "it consumes nothing from the hub" is no longer true.** It consumes
+  the hub's release workflow, scripts, observability stack and skills plugin
+  (LIB-0001's 2026-10-19 amendment).
+- **§6 does not apply to it.** pigeon-cli files its out-of-scope issues in
+  `noisypigeon/pigeon-cli`, because they are about its code.
+
