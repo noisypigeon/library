@@ -1,0 +1,12 @@
+{
+  "name": "library",
+  "owner": { "name": "noisypigeon", "url": "https://github.com/noisypigeon" },
+  "description": "Claude Code plugins for the noisypigeon repos, versioned per plugin as claude-plugins/<plugin>/vX.Y.Z.",
+  "plugins": [
+    {
+      "name": "pigeon-cli",
+      "source": "./claude-plugins/pigeon-cli",
+      "description": "Skills for working on pigeon-cli: analyze-job-run diagnoses a pigeon job run from its JSONL log and metrics."
+    }
+  ]
+}

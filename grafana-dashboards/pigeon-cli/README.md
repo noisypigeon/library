@@ -21,8 +21,11 @@ From Terraform, pass that URL to
 [`scaleway/grafana-dashboard`](../../terraform/scaleway/grafana-dashboard)'s
 `dashboards = { overview = { url = "…" } }`.
 
-`pigeon-cli`'s own local observability stack currently ships a separate copy of
-this JSON. Pointing it at a pinned version here instead is a later step.
+[`observability/pigeon-cli`](../../observability/pigeon-cli) mounts this
+directory from the same checkout, so pigeon-cli's local stack renders this JSON
+rather than a copy of its own (pigeon-cli's CLI-0161). The `instance`
+variable's "All" is `.*`, so the pigeon panels still populate on a stack with no
+node-exporter.
 
 ## Editing
 
