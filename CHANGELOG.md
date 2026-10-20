@@ -44,6 +44,10 @@ ADR-0154 and ADR-0084 each made before it.
 
 <!-- entries below; newest first -->
 
+## 2026-10-20
+
+- [workflows] Add a reusable container image release workflow ([#83](https://github.com/noisypigeon/library/pull/83))
+
 ## 2026-10-19
 
 - [workflows] Add pigeon-cli's observability stack and Claude Code plugin ([#82](https://github.com/noisypigeon/library/pull/82))

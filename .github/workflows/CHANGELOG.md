@@ -4,6 +4,26 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.4.0] - 2026-10-20
+
+### Add a reusable container image release workflow
+
+Adds `container-image-release.yml`, a reusable workflow that publishes a spoke's container image to GHCR for each release ([LIB-0019](docs/adr/LIB-0019-container-image-release.md)). The first caller is pigeon-cli, through its CLI-0163.
+
+- **The spoke owns what the image is.** It keeps its Dockerfile and passes the build context, the image name (by default `ghcr.io/<owner>/<repo>`), build arguments and a platform matrix as inputs.
+- **The spoke also writes a smoke test.** It is a shell snippet run inside each platform's image, with the entrypoint overridden, **before anything is pushed**. If it fails, nothing reaches the registry.
+- **Native per-platform builds.** By default arm64 builds on `ubuntu-24.04-arm` and amd64 on `ubuntu-24.04`, with no QEMU. Each platform is pushed by digest, with its own GitHub Actions layer cache.
+- **One multi-arch tag set.** A final job joins the per-platform digests into one index tagged `X.Y.Z`, `X.Y` and `latest`. `latest` can be turned off with an input. If either platform fails, nothing is published.
+- **OCI labels and provenance.** The labels record source, revision, version and licence, and the `source` label links the package to its repository. The index gets a build-provenance attestation, which `gh attestation verify` can check.
+- **Caller permissions.** The calling job must grant `contents: read`, `packages: write`, `id-token: write` and `attestations: write`. Images are pushed with the caller's `github.token`, so no new secret is needed.
+
+This is purely additive: no existing caller changes.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#83](https://github.com/noisypigeon/library/pull/83)
+
 ## [3.3.0] - 2026-10-19
 
 ### Add pigeon-cli's observability stack and Claude Code plugin
