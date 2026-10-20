@@ -6,6 +6,9 @@
 - **Amended 2026-10-16**: LIB-0008 makes one exception to §1's "exactly three segments":
   a leaf calling a zone-scoped Cloudflare module lives at
   `terraform/cloudflare/<zone>/<module>/<instance>/`. §4's future enforcement must accept it.
+- **Amended 2026-10-20**: LIB-0023, if accepted, adds workload leaves outside `terraform/`, at
+  `workloads/<workload>/<provider>/<module>/<instance>/`. This record's layout and §4's future
+  enforcement don't apply to them.
 
 ## Context
 

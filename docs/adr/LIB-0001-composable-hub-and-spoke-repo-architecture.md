@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-13.
-- **Status**: Accepted; amended 2026-10-15, 2026-10-17 and 2026-10-19 (see `## Amendments`). Invariant 5 is reversed for garden, blog and runway by LIB-0017.
+- **Status**: Accepted; amended 2026-10-15, 2026-10-17, 2026-10-19 and 2026-10-20 (see `## Amendments`). Invariant 5 is reversed for garden, blog and runway by LIB-0017.
 
 ## Context
 
@@ -753,3 +753,23 @@ CLI-0161 §6:
 - **It keeps its own ADRs, changelog convention and `Dockerfile`** (LIB-0017's
   2026-10-19 amendment).
 
+### 2026-10-20: LIB-0023 relaxes invariants 2 and 4 for workload leaves
+
+LIB-0023, if accepted, adds workload leaves, generated from a spoke's
+`workloads/<workload>/values.yaml`. It makes two bounded exceptions for them.
+
+**Invariant 2.** A workload leaf may leave a module's `version` unpinned, or
+pin only its major or minor. The template then resolves the newest matching
+`terraform/<provider>/<module>/v*` tag at every plan.
+
+- It is still a tag, never a branch.
+- Every other pin stays exact: `/.lib-version`, `root_hcl_version`, and every
+  hand-written leaf.
+- It rests on LIB-0022: apply runs only the saved plan for the PR's head, so a
+  release that lands after the plan cannot reach state unreviewed.
+
+**Invariant 4.** Leaves may also live under `workloads/` at the repo root,
+beside `terraform/`. The arithmetic is unchanged: a workload leaf's key is
+`path_relative_to_include()`, in the spoke's one state bucket. Its key never
+moves unless its path does, and it can't collide with a `terraform/` key,
+because the first segment differs.
