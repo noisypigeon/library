@@ -5,6 +5,7 @@
 - **Status**: Accepted. Amends LIB-0001 (invariant 5, §2, and its 2026-10-15
   amendment's item 1), and DEV-0031's filing target (§6). Amended
   2026-10-19 (see `## Amendments`): §5's boundary is lifted for CLI-0161.
+  Amended 2026-10-20 by LIB-0021: §1 no longer asks for a list of records.
 
 ## Context
 
@@ -201,3 +202,12 @@ re-prefixing pigeon-cli's ADRs") and narrows §5.
 - **§6 does not apply to it.** pigeon-cli files its out-of-scope issues in
   `noisypigeon/pigeon-cli`, because they are about its code.
 
+
+### 2026-10-20: a spoke's `CLAUDE.md` names no records (LIB-0021)
+
+[LIB-0021](LIB-0021-spoke-prose-is-minimal.md) narrows §1's last
+sentence. A spoke's `CLAUDE.md` still says its decisions live here, in one
+line. It no longer names the records that are load-bearing for it, because
+that list is a copy of this repo, and copies drift. LIB-0021 §6 also does the
+deferred `^adr/=adr` cleanup, closing
+[#75](https://github.com/noisypigeon/library/issues/75).
