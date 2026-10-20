@@ -46,6 +46,8 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-20
 
+- [scaleway/compute-cluster] Rename scaleway/pigeon-cluster to compute-cluster and scaleway/object-bucket to bucket ([#85](https://github.com/noisypigeon/library/pull/85))
+- [scaleway/bucket] Rename scaleway/pigeon-cluster to compute-cluster and scaleway/object-bucket to bucket ([#85](https://github.com/noisypigeon/library/pull/85))
 - [workflows] Continue a renamed module's version track from its predecessor's last tag ([#84](https://github.com/noisypigeon/library/pull/84))
 - [workflows] Add a reusable container image release workflow ([#83](https://github.com/noisypigeon/library/pull/83))
 
