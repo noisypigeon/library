@@ -36,7 +36,7 @@ Pin the short URL, not this repo:
 
 ```hcl
 module "state_bucket" {
-  source = "https://noisypigeon.garden/terraform/scaleway/object-bucket/v4.2.0"
+  source = "https://noisypigeon.garden/terraform/scaleway/bucket/v5.0.0"
   ...
 }
 ```
