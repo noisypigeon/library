@@ -46,6 +46,9 @@
 # -- and the state backend's, when state_backend is that provider -- from it
 # instead. Which keys it stands in for is the schema's `replaces` and
 # `replaces_state`.
+#
+# Since v4.2.0 (LIB-0022) both state backends lock: Terraform's S3-native
+# lockfile, a conditional write of <state key>.tflock beside the state.
 
 locals {
   # The spoke's instance values. Missing spoke.hcl is a hard error, which is
@@ -394,6 +397,7 @@ EOF
     skip_metadata_api_check     = true
     skip_region_validation      = true
     skip_requesting_account_id  = true
+    use_lockfile                = true
 
     access_key = local.terraform_state_access_key_id
     secret_key = local.terraform_state_access_key
@@ -416,6 +420,7 @@ EOF
     skip_s3_checksum            = true
     skip_bucket_versioning      = true
     disable_bucket_update       = true
+    use_lockfile                = true
 
     access_key = local.terraform_state_access_key_id
     secret_key = local.terraform_state_access_key
