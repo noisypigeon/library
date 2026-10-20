@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-20
 
+- [adr] docs(adr): LIB-0021 spoke prose is minimal ([#86](https://github.com/noisypigeon/library/pull/86))
 - [scaleway/compute-cluster] Rename scaleway/pigeon-cluster to compute-cluster and scaleway/object-bucket to bucket ([#85](https://github.com/noisypigeon/library/pull/85))
 - [scaleway/bucket] Rename scaleway/pigeon-cluster to compute-cluster and scaleway/object-bucket to bucket ([#85](https://github.com/noisypigeon/library/pull/85))
 - [workflows] Continue a renamed module's version track from its predecessor's last tag ([#84](https://github.com/noisypigeon/library/pull/84))
