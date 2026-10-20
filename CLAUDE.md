@@ -68,6 +68,11 @@ nothing that is deployed:
   publishes to crates.io (LIB-0001's 2026-10-19 amendment). Every
   crate-specific value (`--crate`, `--bin`, `--codesign-id`, the target
   matrix) is an input.
+- `.github/workflows/container-image-release.yml` — builds a caller's
+  Dockerfile natively per platform, runs the caller's smoke test inside each
+  image before anything is pushed, then publishes one multi-arch,
+  provenance-attested tag set (`X.Y.Z`, `X.Y`, `latest`) to GHCR (LIB-0019).
+  The Dockerfile, image name and smoke test stay in the spoke.
 - `.github/scripts/generate-module-redirects.sh` — generates the `noisypigeon.garden` site's module
   redirect pages, overview pages, theme-version pages and release posts from
   this repo's tags, READMEs and CHANGELOGs. Runs in a *consuming* site's build,

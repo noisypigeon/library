@@ -1,0 +1,251 @@
+# Reusable: builds the caller's Dockerfile for each platform on a native
+# runner, smoke-tests each image before anything is pushed, then publishes one
+# multi-arch tag set to GHCR with a build-provenance attestation (LIB-0019).
+#
+# Hoisted for pigeon-cli by its CLI-0163, but nothing here is Rust-specific:
+# the spoke owns its Dockerfile, its image name and its smoke test, and this
+# workflow owns only the mechanics of building, checking and publishing.
+#
+# Runs in the caller's context, so the image lands in the caller's GHCR
+# namespace and is pushed with the caller's github.token. The caller keeps the
+# trigger and sequencing (typically `needs:` its own release job, so `version`
+# names a tag that already exists) and grants, on the calling job:
+#
+#   permissions:
+#     contents: read
+#     packages: write
+#     id-token: write
+#     attestations: write
+#
+# Platforms build natively rather than under QEMU: an emulated Rust release
+# build is slow enough to dominate the run.
+name: Container image release
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "The version to publish, bare (X.Y.Z). Tagged X.Y.Z and X.Y."
+        type: string
+        required: true
+      ref:
+        description: "Git ref to build. Defaults to the tag v<version>."
+        type: string
+        required: false
+        default: ""
+      image:
+        description: "Image name without a tag. Defaults to ghcr.io/<owner>/<repo>, lowercased."
+        type: string
+        required: false
+        default: ""
+      context:
+        description: "Build context, relative to the caller's repo root."
+        type: string
+        required: false
+        default: "."
+      dockerfile:
+        description: "Dockerfile path, relative to the caller's repo root."
+        type: string
+        required: false
+        default: "Dockerfile"
+      platforms:
+        description: |
+          JSON array of {"runner": "...", "platform": "linux/<arch>"}, one
+          native build per entry.
+        type: string
+        required: false
+        default: |
+          [
+            { "runner": "ubuntu-24.04-arm", "platform": "linux/arm64" },
+            { "runner": "ubuntu-24.04", "platform": "linux/amd64" }
+          ]
+      build_args:
+        description: "Newline-separated KEY=VALUE build arguments."
+        type: string
+        required: false
+        default: ""
+      smoke_test:
+        description: |
+          Shell run inside each platform's image (`sh -ec`, entrypoint
+          overridden) before it is pushed. A non-zero exit fails the release
+          and nothing reaches the registry. Empty skips the check.
+        type: string
+        required: false
+        default: ""
+      latest:
+        description: "Also move the `latest` tag to this version."
+        type: boolean
+        required: false
+        default: true
+    outputs:
+      image:
+        description: "The image name published to."
+        value: ${{ jobs.merge.outputs.image }}
+      digest:
+        description: "The multi-arch index digest."
+        value: ${{ jobs.merge.outputs.digest }}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: true
+      matrix:
+        include: ${{ fromJSON(inputs.platforms) }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Resolve image and ref
+        id: names
+        env:
+          IMAGE: ${{ inputs.image }}
+          REF: ${{ inputs.ref }}
+          VERSION: ${{ inputs.version }}
+          REPO: ${{ github.repository }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          image="${IMAGE:-ghcr.io/${REPO}}"
+          {
+            echo "image=${image,,}"
+            echo "ref=${REF:-v${VERSION}}"
+            echo "pair=${PLATFORM//\//-}"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.names.outputs.ref }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Image labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.names.outputs.image }}
+          labels: |
+            org.opencontainers.image.version=${{ inputs.version }}
+
+      # Built once into the local daemon so the smoke test runs against the
+      # exact image the next step pushes; the push reuses this build's cache.
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.dockerfile }}
+          platforms: ${{ matrix.platform }}
+          build-args: ${{ inputs.build_args }}
+          labels: ${{ steps.meta.outputs.labels }}
+          load: true
+          tags: smoke:${{ steps.names.outputs.pair }}
+          cache-from: type=gha,scope=${{ steps.names.outputs.pair }}
+          cache-to: type=gha,mode=max,scope=${{ steps.names.outputs.pair }}
+
+      - name: Smoke test
+        if: inputs.smoke_test != ''
+        env:
+          SMOKE_TEST: ${{ inputs.smoke_test }}
+          TAG: smoke:${{ steps.names.outputs.pair }}
+        run: docker run --rm --entrypoint sh "$TAG" -ec "$SMOKE_TEST"
+
+      - name: Push by digest
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.dockerfile }}
+          platforms: ${{ matrix.platform }}
+          build-args: ${{ inputs.build_args }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ steps.names.outputs.image }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ steps.names.outputs.pair }}
+
+      - name: Record digest
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ steps.names.outputs.pair }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      image: ${{ steps.names.outputs.image }}
+      digest: ${{ steps.index.outputs.digest }}
+    steps:
+      - name: Resolve image
+        id: names
+        env:
+          IMAGE: ${{ inputs.image }}
+          REPO: ${{ github.repository }}
+        run: |
+          image="${IMAGE:-ghcr.io/${REPO}}"
+          echo "image=${image,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.names.outputs.image }}
+          flavor: latest=false
+          tags: |
+            type=semver,pattern={{version}},value=v${{ inputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ inputs.version }}
+            type=raw,value=latest,enable=${{ inputs.latest }}
+
+      - name: Create multi-arch index
+        id: index
+        working-directory: ${{ runner.temp }}/digests
+        env:
+          IMAGE: ${{ steps.names.outputs.image }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          tags=()
+          while read -r tag; do tags+=(-t "$tag"); done \
+            < <(jq -r '.tags[]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          sources=()
+          for digest in *; do sources+=("${IMAGE}@sha256:${digest}"); done
+          docker buildx imagetools create "${tags[@]}" "${sources[@]}"
+          digest="$(docker buildx imagetools inspect "${IMAGE}:${VERSION}" \
+            --format '{{json .Manifest}}' | jq -r .digest)"
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          docker buildx imagetools inspect "${IMAGE}:${VERSION}"
+
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ steps.names.outputs.image }}
+          subject-digest: ${{ steps.index.outputs.digest }}
+          push-to-registry: true
