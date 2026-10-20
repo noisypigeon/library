@@ -4,6 +4,45 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.0.0] - 2026-10-20
+
+### feat(workflows): apply only the saved plan, and re-plan on comment (LIB-0022)
+
+`terragrunt-run.yml` now applies exactly the plan that was reviewed, and a PR can be re-planned without a push (LIB-0022 §1–3).
+
+**Plans are saved.** Plan runs every selected unit with `--out-dir`, and the new `.github/scripts/plan-archive.sh` packs the plans into one archive. It is encrypted with the spoke's own sops/age recipient (from `.sops.yaml`, through the `terraform/secrets/*.enc` creation rule), because a plan file holds sensitive values in plaintext. It is uploaded as the artifact `terragrunt-plan-<pr>-<head sha>`, kept for 7 days. The plan comment names the commit it planned.
+
+**Apply applies only that plan.** Apply looks up the artifact for the PR's current head and applies it with `-lock-timeout=0s`. It does nothing, and says so on the PR, when:
+- there is no plan for the head, because the head moved after planning, the plan failed, or the plan expired;
+- the units the PR selects now differ from the ones it planned;
+- Terraform refuses the plan as stale (`Saved plan is stale`) because another apply changed that state;
+- another apply holds the leaf's state lock (from `terragrunt/root-hcl` v4.2.0).
+
+Each failure has the same fix, a new plan, and the comment says how.
+
+**A `terragrunt plan` comment re-plans.** A comment-triggered plan reacts to the comment as apply does, replaces any earlier plan for the same head (deleting it first, so a failed re-plan leaves nothing to apply), and resets `terragrunt/apply` to `pending`.
+
+**Both commands use the PR's head,** never the merge ref. `checkout_ref` now defaults to the head, so a plan caller no longer needs to pass it.
+
+**State backup skips `.tflock` objects.** It can't delete what it copies, so a lock copied to B2 would stay there forever.
+
+### What a caller must change
+
+- Grant `actions: write` in both `terragrunt-plan.yml` and `terragrunt-apply.yml`. The reusable now asks for it, so a caller without it fails to start.
+- `prepare_cmd` must run `fetch-lib.sh`, which puts `plan-archive.sh` where the new `scripts_dir` input expects it (`.lib-src/.github/scripts`). Every current caller already does.
+- In `terragrunt-plan.yml`:
+  - add an `issue_comment: [created]` trigger;
+  - run `plan` on `pull_request` or on a comment that is exactly `terragrunt plan` from an OWNER, MEMBER or COLLABORATOR;
+  - run `detect` on `pull_request` only;
+  - set the concurrency group to `terragrunt-pr-${{ github.event.pull_request.number || github.event.issue.number }}`.
+- The first apply after upgrading needs a plan made by this version. Comment `terragrunt plan` on any PR that was planned before it.
+
+Tested locally against a Terragrunt 1.1.6 / Terraform 1.16.3 fixture, running the workflow's own step scripts: a saved plan round-trips through git-filter worktree units, explicit-filter units and deleted units, and a stale plan is refused with `stale=true`. Not yet exercised on GitHub Actions; LIB-0022's Verification does that in garden after it adopts.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#92](https://github.com/noisypigeon/library/pull/92)
+
 ## [3.5.0] - 2026-10-20
 
 ### Continue a renamed module's version track from its predecessor's last tag
