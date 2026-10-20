@@ -2,8 +2,9 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-20.
-- **Status**: Proposed. Amends LIB-0004 §1 with a second leaf layout, and makes
-  a bounded exception to LIB-0001 invariant 2 for that layout only.
+- **Status**: Proposed. Adds a second home for leaves, `workloads/`, beside
+  `terraform/`. Makes bounded exceptions to LIB-0001 invariants 2 and 4 for
+  those leaves only. LIB-0004's layout does not govern them.
 
 ## Context
 
@@ -43,20 +44,23 @@ leaf, and a state key that follows from the path.
 
 ## Decision
 
-### 1. A workload is `terraform/workloads/<workload>/values.yaml`
+### 1. A workload is `workloads/<workload>/values.yaml`, at the repo root
 
-- **The file sits under `terraform/`**, not at the repo root. That keeps
-  LIB-0001 invariant 4: leaves under `terraform/`, state keyed by their path.
-  It also keeps root.hcl's `is_valid_leaf`, which excludes any leaf whose
-  first segment is not `terraform`.
+- **The file sits at the spoke's repo root**, beside `terraform/`, not inside
+  it. A workload is a different kind of thing from a hand-written leaf, and the
+  path says so.
 - **Its leaves sit beside it**, at
-  `terraform/workloads/<workload>/<provider>/<module>/<instance>/`. This is a
-  second exception to LIB-0004 §1's "exactly three segments", after LIB-0008's
-  zone leaves. Below `workloads/<workload>/`, the path is LIB-0004's
-  `<provider>/<module>/<instance>`.
-- **The state key follows from the path, as always:**
-  `terraform/workloads/<workload>/scaleway/bucket/<key>/terraform.tfstate`.
-  The template needs no change for that.
+  `workloads/<workload>/<provider>/<module>/<instance>/`. Below
+  `workloads/<workload>/`, that is LIB-0004's `<provider>/<module>/<instance>`
+  shape, but LIB-0004's rules for `terraform/` do not govern it.
+- **State belongs to the template, not to the file.** `values.yaml` names no
+  backend, bucket or key. Each leaf's key is `path_relative_to_include()`, the
+  same arithmetic as LIB-0001 invariant 4, in the spoke's existing state bucket
+  (`spoke.hcl`'s `state_backend`):
+  `workloads/<workload>/scaleway/bucket/<key>/terraform.tfstate`.
+  - A workload key can never collide with a `terraform/` key, because the
+    first segment differs.
+  - A workload key never moves unless its path does.
 - **`<workload>` is kebab-case** and unique in the spoke. It usually equals
   the file's `prefix`, but nothing requires that.
 
@@ -158,8 +162,10 @@ file wins.
 - **A stub holds no values and no versions.** Only adding or removing an
   instance or a kind changes the stubs. Editing an input or a `version` changes
   only `values.yaml`.
-- **root.hcl takes a minor release** that recognizes a leaf under
-  `terraform/workloads/`. For such a leaf it:
+- **root.hcl accepts a second leaf root.** Today `is_valid_leaf` requires a
+  first path segment of `terraform`, and the `exclude` block skips anything
+  else. It now accepts `terraform` or `workloads`. A leaf whose first segment is
+  `workloads` is a workload leaf, and for it the template:
   1. reads the workload's `values.yaml`, found with `find_in_parent_folders`,
      through `yamldecode(file(...))`, and marks
      it read with `mark_as_read`. Terragrunt's filter then re-plans every leaf
@@ -170,8 +176,12 @@ file wins.
   4. resolves the version per §3 and sets `terraform.source`;
   5. passes the result as `inputs`.
 - **Providers, secrets and the backend are unchanged.** A workload leaf is a
-  leaf. spoke.hcl's `providers` map turns Scaleway on for it the same way
-  (LIB-0005).
+  leaf.
+  - spoke.hcl's `providers` map turns Scaleway on for it the same way
+    (LIB-0005). A `leaves` prefix such as `workloads/` works as written.
+  - Secrets stay in `terraform/secrets/` (LIB-0012). They are the spoke's, not
+    a workload's.
+  - The backend is the spoke's one state bucket, per §1.
 
 ### 6. A JSON Schema, generated from each module version
 
@@ -191,7 +201,7 @@ file wins.
 
 ### 7. A proof of concept on new, disposable resources
 
-- **runway adds one workload, `terraform/workloads/poc/values.yaml`.** It
+- **runway adds one workload, `workloads/poc/values.yaml`.** It
   declares:
   - a new `project`;
   - one bucket, `scratch`, with `storage_class: standard`, `expiration_days: 1`
@@ -201,9 +211,28 @@ file wins.
 
   Everything else stays at its default, and nothing is pinned.
 - **No existing leaf, state key or resource changes.** pigeon-cli's leaves stay
-  hand-written until Verification passes and a later record decides whether to
-  move them.
+  hand-written until Verification passes. Importing their state into workload
+  leaves comes after that (Out of scope).
 - **`poc` stays the only workload** until then.
+
+### 8. Release impact
+
+The spoke CI also assumes that every leaf is under `terraform/`.
+
+- **`terragrunt/root-hcl` takes a minor version:** §5's second leaf root and
+  the workload handling. A spoke with no `workloads/` plans `No changes.`
+- **`workflows/` takes a minor version**, for two path assumptions and the
+  scripts:
+  - **`terragrunt-detect.yml`**'s default `paths` regex gains `^workloads/`.
+    A spoke caller that overrides it adds the same. Without it, a PR that
+    touches only a workload never plans.
+  - **`state-backup.yml`**'s rclone filters, on the copy and on both sides of
+    its post-copy check, gain `+ workloads/**`. Without it, workload state is
+    never backed up to B2 (LIB-0007).
+  - `resolve-module-version.sh` and `resolve-workloads.sh` live in
+    `.github/scripts/`, so they ride this track too.
+- **runway adopts in its own PR**, template and workflows first, then
+  `workloads/poc/`.
 
 ## Consequences
 
@@ -219,9 +248,12 @@ file wins.
 - **The template gets more complex.** It parses YAML, applies defaults, and
   makes a network call per workload leaf per plan. A tag lookup that fails
   fails the plan. It never falls back to an older version.
-- **Two leaf layouts coexist.** `ls terraform/scaleway/bucket/` no longer lists
-  every bucket in a spoke. Finding every consumer of a module now means also
-  grepping each `values.yaml`.
+- **A spoke has two homes for Terraform**, `terraform/` and `workloads/`.
+  `ls terraform/scaleway/bucket/` no longer lists every bucket in a spoke.
+  Finding every consumer of a module now also means grepping each
+  `values.yaml`.
+- **Both homes share one state bucket and one backup.** A workload costs no new
+  bucket, key or secret.
 
 ## Out of scope
 
@@ -230,28 +262,30 @@ file wins.
 - **More Scaleway kinds**, `iam-policy` first. An API key without a policy
   grants nothing, so the POC proves only the mechanism. Deferred
   ([#97](https://github.com/noisypigeon/library/issues/97)).
-- **Moving existing leaves into a workload.** That is a state move per leaf,
-  under LIB-0004 §3. Deferred ([#98](https://github.com/noisypigeon/library/issues/98)).
+- **Importing state from hand-written leaves into workload leaves**, once the
+  POC passes Verification. It is a `state pull`/`push` per leaf, within the one
+  bucket, under LIB-0004 §3's gates, with no resource changes. Deferred ([#98](https://github.com/noisypigeon/library/issues/98)).
 - **References between workloads.** §4 wires within one file only.
   Deferred ([#99](https://github.com/noisypigeon/library/issues/99)).
 - **A scheduled re-plan to surface floating-version drift.** Deferred
   ([#100](https://github.com/noisypigeon/library/issues/100)).
-- **Building §§3–7.** This record decides the design. The template, scripts,
+- **Building §§3–8.** This record decides the design. The template, scripts,
   schema generation and runway's POC ship in later PRs that cite it
   ([#95](https://github.com/noisypigeon/library/issues/95)).
 
 ## Verification
 
-To be completed when §§3–7 ship.
+To be completed when §§3–8 ship.
 
 1. **The stubs match the file.** `resolve-workloads.sh --check` passes in
    runway, and fails after a bucket key is added to `values.yaml` without
    regenerating.
 2. **The POC touches only itself.** The first plan of
-   `terraform/workloads/poc/` creates four modules' resources, all under that
+   `workloads/poc/` creates four modules' resources, all under that
    path, and every other leaf plans `No changes.`
-3. **It converges.** After apply, a second plan of every `poc` leaf shows
-   `No changes.`
+3. **It converges, in the same bucket.** The apply writes keys under
+   `workloads/poc/` in runway's existing state bucket, and nothing else. A
+   second plan of every `poc` leaf shows `No changes.`
 4. **Latest is latest.** A `scaleway/bucket` release, with no runway commit,
    appears as a new source version on a `terragrunt plan` comment.
 5. **A pin holds.** Setting `version` to the previous `X.Y.Z` plans that
@@ -260,3 +294,5 @@ To be completed when §§3–7 ship.
    `resolve-workloads.sh --check` before any plan runs.
 7. **It tears down.** Removing `bucket.scratch` from `values.yaml` and
    regenerating plans the destroy of that leaf only.
+8. **It is backed up.** The next `state-backup.yml` run copies the
+   `workloads/poc/` keys to B2, and its post-copy check passes.
