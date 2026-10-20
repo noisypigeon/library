@@ -3,6 +3,12 @@
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-20.
 - **Status**: Accepted.
+- **Amended 2026-10-20**: step 4's state moves overlapped an apply on `main`
+  from an unrelated runway PR. That apply recreated four buckets at the old
+  paths, as duplicates (Verification 4). LIB-0004's freeze on Terraform PRs
+  didn't stop it, because a PR that changes `spoke.hcl` applies every leaf.
+  A state move's freeze must also hold every `terragrunt apply` comment, on
+  any PR, until the move's PR merges.
 
 ## Context
 
@@ -157,3 +163,69 @@ ones.
 - **Renaming any other module.**
 - **Re-pinning leaves that don't call either module.** Step 3 changes only
   the leaves being moved.
+
+## Verification
+
+All on 2026-10-20.
+
+1. **Pipeline (library#84).** Released `workflows/v3.5.0`. Before merging,
+   the new fallback was dry-run against this repo's real tags, in five
+   cases:
+
+   | Case | Result |
+   | --- | --- |
+   | `continues-from` `object-bucket/v4.2.0` | 4.2.0 |
+   | `continues-from` `pigeon-cluster/v4.0.0` | 4.0.0 |
+   | no tags, no marker | none, so 0.1.0 |
+   | an already-tagged module | its own tags |
+   | a marker naming a missing tag | fails |
+
+2. **The rename (library#85).** `release:major` cut
+   `terraform/scaleway/compute-cluster/v5.0.0` and
+   `terraform/scaleway/bucket/v5.0.0`. No `v0.1.0` was cut. Each module's
+   `## [5.0.0]` entry landed above its `continues-from` line. After the garden
+   deploy, all four short URLs returned 200 and named the right `git::`
+   subpath: `bucket/v5.0.0`, `compute-cluster/v5.0.0`, `object-bucket/v4.2.0`
+   and `pigeon-cluster/v4.0.0`. The garden's overview pages and release posts
+   weren't checked.
+3. **Rewire (runway#26).** All 6 units planned and applied with no resource
+   add, change or destroy. `pigeon-transform`, the one leaf moving up from
+   4.0.0, showed one move,
+   `module.bucket.random_string.suffix` → `…suffix[0]`. It comes from the
+   `moved` block 4.1.0 added for `exact_name`. 4.1.1's `project_id` fix
+   produced no diff. Auto-merge failed with "Resource not accessible by
+   integration", as in LIB-0015 Verification 5, so the PR was merged by hand.
+4. **Rename (runway#28).** The §5 runbook moved five bucket leaves, one at a
+   time, with `terraform-state` last. Each leaf passed every gate:
+   - the old key held 2 resources, and the new key was empty;
+   - after the push, the new key held 2;
+   - the new path planned `No changes.`;
+   - after `state rm`, the old key was empty.
+
+   `compute-cluster/pigeon-cli`'s old key held no resources, so nothing
+   moved.
+
+   **The first plan failed the gate.** Four old paths planned `2 to destroy`.
+   A `terragrunt apply` comment on runway#27 had started an apply on `main`
+   at 16:48:59 UTC. The moves ran from 16:48:05 to 16:49:46. runway#27 changed
+   `spoke.hcl`, and its apply ran all 20 units, presumably because every leaf
+   reads that file. Four bucket leaves had already had their old keys
+   emptied, so that apply planned `2 to add` on each. It created four new
+   buckets with fresh random suffixes, tracked at the old keys.
+   `terraform-state` was still full at that moment and applied 0/0/0.
+
+   Resource IDs were compared by hash, never by name. The originals were intact
+   at their new keys, with the same IDs as the pre-move backups. The planned
+   destroys named only the duplicates. The owner removed the duplicates from
+   the four old keys with `state rm`, and left the buckets themselves for
+   deletion outside Terraform.
+
+   The re-run plan was clean:
+   - all 12 units succeeded;
+   - none planned a resource add, change or destroy;
+   - `terraform-state`'s removed path showed only the removal of its `name`
+     output (LIB-0004 Verification 5).
+
+   The apply was 0/0/0 on all 12 units. #28 was merged by hand.
+5. **pigeon-cli (pigeon-cli#140).** `CLAUDE.md` names `scaleway/bucket` and
+   `scaleway/compute-cluster` among runway's leaves.
