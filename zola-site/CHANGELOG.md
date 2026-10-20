@@ -4,6 +4,29 @@ All notable changes to this theme are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.0] - 2026-10-20
+
+### Add an optional site banner
+
+A site can now show a one-line notice above its header on every page, set from its own `config.toml`:
+
+```toml
+[extra.banner]
+enabled = true
+message = "This site is mainly a reference."
+link = "https://example.com"   # optional
+link_text = "example.com"      # optional, defaults to link
+```
+
+The banner is a labelled `<aside aria-label="Site notice">` with a real link. It is styled from the theme's colour variables, so it follows light and dark mode. The message is plain text.
+
+It is opt-in. A site without `[extra.banner]`, or with `enabled = false`, renders exactly the same HTML as before. Only `main.css` gains the banner's rules.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#94](https://github.com/noisypigeon/library/pull/94)
+
 ## [1.2.1] - 2026-10-17
 
 ### Name the hub noisypigeon/library
