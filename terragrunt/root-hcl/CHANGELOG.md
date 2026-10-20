@@ -4,6 +4,23 @@ All notable changes to this template are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.2.0] - 2026-10-20
+
+### feat(root-hcl): lock Terraform state on both backends (LIB-0022)
+
+Every leaf's state is now locked while Terraform writes it, on both state backends (LIB-0022 §4). The template sets `use_lockfile = true` in the Scaleway and the R2 backend config. Terraform then takes the lock with a conditional write of `<state key>.tflock` next to the state, and removes it when the run finishes. A second plan or apply of the same leaf fails with `Error acquiring the state lock` instead of writing the state at the same moment.
+
+Nothing a spoke sets changes, and state keys stay the same, so every leaf should plan `No changes.` after the bump. Rendered against garden (R2) and runway (Scaleway), each leaf checked gains only `use_lockfile` in its `remote_state` config.
+
+**If a run dies holding a lock,** that leaf stays locked until it is released by hand. The new runbook, `docs/runbooks/release-a-stuck-state-lock.md`, covers checking that nothing still holds the lock and then running `terragrunt force-unlock`.
+
+**Scaleway spokes should wait.** The lock is only as good as the backend's conditional writes. R2 evaluates them atomically. On Scaleway that is still to be proved (LIB-0022 Verification 1), so runway takes this version only after that.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#91](https://github.com/noisypigeon/library/pull/91)
+
 ## [4.1.1] - 2026-10-17
 
 ### Name the hub noisypigeon/library
