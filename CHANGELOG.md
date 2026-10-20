@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-20
 
+- [adr] docs(adr): LIB-0022 re-plan on comment and locked, saved-plan applies ([#90](https://github.com/noisypigeon/library/pull/90))
 - [adr] LIB-0020: verification, and the freeze must hold every apply during a state move ([#87](https://github.com/noisypigeon/library/pull/87))
 - [adr] docs(adr): LIB-0021 spoke prose is minimal ([#86](https://github.com/noisypigeon/library/pull/86))
 - [scaleway/compute-cluster] Rename scaleway/pigeon-cluster to compute-cluster and scaleway/object-bucket to bucket ([#85](https://github.com/noisypigeon/library/pull/85))
