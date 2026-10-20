@@ -4,6 +4,20 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [3.5.0] - 2026-10-20
+
+### Continue a renamed module's version track from its predecessor's last tag
+
+A Terraform module that has no tags under its own path yet used to be released at `0.1.0`, whatever its `release:*` label said. That was right for a brand-new module and wrong for a renamed one, which is the same code with the same history at a new path.
+
+`template-release.yml` now checks first for a `<!-- continues-from: terraform/<provider>/<module>/vX.Y.Z -->` line in the module's own `CHANGELOG.md`. If it finds one, the new track continues from that tag's version, so `release:major` on a module that continues from `v4.2.0` cuts `v5.0.0`. The named tag must exist, or the release fails rather than cut a wrong version. A module with neither tags nor that line still starts at `0.1.0`.
+
+This is what LIB-0020's renames of `scaleway/pigeon-cluster` to `scaleway/compute-cluster` and `scaleway/object-bucket` to `scaleway/bucket` rely on. The record itself lands here too. Spokes don't need to take this release: only this repo's own release runs use the step.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#84](https://github.com/noisypigeon/library/pull/84)
+
 ## [3.4.0] - 2026-10-20
 
 ### Add a reusable container image release workflow

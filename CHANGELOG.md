@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-20
 
+- [workflows] Continue a renamed module's version track from its predecessor's last tag ([#84](https://github.com/noisypigeon/library/pull/84))
 - [workflows] Add a reusable container image release workflow ([#83](https://github.com/noisypigeon/library/pull/83))
 
 ## 2026-10-19
