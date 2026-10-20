@@ -134,19 +134,22 @@ jobs:
             echo "RCLONE_S3_NO_CHECK_BUCKET=true"
           } >> "$GITHUB_ENV"
 
+      # A .tflock is a live run's state lock (LIB-0022), not state, and this key
+      # can't delete what it copies, so one copied here would stay forever.
+      #
       # MD5s decide what's copied, read from the listings alone: R2 and B2's
       # S3 API both list an MD5 ETag for a single-part object. Comparing
       # modification times instead makes rclone HEAD each B2 object and then
       # rewrite its metadata, which a key without readFiles can't do.
       - name: Copy state to B2
         if: steps.gate.outputs.enabled == 'true'
-        run: rclone copy "r2:$STATE_BUCKET" "b2:$BACKUP_BUCKET" --include "terraform/**" --checksum --s3-no-head --stats-one-line -v
+        run: rclone copy "r2:$STATE_BUCKET" "b2:$BACKUP_BUCKET" --filter "- *.tflock" --filter "+ terraform/**" --filter "- **" --checksum --s3-no-head --stats-one-line -v
 
       - name: Check B2 holds every state file
         if: steps.gate.outputs.enabled == 'true'
         run: |
-          src=$(rclone lsf -R --files-only --include "terraform/**" "r2:$STATE_BUCKET" | sort)
-          dst=$(rclone lsf -R --files-only --include "terraform/**" "b2:$BACKUP_BUCKET" | sort)
+          src=$(rclone lsf -R --files-only --filter "- *.tflock" --filter "+ terraform/**" --filter "- **" "r2:$STATE_BUCKET" | sort)
+          dst=$(rclone lsf -R --files-only --filter "- *.tflock" --filter "+ terraform/**" --filter "- **" "b2:$BACKUP_BUCKET" | sort)
           missing=$(comm -23 <(echo "$src") <(echo "$dst"))
           echo "R2: $(echo "$src" | grep -c .) files, B2: $(echo "$dst" | grep -c .) files"
           if [ -n "$missing" ]; then
