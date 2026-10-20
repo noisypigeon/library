@@ -44,7 +44,10 @@
   {% block extra_head %}{% endblock extra_head %}
 </head>
 <body class="site-view {% block body_class %}{% endblock body_class %} color-theme-gameboy font-theme-ibm-plex">
-  <a class="skip-link" href="#main">Skip to content</a>
+  <a class="skip-link" href="#main">Skip to content</a>{%- if config.extra.banner and config.extra.banner.enabled %}
+  <aside class="site-banner" aria-label="Site notice">
+    <p>{{ config.extra.banner.message }}{% if config.extra.banner.link %} <a href="{{ config.extra.banner.link }}">{{ config.extra.banner.link_text | default(value=config.extra.banner.link) }}</a>{% endif %}</p>
+  </aside>{%- endif %}
 
   {% include "header.html" %}
 

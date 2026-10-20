@@ -98,6 +98,21 @@ path adjustment at all.
   own version-redirect pages (ADR-0114) — both have no business being part of
   a generic site theme.
 
+## Optional: site banner
+
+A site can show a one-line notice above its header on every page:
+
+```toml
+[extra.banner]
+enabled = true
+message = "This site is mainly a reference."
+link = "https://example.com"   # optional
+link_text = "example.com"      # optional, defaults to link
+```
+
+The message is plain text. Without `[extra.banner]`, or with
+`enabled = false`, nothing is rendered.
+
 ## Versioning
 
 Releases are tagged on this repo's `main` as `zola-site/vX.Y.Z`
