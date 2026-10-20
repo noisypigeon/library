@@ -4,6 +4,33 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.0.1] - 2026-10-20
+
+### fix(workflows): write changelogs on the newest main, not the merge commit
+
+Every changelog writer now writes on the newest `main` instead of the PR's merge commit, so two PRs merged close together no longer fail each other's changelog commit.
+
+**What went wrong.** #91 and #92 merged seconds apart. Their release runs were serialized, but #92's run still wrote its changelogs on its own merge commit, which predated #91's changelog push. Both had added a root `CHANGELOG.md` line at the same spot, so #92's rebase conflicted, the step stopped, and `workflows/v4.0.0` was never tagged. A re-run would have conflicted the same way.
+
+**The fix, in all four writers:** `template-release.yml`, `root-changelog.yml`, and the reusable `spoke-root-changelog.yml` and `blog-changelog.yml`.
+- **They check out `main`,** as `module-docs.yml` already did. The merge commit stays reachable, so detection still diffs it by SHA.
+- **`root-changelog.yml` and `spoke-root-changelog.yml` write their line again on each retry,** on a fresh `main`, rather than rebasing the last attempt. Losing a race to another writer can no longer conflict.
+- **`template-release.yml` and `blog-changelog.yml` keep a rebase retry.** They write across several steps, so a conflict now needs another workflow's line pushed in the seconds between checkout and push, and it still fails loudly. `blog-changelog.yml` gains the five-attempt retry the others had; it used to try once.
+
+Versions are unaffected. They are still computed from the tags at checkout, and a tag still points at the pushed changelog commit.
+
+Spokes get the `spoke-root-changelog.yml` and `blog-changelog.yml` fixes when they move to this version.
+
+Tested locally with a bare origin and the real `root-changelog.sh`:
+- the old flow reproduces #92's conflict;
+- the new flow pushes both lines under one date;
+- `root-changelog.yml`'s own step text, losing its first push to a rival writer, writes again and pushes on attempt 2.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#93](https://github.com/noisypigeon/library/pull/93)
+
 ## [4.0.0] - 2026-10-20
 
 ### feat(workflows): apply only the saved plan, and re-plan on comment (LIB-0022)

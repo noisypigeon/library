@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-20
 
+- [workflows] fix(workflows): write changelogs on the newest main, not the merge commit ([#93](https://github.com/noisypigeon/library/pull/93))
 - [workflows] feat(workflows): apply only the saved plan, and re-plan on comment (LIB-0022) ([#92](https://github.com/noisypigeon/library/pull/92))
 - [terragrunt/root-hcl] feat(root-hcl): lock Terraform state on both backends (LIB-0022) ([#91](https://github.com/noisypigeon/library/pull/91))
 - [adr] docs(adr): LIB-0022 re-plan on comment and locked, saved-plan applies ([#90](https://github.com/noisypigeon/library/pull/90))
