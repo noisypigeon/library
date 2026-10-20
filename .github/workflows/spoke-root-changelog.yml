@@ -61,9 +61,13 @@ jobs:
   rollup:
     runs-on: ubuntu-latest
     steps:
+      # The newest main, not the merge commit. A changelog written on the merge
+      # commit conflicts with any line another run pushed after it -- which is
+      # how two releases merged back to back failed (#92). fetch-depth: 0 keeps
+      # the merge commit reachable, so detection still diffs it by SHA.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          ref: main
           fetch-depth: 0
           token: ${{ secrets.BOT_GITHUB_TOKEN }}
 
@@ -119,25 +123,22 @@ jobs:
           git config user.name "$GIT_USER_NAME"
           git config user.email "$GIT_USER_EMAIL"
 
-          "./$CHANGELOG_SCRIPT" \
-            --tag "$TAG" \
-            --title "$PR_TITLE" \
-            --number "$PR_NUMBER" \
-            --url "$PR_URL"
-
-          git add CHANGELOG.md
-          git commit -m "chore: root changelog entry for PR #${PR_NUMBER}"
           # Retry rather than fail on a rejected push, as this repo's own
           # root-changelog.yml does: a spoke's other main writers (a blog
           # changelog, a deploy's bookkeeping) can legitimately race for main.
-          # A rebase conflict is a different problem and stays fatal.
+          # Each attempt writes the line again on the newest main rather than
+          # rebasing the last one, so losing a race can't conflict. The library
+          # fetched into .lib-src/ is gitignored, so the reset leaves it alone.
           for attempt in 1 2 3 4 5; do
             git fetch origin main
-            if ! git rebase origin/main; then
-              git rebase --abort || true
-              echo "::error::rebase onto origin/main conflicted; refusing to guess"
-              exit 1
-            fi
+            git reset -q --hard origin/main
+            "./$CHANGELOG_SCRIPT" \
+              --tag "$TAG" \
+              --title "$PR_TITLE" \
+              --number "$PR_NUMBER" \
+              --url "$PR_URL"
+            git add CHANGELOG.md
+            git commit -m "chore: root changelog entry for PR #${PR_NUMBER}"
             if git push origin HEAD:main; then
               echo "Pushed on attempt ${attempt}."
               exit 0

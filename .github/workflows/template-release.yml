@@ -32,9 +32,13 @@ jobs:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
+      # The newest main, not the merge commit. A changelog written on the merge
+      # commit conflicts with any line another run pushed after it -- which is
+      # how two releases merged back to back failed (#92). fetch-depth: 0 keeps
+      # the merge commit reachable, so detection still diffs it by SHA.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          ref: main
           fetch-depth: 0
           fetch-tags: true
           token: ${{ secrets.BOT_GITHUB_TOKEN }}
@@ -521,7 +525,10 @@ jobs:
           git commit -m "chore: update changelog(s) for PR #${{ github.event.pull_request.number }}"
           # Retry rather than fail on a rejected push: these writers no longer
           # share a concurrency group, so two of them can legitimately race for
-          # main. A rebase conflict is a different problem and stays fatal.
+          # main. This run wrote on the newest main, so a rebase conflict needs
+          # another workflow's changelog line pushed in the seconds since the
+          # checkout. The changelogs are written across several steps and can't
+          # simply be rewritten here, so that conflict stays fatal.
           for attempt in 1 2 3 4 5; do
             git fetch origin main
             if ! git rebase origin/main; then

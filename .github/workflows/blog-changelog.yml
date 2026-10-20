@@ -94,9 +94,13 @@ jobs:
             exit 1
           fi
 
+      # The newest main, not the merge commit. A changelog written on the merge
+      # commit conflicts with any line another run pushed after it -- which is
+      # how two releases merged back to back failed (#92). fetch-depth: 0 keeps
+      # the merge commit reachable, so detection still diffs it by SHA.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          ref: main
           fetch-depth: 0
           token: ${{ secrets.BOT_GITHUB_TOKEN }}
 
@@ -217,9 +221,28 @@ jobs:
       - name: Commit changelog updates
         run: |
           git commit -m "chore: update changelog(s) for PR #${{ github.event.pull_request.number }}"
-          git fetch origin main
-          git rebase origin/main
-          git push origin HEAD:main
+          # Retry rather than fail on a rejected push, as spoke-root-changelog.yml
+          # does: the caller's other main writers can legitimately race for main.
+          # This run wrote on the newest main, so a rebase conflict needs another
+          # writer's line pushed in the seconds since the checkout. The changelog
+          # and digest are written in an earlier step and can't simply be
+          # rewritten here, so that conflict stays fatal.
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              echo "::error::rebase onto origin/main conflicted; refusing to guess"
+              exit 1
+            fi
+            if git push origin HEAD:main; then
+              echo "Pushed on attempt ${attempt}."
+              exit 0
+            fi
+            echo "Push rejected (attempt ${attempt}/5); another writer won the race."
+            sleep $((attempt * 5))
+          done
+          echo "::error::could not push to main after 5 attempts"
+          exit 1
 
       - name: Trigger blog deploy
         env:
