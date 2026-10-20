@@ -104,7 +104,7 @@ variable "jobs" {
     # job -- if the cluster has disabled its shared PN while this stays
     # true, compute-instance's own validation will fail the plan
     # ("private_network_id must be set when enable_private_network is
-    # true"), since pigeon-cluster doesn't duplicate that check itself.
+    # true"), since compute-cluster doesn't duplicate that check itself.
     enable_private_network = optional(bool, true)
     # ADR-0149: reinstates the per-job public-IP override ADR-0146 removed.
     # When enable_private_network is true, this job gets enable_ipv4's exact

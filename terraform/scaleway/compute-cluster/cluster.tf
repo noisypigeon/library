@@ -111,7 +111,7 @@ module "job_application" {
   name     = "${var.cluster_config.name_prefix}-${each.key}"
 }
 
-# ADR-0144: pigeon-cluster composes its own policy/key per job so the
+# ADR-0144: compute-cluster composes its own policy/key per job so the
 # resulting key can be read back here and used as the job's keyring default
 # before the job's instance is even built. iam-policy requires at least one
 # non-empty permission grant, so job_policy is skipped for a job with no
@@ -258,7 +258,7 @@ module "job" {
 # ADR-0153: lifted out of compute-instance. Still a standalone resource rather
 # than an inline private_network block on the server, for ADR-0145's original
 # reason: attaching or detaching must never force server replacement. This now
-# sits next to the Private Network it attaches to, which pigeon-cluster
+# sits next to the Private Network it attaches to, which compute-cluster
 # already owned.
 resource "scaleway_instance_private_nic" "job" {
   for_each = local.jobs_on_private_network

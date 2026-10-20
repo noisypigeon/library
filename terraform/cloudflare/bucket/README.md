@@ -1,7 +1,7 @@
 # bucket
 
 A Cloudflare R2 bucket (`cloudflare_r2_bucket`), named the way
-`backblaze/bucket` and `scaleway/object-bucket` name theirs:
+`backblaze/bucket` and `scaleway/bucket` name theirs:
 `{name_prefix}-{random_code}-{name_suffix}`, or exactly `exact_name`.
 
 - **Every bucket is in R2's `eu` jurisdiction.** Cloudflare enforces it, and
