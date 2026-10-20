@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-20
 
+- [adr] Propose LIB-0023, a workload values.yaml for Scaleway modules ([#101](https://github.com/noisypigeon/library/pull/101))
 - [zola-site] Add an optional site banner ([#94](https://github.com/noisypigeon/library/pull/94))
 - [workflows] fix(workflows): write changelogs on the newest main, not the merge commit ([#93](https://github.com/noisypigeon/library/pull/93))
 - [workflows] feat(workflows): apply only the saved plan, and re-plan on comment (LIB-0022) ([#92](https://github.com/noisypigeon/library/pull/92))
