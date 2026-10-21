@@ -4,6 +4,31 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.3.0] - 2026-10-20
+
+### Give each workload its own deployer, and stage its applies (LIB-0024)
+
+Every workload with a project now bootstraps its own Terraform deployer, and CI applies a workload's leaves in stages, so a new `values.yaml` lands in one PR (LIB-0024). This releases `terragrunt/root-hcl` and `workflows/` together, since their kind tables must agree.
+
+**`terragrunt/root-hcl`:**
+- **An implicit deployer kind.** A workload with a `scaleway.project` gets `scaleway/terraform-deployer-iam` at `workloads/<w>/scaleway/terraform-deployer-iam/main`. It's scoped to that project, with `ObjectStorageFullAccess`, and rotates its key every 30 days. An optional `scaleway.deployer` entry overrides its inputs.
+- **Each kind says whose credentials it signs in with.** Projects, deployers and IAM objects use the spoke's key. Buckets use the workload deployer's, which root.hcl takes from two sensitive variables the stub sets: `scaleway_access_key` and `scaleway_secret_key`.
+- **Typed wiring.** The deployer's `project_ids` is a `list(string)`.
+- Hand-written leaves render exactly as before.
+
+**`workflows/`:**
+- **`resolve-workloads.sh`** generates the deployer stub, and the bucket's dependency on it. `--check` accepts and validates `scaleway.deployer`.
+- **`terragrunt-run.yml`** plans workload leaves one at a time, in dependency order. It defers any whose workload dependencies are new or changing, and lists them in the PR comment. An apply that leaves units deferred keeps `terragrunt/apply` pending and doesn't auto-merge; a `terragrunt plan` comment plans the next stage.
+- **`generate-module-redirects.sh`** publishes `terraform-deployer-iam`'s per-version input schemas, and adds `scaleway.deployer` to the workload schema.
+
+**Taking it:** because an `issue_comment` apply runs the default branch's callers, a spoke takes this `workflows/` version alone first, in a PR that changes only `.lib-version` and the callers and so selects nothing. It takes root-hcl 4.4.0 and any workload changes after that (LIB-0024 §5). `resolve-workloads.sh --check` needs the deployer's schema on noisypigeon.garden, so garden takes this version before any spoke checks a workload with it.
+
+Proved on noisypigeon/runway#36, a plan-only draft pinned to this branch. It planned the POC's new deployer and deferred its bucket.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#114](https://github.com/noisypigeon/library/pull/114)
+
 ## [4.2.0] - 2026-10-20
 
 ### Generate workload stubs in CI and plan removals as destroys (LIB-0023)

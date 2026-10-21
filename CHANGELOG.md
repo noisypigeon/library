@@ -46,6 +46,8 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-20
 
+- [workflows] Give each workload its own deployer, and stage its applies (LIB-0024) ([#114](https://github.com/noisypigeon/library/pull/114))
+- [terragrunt/root-hcl] Give each workload its own deployer, and stage its applies (LIB-0024) ([#114](https://github.com/noisypigeon/library/pull/114))
 - [scaleway/terraform-deployer-iam] Rotate the deployer API key every rotation_days ([#113](https://github.com/noisypigeon/library/pull/113))
 - [adr] Propose LIB-0024, workload deployers and staged applies ([#112](https://github.com/noisypigeon/library/pull/112))
 - [terragrunt/root-hcl] Stop telling spokes to commit workload stubs ([#106](https://github.com/noisypigeon/library/pull/106))
