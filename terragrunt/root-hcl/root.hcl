@@ -392,7 +392,7 @@ locals {
 
   guard_workload_values   = local.is_workload_leaf && local.workload_values == null ? file("${local.workload_file} is missing or not valid YAML, but ${path_relative_to_include()} is its stub (LIB-0023)") : true
   guard_workload_kind     = local.is_workload_leaf && local.workload_kind == null ? file("${path_relative_to_include()}: ${local.workload_module} is not a workload kind (LIB-0023 §2)") : true
-  guard_workload_declared = local.is_workload_leaf && !try(local.workload_kind.declared, true) ? file("${path_relative_to_include()} has no entry in ${local.workload_file}; run resolve-workloads.sh and commit the result (LIB-0023 §5)") : true
+  guard_workload_declared = local.is_workload_leaf && !try(local.workload_kind.declared, true) ? file("${path_relative_to_include()} has no entry in ${local.workload_file}; run resolve-workloads.sh, which generates stubs from values.yaml (LIB-0023)") : true
   guard_workload_names    = local.is_workload_leaf && (local.workload_prefix == "" || local.workload_suffix == "") ? file("${local.workload_file} needs a non-empty prefix and suffix (LIB-0023 §4)") : true
   guard_workload_inputs   = local.is_workload_leaf && !alltrue([for k in keys(local.workload_inputs) : can(regex("^[a-z_][a-z0-9_]*$", k))]) ? file("${path_relative_to_include()}: ${local.workload_file} has an input name that isn't a Terraform identifier") : true
   guard_workload_pin      = local.is_workload_leaf && !can(regex("^([0-9]+(\\.[0-9]+){0,2})?$", local.workload_pin)) ? file("${path_relative_to_include()}: version \"${local.workload_pin}\" must be X, X.Y or X.Y.Z (LIB-0023 §3)") : true
