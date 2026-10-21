@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-20
 
+- [workflows] Generate workload stubs in CI and plan removals as destroys (LIB-0023) ([#107](https://github.com/noisypigeon/library/pull/107))
 - [adr] Record LIB-0022's Scaleway lock check ([#105](https://github.com/noisypigeon/library/pull/105))
 - [terragrunt/root-hcl] Support workload leaves in the root.hcl template (LIB-0023) ([#104](https://github.com/noisypigeon/library/pull/104))
 - [workflows] Generate workload stubs and publish module inputs schemas (LIB-0023) ([#103](https://github.com/noisypigeon/library/pull/103))

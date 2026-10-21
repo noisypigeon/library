@@ -4,6 +4,26 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.2.0] - 2026-10-20
+
+### Generate workload stubs in CI and plan removals as destroys (LIB-0023)
+
+A workload now commits only its `workloads/<workload>/values.yaml`. Its stub leaves are generated wherever Terragrunt runs, and are never committed (LIB-0023's second amendment).
+
+- **`terragrunt-run.yml` generates the stubs itself**, so callers change nothing.
+  - In a spoke with a `workloads/`, the `[main...HEAD]` git filter excludes `./workloads/**`, so deleting a committed stub, as a spoke does once to adopt this, never plans its destroy.
+  - Workload leaves are planned in a Terragrunt invocation of their own: every stub of a workload whose `values.yaml` changed, or of every workload when `root.hcl`, `spoke.hcl` or a secret changed.
+- **Removing an instance from `values.yaml` plans its destroy.** CI generates the PR base's stubs in a worktree and plans `-destroy` for each one HEAD no longer has. Those plans are saved with the rest, and apply runs them one at a time, dependents first. The saved plan's `units.txt` names the base and each destroy, so apply can't run against different ones.
+- **`resolve-workloads.sh`** gains `--list`, which prints the stub set. `--check` now validates `values.yaml` only, and fails if a stub is tracked by git.
+
+To adopt it, a spoke with committed stubs runs `git rm --cached` on them and gitignores `/workloads/*/*/`, in the same PR that takes this version. Its state keys don't change. A spoke with no `workloads/` behaves exactly as before.
+
+Proved on noisypigeon/runway#33, a plan-only draft pinned to this branch.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#107](https://github.com/noisypigeon/library/pull/107)
+
 ## [4.1.0] - 2026-10-20
 
 ### Generate workload stubs and publish module inputs schemas (LIB-0023)
