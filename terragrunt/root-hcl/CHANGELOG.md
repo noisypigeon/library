@@ -4,6 +4,32 @@ All notable changes to this template are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.5.0] - 2026-10-21
+
+### Add a workload secrets.yaml in SOPS YAML (LIB-0025)
+
+A workload can now keep secrets in `workloads/<w>/secrets.yaml`, encrypted with sops as YAML, beside its `values.yaml` (LIB-0025). This releases `terragrunt/root-hcl` and `workflows/` together.
+
+**`terragrunt/root-hcl`:**
+- **Decryption:** root.hcl decrypts a workload's `secrets.yaml` for that workload's leaves only. A file that won't decrypt fails the run.
+- **Secret inputs,** under the same kind paths as `values.yaml`, become sensitive `string` variables. Their values arrive through the template's inputs and are never written into a generated file, so plans show them as `(sensitive value)`.
+- **`{ secretRef: NAME }`:** any `values.yaml` input written this way is resolved from `secrets.yaml`'s `env` map. The whole map is also passed to the workload's leaves as `var.workload_env`.
+- **Guards** fail on an input set in both files, a `secretRef` to a missing name, and a list or map value.
+- A workload without `secrets.yaml`, and every hand-written leaf, behave as before.
+
+**`workflows/`:**
+- **`resolve-workloads.sh --check`** checks `secrets.yaml` without decrypting it. It refuses a file with no `sops` metadata or any plaintext value, unknown keys, a secret for an instance `values.yaml` doesn't declare, an input set in both files, an unknown input, and an unresolvable `secretRef`.
+- **`terragrunt-run.yml`** re-plans a workload when only its `secrets.yaml` changes, and masks every decrypted value in the job log.
+- **`module-inputs-schema.sh`** accepts `{ secretRef: NAME }` as any input's value in the published schemas.
+
+**Taking it:** add `^workloads/[^/]+/secrets\\.yaml$` to the spoke's `.sops.yaml` with its age recipient. Take this `workflows/` version alone first (LIB-0024 §5), then root-hcl 4.5.0.
+
+Proved on noisypigeon/runway#39, a plan-only draft pinned to this branch. Secrets reached the plan as `(sensitive value)`, and no dummy secret appeared in the comment or the job log.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#119](https://github.com/noisypigeon/library/pull/119)
+
 ## [4.4.0] - 2026-10-20
 
 ### Give each workload its own deployer, and stage its applies (LIB-0024)
