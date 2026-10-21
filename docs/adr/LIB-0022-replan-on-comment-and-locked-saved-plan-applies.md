@@ -158,6 +158,15 @@ To be completed when §§1–5 ship.
    second with `Error acquiring the state lock`, on R2 and on Scaleway. On
    Scaleway, also check that a second `PutObject` of the `.tflock` key with
    `If-None-Match: *` returns `412`.
+   - **Scaleway: passed, 2026-10-20**, against a throwaway key
+     (`lock-test/lib-0022/`) in runway's state bucket, with Terraform 1.16.3.
+     The first apply wrote `terraform.tfstate.tflock` and held it. The second
+     apply, with `-lock-timeout=0s`, failed at once with
+     `Error acquiring the state lock`. The first apply then completed and
+     released the lock. A second `PutObject` with `If-None-Match: *` on an
+     existing key returned `PreconditionFailed` (412). Every test object was
+     deleted afterwards. The community report in the Context does not
+     reproduce, so runway may take root-hcl 4.2.0 (§5).
 2. **A stale plan is refused.** PR A and PR B both plan one leaf. A applies.
    B's apply fails with `Saved plan is stale`, and B applies after a
    `terragrunt plan` comment.
