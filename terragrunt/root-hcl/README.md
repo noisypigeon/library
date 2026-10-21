@@ -6,7 +6,8 @@ lives in its `spoke.hcl`; everything else is this one template.
 
 ## What it does
 
-For every leaf under a spoke's `terraform/`:
+For every leaf under a spoke's `terraform/`, and every workload leaf under its
+`workloads/` (v4.3.0, LIB-0023):
 
 - decrypts, in memory with sops/age (no plaintext on disk), only the
   `terraform/secrets/<concern>.enc` files that leaf needs, checks their keys
@@ -14,9 +15,9 @@ For every leaf under a spoke's `terraform/`:
   (LIB-0010, LIB-0012);
 - generates the providers `spoke.hcl`'s `providers` map turns on for that leaf
   (Cloudflare, Scaleway, Backblaze B2, Scaleway Cockpit Grafana; LIB-0005);
-- excludes anything not under `terraform/`;
+- excludes anything else;
 - keeps state in the spoke's own bucket, on Scaleway or R2 (`state_backend`,
-  LIB-0007), at `terraform/<leaf>/terraform.tfstate`.
+  LIB-0007), at `<leaf>/terraform.tfstate`.
 
 That key carries no prefix, so it is byte-identical to what the per-domain roots
 in `noisypigeon/noisypigeon` produced. Hoisting a leaf into a spoke therefore
@@ -324,6 +325,50 @@ their names, apart from `env.enc` losing `ENV_`.
      default now finds the split files. `state-backup.yml`'s callers can stay:
      it does nothing without `state_backup = true`.
 3. Check that every leaf plans `No changes.`
+
+## Workloads (v4.3.0, LIB-0023)
+
+A workload is one file, `workloads/<workload>/values.yaml` at the spoke's root,
+declaring the Scaleway modules one thing needs:
+
+```yaml
+# yaml-language-server: $schema=https://noisypigeon.garden/schemas/workload/v1.json
+prefix: pigeon-cli
+suffix: email
+scaleway:
+  project: {}
+  bucket:
+    example:
+      storage_class: standard
+  iam:
+    application: {}
+    apiKey: {}
+```
+
+`.lib-src/.github/scripts/resolve-workloads.sh` turns it into one stub leaf per
+module, at `workloads/<workload>/<provider>/<module>/<instance>/terragrunt.hcl`,
+which the spoke commits. CI runs it with `--check`. A stub carries only the
+`dependency` blocks its kind implies. For a workload leaf, this template:
+
+- reads the leaf's entry in `values.yaml`, and marks the file read, so a PR that
+  edits only `values.yaml` still plans every leaf that reads it;
+- defaults the names from `prefix` and `suffix`: `project.name` and
+  `iam.application.name` are `<prefix>-<suffix>`, and a bucket's `name_prefix`
+  and `name_suffix` are `<prefix>-<key>` and `<suffix>`;
+- resolves the module's version at every plan: `version: "X.Y.Z"` exactly,
+  `"X.Y"` or `"X"` as the newest release within it, and no `version` as the
+  newest release (`git ls-remote --sort=-v:refname` against the library);
+- writes `workload_generated.tf`: a `module "this"` block at that version's
+  short URL, with the entry's inputs as literals, the wiring inputs (a bucket's
+  `project_id`, an API key's `default_project_id` and `application_id`) as
+  variables the stub sets from its dependencies, and the whole module as
+  `output "module"`.
+
+Every input written in `values.yaml` wins over a default or a dependency. A
+dependency has no `mock_outputs`, since apply runs the saved plan (LIB-0022):
+a dependent plans only once what it depends on is applied, so land a workload's
+independent kinds first. Every other leaf gets a one-line comment in
+`workload_generated.tf`, so a hand-written leaf plans `No changes.` on v4.3.0.
 
 ## Two pins, deliberately
 
