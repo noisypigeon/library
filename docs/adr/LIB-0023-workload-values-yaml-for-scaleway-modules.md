@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-20.
-- **Status**: Proposed; amended twice on 2026-10-20 (see `## Amendments`), and by LIB-0024, which adds the implicit `scaleway.deployer` kind and a `credentials` column to §2's table. Adds a second home for leaves, `workloads/`, beside
+- **Status**: Proposed; amended twice on 2026-10-20 (see `## Amendments`), by LIB-0024, which adds the implicit `scaleway.deployer` kind and a `credentials` column to §2's table, and by LIB-0025, which adds a sops-encrypted `secrets.yaml` beside `values.yaml` and `secretRef` within it. Adds a second home for leaves, `workloads/`, beside
   `terraform/`. Makes bounded exceptions to LIB-0001 invariants 2 and 4 for
   those leaves only. LIB-0004's layout does not govern them.
 
