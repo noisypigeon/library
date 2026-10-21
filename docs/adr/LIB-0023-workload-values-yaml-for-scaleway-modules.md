@@ -361,7 +361,10 @@ runs, and the spoke gitignores `/workloads/*/*/`.
   committed stub, as a spoke does once to adopt this, never plans its destroy.
   Workload leaves are selected by workload instead: every stub of a workload
   whose `values.yaml` changed, or of every workload when `root.hcl`,
-  `spoke.hcl` or a secret changed.
+  `spoke.hcl` or a secret changed. They run in a Terragrunt invocation of
+  their own. Beside a git expression, Terragrunt resolves a path against the
+  git filter's base worktree. A stub committed there then plans as a removal,
+  and a gitignored one isn't found. runway's first draft plan showed both.
 - **Removing an instance plans its destroy.** CI generates the stubs of the
   PR's base (`git merge-base main HEAD`) in a worktree of it. It plans
   `-destroy` for each one that HEAD's `values.yaml` no longer implies. These

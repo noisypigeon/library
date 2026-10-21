@@ -212,6 +212,7 @@ jobs:
             FILTER_ARGS+=(--filter "./$dir")
           done < <(git diff --name-only main...HEAD)
 
+          WORKLOAD_ARGS=()
           : > "$RUNNER_TEMP/destroy-units.txt"
           if [ "$workloads" = true ]; then
             resolver="$GITHUB_WORKSPACE/$SCRIPTS_DIR/resolve-workloads.sh"
@@ -222,13 +223,15 @@ jobs:
             else
               names=$(grep -E '^workloads/[^/]+/values\.yaml$' <<<"$changed" | cut -d/ -f2 || true)
             fi
-            # Exact stub directories, never ./workloads/<w>/**: while a git
-            # expression is in play, a glob also matches a removed unit from
-            # the git filter's base worktree, and that would plan it twice.
+            # Their own filters, run by their own terragrunt invocation, never
+            # beside the git expression: with one in play, terragrunt resolves
+            # a path against the git filter's base worktree, so a stub that was
+            # committed there plans as a removal and a generated one, being
+            # gitignored, isn't found at all.
             "$resolver" --list | LC_ALL=C sort > "$RUNNER_TEMP/head-stubs.txt"
             for w in $names; do
               while IFS= read -r unit; do
-                FILTER_ARGS+=(--filter "./$unit")
+                WORKLOAD_ARGS+=(--filter "./$unit")
               done < <(grep "^workloads/$w/" "$RUNNER_TEMP/head-stubs.txt" || true)
             done
 
@@ -242,8 +245,13 @@ jobs:
           fi
 
           printf '%s\n' "${FILTER_ARGS[@]}" > "$RUNNER_TEMP/filter-args"
-          terragrunt --no-color find "${FILTER_ARGS[@]}" --filter-allow-destroy --json \
-            | jq -r '.[].path' | sed 's|^\./||' | LC_ALL=C sort -u > "$RUNNER_TEMP/units.txt"
+          printf '%s\n' ${WORKLOAD_ARGS[@]+"${WORKLOAD_ARGS[@]}"} > "$RUNNER_TEMP/workload-args"
+          {
+            terragrunt --no-color find "${FILTER_ARGS[@]}" --filter-allow-destroy --json | jq -r '.[].path'
+            if [ ${#WORKLOAD_ARGS[@]} -gt 0 ]; then
+              terragrunt --no-color find "${WORKLOAD_ARGS[@]}" --json | jq -r '.[].path'
+            fi
+          } | sed 's|^\./||' | LC_ALL=C sort -u > "$RUNNER_TEMP/units.txt"
           if [ "$workloads" = true ]; then
             echo "base: $base" >> "$RUNNER_TEMP/units.txt"
             sed 's/^/destroy: /' "$RUNNER_TEMP/destroy-units.txt" >> "$RUNNER_TEMP/units.txt"
@@ -343,6 +351,17 @@ jobs:
           terragrunt --no-color run --all "${FILTER_ARGS[@]}" --filter-allow-destroy --non-interactive --out-dir "$PLAN_DIR" -- "${TF_ARGS[@]}" > output.txt 2>&1
           code=$?
           set -e
+
+          # Workload leaves (LIB-0023), in an invocation of their own: see
+          # "Select units".
+          WORKLOAD_ARGS=()
+          while IFS= read -r arg; do [ -n "$arg" ] && WORKLOAD_ARGS+=("$arg"); done < "$RUNNER_TEMP/workload-args"
+          if [ ${#WORKLOAD_ARGS[@]} -gt 0 ] && [ "$code" -eq 0 ]; then
+            set +e
+            terragrunt --no-color run --all "${WORKLOAD_ARGS[@]}" --non-interactive --out-dir "$PLAN_DIR" -- "${TF_ARGS[@]}" >> output.txt 2>&1
+            code=$?
+            set -e
+          fi
 
           # Workload instances values.yaml no longer has (LIB-0023), planned
           # with -destroy from the base's stubs. Their plans land in the same
