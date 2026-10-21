@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-20
 
+- [terragrunt/root-hcl] Support workload leaves in the root.hcl template (LIB-0023) ([#104](https://github.com/noisypigeon/library/pull/104))
 - [workflows] Generate workload stubs and publish module inputs schemas (LIB-0023) ([#103](https://github.com/noisypigeon/library/pull/103))
 - [adr] Amend LIB-0023 with what planning the build found ([#102](https://github.com/noisypigeon/library/pull/102))
 - [adr] Propose LIB-0023, a workload values.yaml for Scaleway modules ([#101](https://github.com/noisypigeon/library/pull/101))
