@@ -321,9 +321,12 @@ written. The design is otherwise unchanged.
    - A workload leaf keeps `source = get_terragrunt_dir()`, as a hand-written
      leaf does.
    - root.hcl generates `workload_generated.tf`: a `module "this"` block at
-     the resolved short URL, one variable per input, and
-     `output "module" { value = module.this }`. A hand-written leaf writes the
-     same thing by hand.
+     the resolved short URL, and `output "module" { value = module.this }`.
+     A hand-written leaf writes the same thing by hand.
+   - The entry's inputs are written into that block as literals. A
+     `type = any` variable set through `TF_VAR_` arrives as a string, so a list
+     or object input passed as a variable would break. Only the wiring inputs
+     are variables, set by the stub from its dependencies' outputs.
 3. **§5 and §7: no `mock_outputs`.** Under LIB-0022, apply runs the saved plan.
    A bucket planned with a mock project ID, before its project exists, would
    apply that mock.

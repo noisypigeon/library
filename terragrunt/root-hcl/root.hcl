@@ -49,6 +49,15 @@
 #
 # Since v4.2.0 (LIB-0022) both state backends lock: Terraform's S3-native
 # lockfile, a conditional write of <state key>.tflock beside the state.
+#
+# Since v4.3.0 (LIB-0023) a leaf may also be a workload leaf,
+# workloads/<workload>/<provider>/<module>/<instance>/, a stub that
+# resolve-workloads.sh generates from workloads/<workload>/values.yaml. For
+# one, this file reads its entry in values.yaml, applies the workload's name
+# defaults, resolves the module's newest release matching the entry's
+# `version` at every plan, and writes the module call into
+# workload_generated.tf. Its state sits in the same bucket as every other
+# leaf's, keyed by its path.
 
 locals {
   # The spoke's instance values. Missing spoke.hcl is a hard error, which is
@@ -282,9 +291,12 @@ locals {
   backblaze_application_key    = get_env("BACKBLAZE_PROVIDER_ACCESS_KEY", lookup(local.breakglass_values, lookup(local.breakglass_replace, "BACKBLAZE_PROVIDER_ACCESS_KEY", ""), lookup(local.secrets_backblaze, "BACKBLAZE_PROVIDER_ACCESS_KEY", "")))
 
   # Enforce the terraform/<leaf> convention (ADR-0092, ADR-0096): anything this
-  # root is included from outside <spoke>/terraform/ is excluded.
-  path_segments = split("/", path_relative_to_include())
-  is_valid_leaf = length(local.path_segments) >= 1 && local.path_segments[0] == "terraform"
+  # root is included from outside <spoke>/terraform/ is excluded -- except a
+  # workload leaf (LIB-0023), which is exactly
+  # workloads/<workload>/<provider>/<module>/<instance>.
+  path_segments    = split("/", path_relative_to_include())
+  is_workload_leaf = length(local.path_segments) == 5 && local.path_segments[0] == "workloads"
+  is_valid_leaf    = local.path_segments[0] == "terraform" || local.is_workload_leaf
 
   # A zone leaf (LIB-0008) is terraform/cloudflare/<zone>/<module>/<instance>/,
   # where <zone> is the zone's apex domain. A domain always has a dot and a
@@ -296,6 +308,125 @@ locals {
     length(regexall("\\.", try(local.path_segments[2], ""))) > 0
   )
   cloudflare_zone = local.is_zone_leaf ? local.path_segments[2] : ""
+
+  # Workload leaves (LIB-0023). HCL evaluates both arms of a conditional, so
+  # every expression below runs for every leaf and is written to be harmless
+  # for a hand-written one. Only the guards and workload_tf act, and only on a
+  # workload leaf.
+  workload          = try(local.path_segments[1], "")
+  workload_module   = "${try(local.path_segments[2], "")}/${try(local.path_segments[3], "")}"
+  workload_instance = try(local.path_segments[4], "")
+  workload_file     = "workloads/${local.workload}/values.yaml"
+  workload_values   = try(yamldecode(file(mark_as_read("${get_parent_terragrunt_dir()}/${local.workload_file}"))), null)
+  workload_prefix = try(tostring(local.workload_values.prefix), "")
+  workload_suffix = try(tostring(local.workload_values.suffix), "")
+
+  # The kinds (LIB-0023 §2): each module a workload can call, whether this
+  # leaf's values.yaml declares its instance, the entry itself, the inputs a
+  # dependency fills (§4's wiring, which the stub sets), and the name
+  # defaults. resolve-workloads.sh's KINDS and generate-module-redirects.sh's
+  # schema list are this table's twins: change one and change all three.
+  # A YAML key with nothing under it is null, so every lookup goes through
+  # try(); a conditional can't stand in, since HCL wants both of its arms to
+  # be the same shape of object.
+  workload_scaleway = try(local.workload_values.scaleway, null)
+  workload_iam      = try(local.workload_scaleway.iam, null)
+  workload_buckets  = try(local.workload_scaleway.bucket, null)
+  workload_kinds = {
+    "scaleway/project" = {
+      declared  = local.workload_instance == "main" && contains(try(keys(local.workload_scaleway), []), "project")
+      entry     = try(local.workload_scaleway.project, null)
+      wiring    = []
+      defaults  = { name = "${local.workload_prefix}-${local.workload_suffix}" }
+      sensitive = false
+    }
+    "scaleway/iam-application" = {
+      declared  = local.workload_instance == "main" && contains(try(keys(local.workload_iam), []), "application")
+      entry     = try(local.workload_iam.application, null)
+      wiring    = []
+      defaults  = { name = "${local.workload_prefix}-${local.workload_suffix}" }
+      sensitive = false
+    }
+    "scaleway/bucket" = {
+      declared  = contains(try(keys(local.workload_buckets), []), local.workload_instance)
+      entry     = try(local.workload_buckets[local.workload_instance], null)
+      wiring    = ["project_id"]
+      defaults  = { name_prefix = "${local.workload_prefix}-${local.workload_instance}", name_suffix = local.workload_suffix }
+      sensitive = false
+    }
+    "scaleway/iam-api-key" = {
+      declared  = local.workload_instance == "main" && contains(try(keys(local.workload_iam), []), "apiKey")
+      entry     = try(local.workload_iam.apiKey, null)
+      wiring    = ["default_project_id", "application_id"]
+      defaults  = {}
+      sensitive = true
+    }
+  }
+  workload_kind  = try(local.workload_kinds[local.workload_module], null)
+  workload_entry = merge({}, try(local.workload_kind.entry, null))
+
+  # The module's inputs: the name defaults, then the entry, which wins. A
+  # wiring input the entry doesn't set is left to the stub's dependency.
+  workload_inputs = merge(
+    try(local.workload_kind.defaults, {}),
+    { for k, v in local.workload_entry : k => v if k != "version" },
+  )
+  workload_wiring = [for k in try(local.workload_kind.wiring, []) : k if !contains(keys(local.workload_inputs), k)]
+
+  # The version (LIB-0023 §3): X.Y.Z exactly, X.Y or X as the newest release
+  # within it, or the newest release when unset, by git's own version sort.
+  # A hand-written leaf runs `true` instead of git, so it lists nothing.
+  workload_pin = try(tostring(local.workload_entry.version), "")
+  workload_tag_pattern = (
+    local.workload_pin == "" ? "v*" :
+    length(split(".", local.workload_pin)) == 3 ? "v${local.workload_pin}" :
+    "v${local.workload_pin}.*"
+  )
+  workload_tags = run_cmd(
+    "--terragrunt-quiet", local.is_workload_leaf ? "git" : "true",
+    "ls-remote", "--sort=-v:refname", "--tags",
+    get_env("LIB_TAG_REMOTE", "https://github.com/noisypigeon/library"),
+    "refs/tags/terraform/${local.workload_module}/${local.workload_tag_pattern}",
+  )
+  workload_version = try(regex("/v([0-9]+\\.[0-9]+\\.[0-9]+)(\\^\\{\\})?$", split("\n", trimspace(local.workload_tags))[0])[0], "")
+
+  guard_workload_values   = local.is_workload_leaf && local.workload_values == null ? file("${local.workload_file} is missing or not valid YAML, but ${path_relative_to_include()} is its stub (LIB-0023)") : true
+  guard_workload_kind     = local.is_workload_leaf && local.workload_kind == null ? file("${path_relative_to_include()}: ${local.workload_module} is not a workload kind (LIB-0023 §2)") : true
+  guard_workload_declared = local.is_workload_leaf && !try(local.workload_kind.declared, true) ? file("${path_relative_to_include()} has no entry in ${local.workload_file}; run resolve-workloads.sh and commit the result (LIB-0023 §5)") : true
+  guard_workload_names    = local.is_workload_leaf && (local.workload_prefix == "" || local.workload_suffix == "") ? file("${local.workload_file} needs a non-empty prefix and suffix (LIB-0023 §4)") : true
+  guard_workload_inputs   = local.is_workload_leaf && !alltrue([for k in keys(local.workload_inputs) : can(regex("^[a-z_][a-z0-9_]*$", k))]) ? file("${path_relative_to_include()}: ${local.workload_file} has an input name that isn't a Terraform identifier") : true
+  guard_workload_pin      = local.is_workload_leaf && !can(regex("^([0-9]+(\\.[0-9]+){0,2})?$", local.workload_pin)) ? file("${path_relative_to_include()}: version \"${local.workload_pin}\" must be X, X.Y or X.Y.Z (LIB-0023 §3)") : true
+  guard_workload_version  = local.is_workload_leaf && local.workload_version == "" ? file("${path_relative_to_include()}: no terraform/${local.workload_module} tag matches version \"${local.workload_pin}\" (LIB-0023 §3)") : true
+
+  # The leaf's module call. Inputs are written as literals -- JSON is HCL
+  # expression syntax -- with template sequences escaped, since a `type = any`
+  # variable set through TF_VAR_ would arrive as a string. Only wiring inputs
+  # are variables, set by the stub from its dependencies' outputs. The whole
+  # module is one output, so a dependent reads dependency.<name>.outputs.module.id.
+  workload_tf = <<EOF
+# Generated by root.hcl from ${local.workload_file} (LIB-0023) -- do not edit.
+%{for k in local.workload_wiring~}
+variable "${k}" {
+  type    = string
+  default = null
+}
+
+%{endfor~}
+module "this" {
+  source = "https://noisypigeon.garden/terraform/${local.workload_module}/v${local.workload_version}"
+%{for k, v in local.workload_inputs~}
+  ${k} = ${replace(replace(jsonencode(v), "$${", "$$${"), "%%{", "%%%{")}
+%{endfor~}
+%{for k in local.workload_wiring~}
+  ${k} = var.${k}
+%{endfor~}
+}
+
+output "module" {
+  value     = module.this
+  sensitive = ${try(local.workload_kind.sensitive, false)}
+}
+EOF
 
   # Appended to cloudflare_ids_generated.tf for a zone leaf only. The zone's ID
   # is no longer here: dns-record v1 looks it up from this apex (LIB-0011).
@@ -521,6 +652,14 @@ locals {
   scaleway_s3_provider_name = "Scaleway"
 }
 EOF
+}
+
+# A workload leaf's module call (LIB-0023); a comment in every other leaf, so a
+# copy an earlier run left in its .terragrunt-cache can't call anything.
+generate "workload" {
+  path      = "workload_generated.tf"
+  if_exists = "overwrite"
+  contents  = local.is_workload_leaf ? local.workload_tf : "# Not a workload leaf (LIB-0023).\n"
 }
 
 # The spoke's own dedicated Terraform state bucket (ADR-0130/0132/0133), on the
