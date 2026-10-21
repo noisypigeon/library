@@ -44,6 +44,10 @@ ADR-0154 and ADR-0084 each made before it.
 
 <!-- entries below; newest first -->
 
+## 2026-10-21
+
+- [adr] Propose LIB-0025, a workload's secrets.yaml ([#118](https://github.com/noisypigeon/library/pull/118))
+
 ## 2026-10-20
 
 - [workflows] Give each workload its own deployer, and stage its applies (LIB-0024) ([#114](https://github.com/noisypigeon/library/pull/114))
