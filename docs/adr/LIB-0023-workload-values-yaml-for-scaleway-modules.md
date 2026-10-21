@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-20.
-- **Status**: Proposed; amended 2026-10-20 (see `## Amendments`). Adds a second home for leaves, `workloads/`, beside
+- **Status**: Proposed; amended twice on 2026-10-20 (see `## Amendments`). Adds a second home for leaves, `workloads/`, beside
   `terraform/`. Makes bounded exceptions to LIB-0001 invariants 2 and 4 for
   those leaves only. LIB-0004's layout does not govern them.
 
@@ -345,3 +345,37 @@ written. The design is otherwise unchanged.
 spokes whose state is on R2 call it. runway's state is on Scaleway. So the new
 `+ workloads/**` filter is proved against garden's R2 bucket, by comparing
 `rclone lsf` with and without it.
+
+### 2026-10-20: a workload commits only `values.yaml`
+
+§5's committed stubs are reversed. A workload is one file,
+`workloads/<workload>/values.yaml`. Its stubs are generated wherever Terragrunt
+runs, and the spoke gitignores `/workloads/*/*/`.
+
+- **Locally,** a spoke's `terraform-prepare` task runs `resolve-workloads.sh`
+  before `terragrunt`.
+- **In CI,** `terragrunt-run.yml` (`workflows/v4.2.0`) runs it itself, so a
+  caller changes nothing. Terragrunt's `[main...HEAD]` filter plans inside
+  worktrees of tracked files, so it can't see a stub. So in a spoke with a
+  `workloads/`, that filter excludes `./workloads/**`. That way deleting a
+  committed stub, as a spoke does once to adopt this, never plans its destroy.
+  Workload leaves are selected by workload instead: every stub of a workload
+  whose `values.yaml` changed, or of every workload when `root.hcl`,
+  `spoke.hcl` or a secret changed. They run in a Terragrunt invocation of
+  their own. Beside a git expression, Terragrunt resolves a path against the
+  git filter's base worktree. A stub committed there then plans as a removal,
+  and a gitignored one isn't found. runway's first draft plan showed both.
+- **Removing an instance plans its destroy.** CI generates the stubs of the
+  PR's base (`git merge-base main HEAD`) in a worktree of it. It plans
+  `-destroy` for each one that HEAD's `values.yaml` no longer implies. These
+  destroy plans are saved with the rest. Apply runs them one at a time,
+  dependents first, since Terragrunt orders a saved plan's apply as if it
+  created. The base and each destroy are written into the saved plan's
+  `units.txt`, so apply can't run against different ones.
+- **`resolve-workloads.sh --check`** no longer compares stubs, since there are
+  none in git. It validates `values.yaml` as before, and fails if a stub is
+  tracked. **`--list`** prints the stub set, for CI to compare base with head.
+
+State keys don't change: a stub's path, and so its key, is what it was when it
+was committed. Verification 1 becomes "`--check` passes with only
+`values.yaml` committed, and fails if a stub is tracked".

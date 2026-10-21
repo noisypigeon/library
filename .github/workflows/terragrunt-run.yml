@@ -26,6 +26,12 @@
 # Both commands plan and apply the PR's head, never the merge ref, so what was
 # planned is the tree that gets applied.
 #
+# Since v4.2.0 a spoke's workload leaves (LIB-0023) are generated here, from
+# each workloads/<workload>/values.yaml, rather than committed. "Select units"
+# runs resolve-workloads.sh, plans every leaf of a workload whose values.yaml
+# changed, and plans an instance values.yaml no longer has as a destroy, from
+# its stub at the PR's base.
+#
 # secrets_files and prepare_cmd exist for spokes (LIB-0003). A spoke keeps its
 # secrets in one sops file per concern under terraform/secrets/ (LIB-0012), and
 # its root.hcl is materialized from the library's template, so it has to run its
@@ -157,20 +163,42 @@ jobs:
       # (noisypigeon/noisypigeon.com#19). If the lookup fails, fail the run
       # rather than risk the duplicate.
       #
+      # Workload leaves (LIB-0023) are generated, never committed, so the git
+      # filter can't see them: it plans in worktrees of tracked files. A spoke
+      # with a workloads/ excludes them from the git filter -- deleting a
+      # committed stub must not plan its destroy -- and selects them here
+      # instead, by workload: every leaf of a workload whose values.yaml
+      # changed, and of every workload when root.hcl, spoke.hcl or a secret
+      # changed. An instance values.yaml no longer has is planned as a destroy
+      # from its stub as of the PR's base (`git merge-base main HEAD`, which
+      # moves only when the head does), generated in a worktree of that base.
+      #
       # Written to a file, one argument per line, so plan and apply select
       # units the same way, and units.txt is what apply compares with the
-      # saved plan's manifest.
+      # saved plan's manifest. A workload spoke's units.txt also names the base
+      # and each destroy, so apply can't run against different ones.
       - name: Select units
         env:
           SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
           TG_TF_PATH: terraform
+          SCRIPTS_DIR: ${{ inputs.scripts_dir }}
         run: |
           set -euo pipefail
-          FILTER_ARGS=(--filter '[main...HEAD]')
+          base=$(git merge-base main HEAD)
+          workloads=false
+          if [ -d workloads ] || git cat-file -e "$base:workloads" 2>/dev/null; then
+            workloads=true
+          fi
+          if [ "$workloads" = true ]; then
+            FILTER_ARGS=(--filter '[main...HEAD] | !./workloads/**')
+          else
+            FILTER_ARGS=(--filter '[main...HEAD]')
+          fi
           git_units=$(terragrunt --no-color find "${FILTER_ARGS[@]}" --filter-allow-destroy --json | jq -r '.[].path')
           dirs=""
           while IFS= read -r f; do
             [ -z "$f" ] && continue
+            case "$f" in workloads/*) continue ;; esac
             dir=$(dirname "$f")
             while [ "$dir" != "." ] && [ ! -f "$dir/terragrunt.hcl" ]; do
               dir=$(dirname "$dir")
@@ -183,9 +211,51 @@ jobs:
             dirs="$dirs $dir"
             FILTER_ARGS+=(--filter "./$dir")
           done < <(git diff --name-only main...HEAD)
+
+          WORKLOAD_ARGS=()
+          : > "$RUNNER_TEMP/destroy-units.txt"
+          if [ "$workloads" = true ]; then
+            resolver="$GITHUB_WORKSPACE/$SCRIPTS_DIR/resolve-workloads.sh"
+            "$resolver"
+            changed=$(git diff --name-only "$base" HEAD)
+            if grep -qE '^(root\.hcl|spoke\.hcl|terraform/secrets/)' <<<"$changed"; then
+              names=$(find workloads -mindepth 2 -maxdepth 2 -name values.yaml | cut -d/ -f2)
+            else
+              names=$(grep -E '^workloads/[^/]+/values\.yaml$' <<<"$changed" | cut -d/ -f2 || true)
+            fi
+            # Their own filters, run by their own terragrunt invocation, never
+            # beside the git expression: with one in play, terragrunt resolves
+            # a path against the git filter's base worktree, so a stub that was
+            # committed there plans as a removal and a generated one, being
+            # gitignored, isn't found at all.
+            "$resolver" --list | LC_ALL=C sort > "$RUNNER_TEMP/head-stubs.txt"
+            for w in $names; do
+              while IFS= read -r unit; do
+                WORKLOAD_ARGS+=(--filter "./$unit")
+              done < <(grep "^workloads/$w/" "$RUNNER_TEMP/head-stubs.txt" || true)
+            done
+
+            git worktree add -q --detach "$RUNNER_TEMP/base" "$base"
+            if [ -d "$RUNNER_TEMP/base/workloads" ]; then
+              (cd "$RUNNER_TEMP/base" && "$resolver" >/dev/null && "$resolver" --list) | LC_ALL=C sort > "$RUNNER_TEMP/base-stubs.txt"
+            else
+              : > "$RUNNER_TEMP/base-stubs.txt"
+            fi
+            comm -23 "$RUNNER_TEMP/base-stubs.txt" "$RUNNER_TEMP/head-stubs.txt" > "$RUNNER_TEMP/destroy-units.txt"
+          fi
+
           printf '%s\n' "${FILTER_ARGS[@]}" > "$RUNNER_TEMP/filter-args"
-          terragrunt --no-color find "${FILTER_ARGS[@]}" --filter-allow-destroy --json \
-            | jq -r '.[].path' | sed 's|^\./||' | LC_ALL=C sort -u > "$RUNNER_TEMP/units.txt"
+          printf '%s\n' ${WORKLOAD_ARGS[@]+"${WORKLOAD_ARGS[@]}"} > "$RUNNER_TEMP/workload-args"
+          {
+            terragrunt --no-color find "${FILTER_ARGS[@]}" --filter-allow-destroy --json | jq -r '.[].path'
+            if [ ${#WORKLOAD_ARGS[@]} -gt 0 ]; then
+              terragrunt --no-color find "${WORKLOAD_ARGS[@]}" --json | jq -r '.[].path'
+            fi
+          } | sed 's|^\./||' | LC_ALL=C sort -u > "$RUNNER_TEMP/units.txt"
+          if [ "$workloads" = true ]; then
+            echo "base: $base" >> "$RUNNER_TEMP/units.txt"
+            sed 's/^/destroy: /' "$RUNNER_TEMP/destroy-units.txt" >> "$RUNNER_TEMP/units.txt"
+          fi
           echo "Selected units:"
           sed 's/^/  /' "$RUNNER_TEMP/units.txt"
 
@@ -281,6 +351,41 @@ jobs:
           terragrunt --no-color run --all "${FILTER_ARGS[@]}" --filter-allow-destroy --non-interactive --out-dir "$PLAN_DIR" -- "${TF_ARGS[@]}" > output.txt 2>&1
           code=$?
           set -e
+
+          # Workload leaves (LIB-0023), in an invocation of their own: see
+          # "Select units".
+          WORKLOAD_ARGS=()
+          while IFS= read -r arg; do [ -n "$arg" ] && WORKLOAD_ARGS+=("$arg"); done < "$RUNNER_TEMP/workload-args"
+          if [ ${#WORKLOAD_ARGS[@]} -gt 0 ] && [ "$code" -eq 0 ]; then
+            set +e
+            terragrunt --no-color run --all "${WORKLOAD_ARGS[@]}" --non-interactive --out-dir "$PLAN_DIR" -- "${TF_ARGS[@]}" >> output.txt 2>&1
+            code=$?
+            set -e
+          fi
+
+          # Workload instances values.yaml no longer has (LIB-0023), planned
+          # with -destroy from the base's stubs. Their plans land in the same
+          # $PLAN_DIR, keyed by the same relative paths. Terragrunt orders a
+          # saved plan's apply as if it created, so the destroys are applied one
+          # at a time, dependents first: the reverse of `find --dag`.
+          if [ -s "$RUNNER_TEMP/destroy-units.txt" ] && [ "$code" -eq 0 ]; then
+            DESTROY_ARGS=()
+            while IFS= read -r unit; do DESTROY_ARGS+=(--filter "./$unit"); done < "$RUNNER_TEMP/destroy-units.txt"
+            echo "=== Removed from values.yaml: planned as destroys from $(git merge-base main HEAD | cut -c1-7) ===" >> output.txt
+            set +e
+            if [ "$COMMAND" = plan ]; then
+              (cd "$RUNNER_TEMP/base" && terragrunt --no-color run --all "${DESTROY_ARGS[@]}" --non-interactive --out-dir "$PLAN_DIR" -- plan -destroy) >> output.txt 2>&1
+              code=$?
+            else
+              order=$(cd "$RUNNER_TEMP/base" && terragrunt --no-color find "${DESTROY_ARGS[@]}" --dag --json | jq -r '.[].path' | sed 's|^\./||' | awk '{ u[NR] = $0 } END { for (i = NR; i > 0; i--) print u[i] }')
+              for unit in $order; do
+                (cd "$RUNNER_TEMP/base" && terragrunt --no-color run --all --filter "./$unit" --non-interactive --out-dir "$PLAN_DIR" -- apply -lock-timeout=0s) >> output.txt 2>&1
+                code=$?
+                [ "$code" -eq 0 ] || break
+              done
+            fi
+            set -e
+          fi
           echo "exit_code=$code" >> "$GITHUB_OUTPUT"
           if grep -qE 'Saved plan is stale|Error acquiring the state lock' output.txt; then
             echo "stale=true" >> "$GITHUB_OUTPUT"

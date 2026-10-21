@@ -346,9 +346,13 @@ scaleway:
 ```
 
 `.lib-src/.github/scripts/resolve-workloads.sh` turns it into one stub leaf per
-module, at `workloads/<workload>/<provider>/<module>/<instance>/terragrunt.hcl`,
-which the spoke commits. CI runs it with `--check`. A stub carries only the
-`dependency` blocks its kind implies. For a workload leaf, this template:
+module, at `workloads/<workload>/<provider>/<module>/<instance>/terragrunt.hcl`.
+The stubs are generated, never committed: the spoke gitignores `/workloads/*/*/`,
+`mise run terraform-prepare` generates them locally, and `terragrunt-run.yml`
+(`workflows/v4.2.0`) generates them in CI, where deleting an instance from
+`values.yaml` plans its destroy. CI also runs the script with `--check`. A stub
+carries only the `dependency` blocks its kind implies. For a workload leaf, this
+template:
 
 - reads the leaf's entry in `values.yaml`, and marks the file read, so a PR that
   edits only `values.yaml` still plans every leaf that reads it;
