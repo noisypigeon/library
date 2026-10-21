@@ -4,6 +4,16 @@ All notable changes to this template are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.3.1] - 2026-10-20
+
+### Stop telling spokes to commit workload stubs
+
+When a workload leaf has no entry in its `values.yaml`, root.hcl's error used to say to run `resolve-workloads.sh` and commit the result. Workload stubs are now generated, never committed (LIB-0023's second amendment, `workflows/v4.2.0`), so the message says to run `resolve-workloads.sh`, which generates them from `values.yaml`. Nothing else changes.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#106](https://github.com/noisypigeon/library/pull/106)
+
 ## [4.3.0] - 2026-10-20
 
 ### Support workload leaves in the root.hcl template (LIB-0023)
