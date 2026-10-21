@@ -13,8 +13,9 @@
 # read at run time from the key's own b2_authorize_account (v4). Without
 # readFiles the key can't answer the HeadObject rclone sends for a sub-path or
 # after an upload, so the copy runs bucket root to bucket root, filtered to
-# terraform/**, with --s3-no-head; --s3-no-check-bucket keeps rclone from
-# trying to create either bucket, which neither key may do.
+# terraform/** and workloads/** (LIB-0023), with --s3-no-head;
+# --s3-no-check-bucket keeps rclone from trying to create either bucket, which
+# neither key may do.
 #
 # A spoke on state_backend = "cloudflare" calls this from terragrunt-apply.yml
 # (a job after apply) and from a scheduled caller, which picks up local applies.
@@ -143,13 +144,13 @@ jobs:
       # rewrite its metadata, which a key without readFiles can't do.
       - name: Copy state to B2
         if: steps.gate.outputs.enabled == 'true'
-        run: rclone copy "r2:$STATE_BUCKET" "b2:$BACKUP_BUCKET" --filter "- *.tflock" --filter "+ terraform/**" --filter "- **" --checksum --s3-no-head --stats-one-line -v
+        run: rclone copy "r2:$STATE_BUCKET" "b2:$BACKUP_BUCKET" --filter "- *.tflock" --filter "+ terraform/**" --filter "+ workloads/**" --filter "- **" --checksum --s3-no-head --stats-one-line -v
 
       - name: Check B2 holds every state file
         if: steps.gate.outputs.enabled == 'true'
         run: |
-          src=$(rclone lsf -R --files-only --filter "- *.tflock" --filter "+ terraform/**" --filter "- **" "r2:$STATE_BUCKET" | sort)
-          dst=$(rclone lsf -R --files-only --filter "- *.tflock" --filter "+ terraform/**" --filter "- **" "b2:$BACKUP_BUCKET" | sort)
+          src=$(rclone lsf -R --files-only --filter "- *.tflock" --filter "+ terraform/**" --filter "+ workloads/**" --filter "- **" "r2:$STATE_BUCKET" | sort)
+          dst=$(rclone lsf -R --files-only --filter "- *.tflock" --filter "+ terraform/**" --filter "+ workloads/**" --filter "- **" "b2:$BACKUP_BUCKET" | sort)
           missing=$(comm -23 <(echo "$src") <(echo "$dst"))
           echo "R2: $(echo "$src" | grep -c .) files, B2: $(echo "$dst" | grep -c .) files"
           if [ -n "$missing" ]; then
