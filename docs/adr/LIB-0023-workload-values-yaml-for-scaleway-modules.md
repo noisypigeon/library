@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-20.
-- **Status**: Proposed. Adds a second home for leaves, `workloads/`, beside
+- **Status**: Proposed; amended 2026-10-20 (see `## Amendments`). Adds a second home for leaves, `workloads/`, beside
   `terraform/`. Makes bounded exceptions to LIB-0001 invariants 2 and 4 for
   those leaves only. LIB-0004's layout does not govern them.
 
@@ -296,3 +296,49 @@ To be completed when §§3–8 ship.
    regenerating plans the destroy of that leaf only.
 8. **It is backed up.** The next `state-backup.yml` run copies the
    `workloads/poc/` keys to B2, and its post-copy check passes.
+
+## Amendments
+
+### 2026-10-20: what planning the build changed
+
+Planning #95 against the code found four places where §§3–7 can't work as
+written. The design is otherwise unchanged.
+
+1. **§3: the version is resolved inside root.hcl, not by a script.**
+   Terragrunt's `[main...HEAD]` filter plans inside git worktrees, which hold
+   only tracked files. `.lib-src/` is gitignored, so `run_cmd` would find no
+   `resolve-module-version.sh` there. The only files beside a spoke's
+   `root.hcl` are the template's own committed copies.
+   - root.hcl calls `run_cmd` on
+     `git ls-remote --sort=-v:refname --tags <library> refs/tags/terraform/scaleway/<module>/v<pin>*`
+     and takes the first line. git's version sort needs no shell and no new
+     file.
+   - There is no `resolve-module-version.sh`.
+2. **§5: root.hcl writes a wrapper module; it does not set
+   `terraform.source`.** Pointing `terraform.source` at the module would put
+   root.hcl's generated `required_providers` block beside the module's own,
+   and Terraform allows only one per module.
+   - A workload leaf keeps `source = get_terragrunt_dir()`, as a hand-written
+     leaf does.
+   - root.hcl generates `workload_generated.tf`: a `module "this"` block at
+     the resolved short URL, one variable per input, and
+     `output "module" { value = module.this }`. A hand-written leaf writes the
+     same thing by hand.
+3. **§5 and §7: no `mock_outputs`.** Under LIB-0022, apply runs the saved plan.
+   A bucket planned with a mock project ID, before its project exists, would
+   apply that mock.
+   - A stub's `dependency` blocks have no mocks. A leaf plans only once its
+     dependencies are applied, as runway's hand-written leaves already do.
+   - The POC therefore lands in two runway PRs: `project` and
+     `iam.application` first, then `bucket.scratch` and `iam.apiKey`.
+4. **§6: the per-version schema has no `required`, and it allows `version`.**
+   §4's defaults fill inputs a module requires, such as `name` and
+   `application_id`, so the module's own `required` list would reject a valid
+   file. Terraform still rejects a missing input at plan time. Each schema
+   sets `additionalProperties: false`, which is what catches a misspelt
+   input, and so it has to list `version` itself.
+
+**Verification 8 runs elsewhere.** `state-backup.yml` copies R2 to B2, and only
+spokes whose state is on R2 call it. runway's state is on Scaleway. So the new
+`+ workloads/**` filter is proved against garden's R2 bucket, by comparing
+`rclone lsf` with and without it.
