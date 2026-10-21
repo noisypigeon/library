@@ -4,6 +4,26 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.1.0] - 2026-10-20
+
+### Generate workload stubs and publish module inputs schemas (LIB-0023)
+
+This adds the scripts and CI paths LIB-0023's workloads need. A spoke can describe a workload's Scaleway resources in one `workloads/<workload>/values.yaml` at its repo root.
+
+- **`resolve-workloads.sh`** turns each `values.yaml` into one stub leaf per module, at `workloads/<workload>/<provider>/<module>/<instance>/terragrunt.hcl`. A stub carries only the `dependency` blocks its kind implies, with no `mock_outputs`, since apply runs the saved plan. Run it from a spoke's root and commit the result. It removes stubs `values.yaml` no longer implies, but only files carrying its GENERATED header.
+- **`resolve-workloads.sh --check`** writes nothing. It fails when a stub is missing, stale or hand-edited, and when an input isn't one of its module's inputs at the version it resolves to. That includes the inputs a workload wires from its dependencies, which an older pinned version may not have. Spokes add it to their `prepare_cmd`. It needs `yq`, which GitHub's Ubuntu runners have.
+- **`module-inputs-schema.sh`** prints a JSON Schema of one module directory's inputs, from `terraform-docs`.
+- **`generate-module-redirects.sh --static-root <dir>`** also publishes those schemas, one per `scaleway/project`, `bucket`, `iam-application` and `iam-api-key` version, beside each version's redirect page. It also publishes `schemas/workload/v1.json`, which validates a whole `values.yaml` and resolves pins to the right version's schema. Without the flag, nothing changes.
+- **`zola-site-pages.yml`** gains a `terraform_docs` input that installs terraform-docs v0.24.0 before `extra_step`.
+- **`terragrunt-detect.yml`**'s default `leaf_pattern` now matches `^workloads/`. A caller that overrides it should add the same.
+- **`state-backup.yml`** now copies and checks `workloads/**` as well as `terraform/**`, so workload state in R2 is backed up to B2.
+
+Nothing changes for a spoke with no `workloads/`. Workload leaves themselves need `terragrunt/root-hcl` v4.3.0, released separately.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#103](https://github.com/noisypigeon/library/pull/103)
+
 ## [4.0.1] - 2026-10-20
 
 ### fix(workflows): write changelogs on the newest main, not the merge commit
