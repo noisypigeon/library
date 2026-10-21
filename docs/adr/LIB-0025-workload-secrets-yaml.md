@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-21.
-- **Status**: Proposed. Amends LIB-0023, adding `secrets.yaml` beside
+- **Status**: Accepted. Amends LIB-0023, adding `secrets.yaml` beside
   `values.yaml`, and `secretRef` in `values.yaml`.
 
 ## Context
@@ -165,7 +165,7 @@ Sources:
 
 ## Verification
 
-Recorded 2026-10-21. Item 4 remains open, until runway#41 is merged.
+Recorded 2026-10-21. Every item passed.
 
 1. **Plaintext is refused.** `--check` fails on a `secrets.yaml` without
    `sops` metadata, and on one with a plaintext value.
@@ -184,8 +184,11 @@ Recorded 2026-10-21. Item 4 remains open, until runway#41 is merged.
      dummy value appeared in the comment or the job log.
 4. **A secrets-only change re-plans.** Editing only `secrets.yaml` selects its
    workload.
-   - **Open:** #39 couldn't isolate it, since its diff also changed
-     `root.hcl`. It needs a `secrets.yaml`-only PR after runway#41.
+   - **Passed:** [runway#43](https://github.com/noisypigeon/runway/pull/43)
+     changed only `workloads/poc/secrets.yaml`, re-encrypting it with
+     `sops --rotate`. It selected exactly the five `workloads/poc` leaves,
+     all `No changes.`, and no hand-written leaf. (#39 couldn't isolate this,
+     since its diff also changed `root.hcl`.)
 5. **`secretRef` resolves,** and a `secretRef` to a name `env` lacks fails the
    plan.
    - **Passed:** `website_index_document: { secretRef: … }` resolved on #39
