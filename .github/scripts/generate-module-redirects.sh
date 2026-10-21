@@ -36,6 +36,12 @@
 # from the modules' own CHANGELOG.md files (ADR-0141) — read off LIB_ROOT,
 # which since LIB-0002 is a fetched clone, not the site's own repo.
 #
+# With --static-root (the site's static/ directory), also publishes LIB-0023
+# §6's JSON Schemas there: one inputs.schema.json per terraform/scaleway
+# module version a workload can use, beside that version's redirect page, and
+# the workload schema at schemas/workload/v1.json that ties them together.
+# Without it, nothing under static/ is touched.
+#
 # Regenerate-all semantics: every run wipes and rewrites every generated page
 # under content/terraform/, content/theme-versions/ and content/releases/
 # (except each directory's hand-authored _index.md) from the current set of
@@ -45,10 +51,13 @@ set -euo pipefail
 LIB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TAG_REPO="${TAG_REPO:-noisypigeon/library}"
 CONTENT_ROOT=""
+STATIC_ROOT=""
+SCHEMA_BASE_URL="${SCHEMA_BASE_URL:-https://noisypigeon.garden}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --content-root) CONTENT_ROOT="$2"; shift 2 ;;
+    --static-root) STATIC_ROOT="$2"; shift 2 ;;
     --lib-root) LIB_ROOT="$2"; shift 2 ;;
     --tag-repo) TAG_REPO="$2"; shift 2 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -210,6 +219,100 @@ while IFS= read -r pair; do
 done <<<"$module_pairs"
 
 echo "Generated ${overview_count} module overview page(s) under ${CONTENT_DIR#"$CONTENT_ROOT"/}."
+
+# Workload schemas (LIB-0023 §6). Each module version's inputs schema is
+# generated from that tag's own module directory, so a pinned version
+# validates against the inputs it really has. The workload schema validates
+# each kind against its newest version, or the version its `version` pins.
+#
+# The module list is the third copy of the kind table; its twins are
+# resolve-workloads.sh's KINDS and root.hcl's workload_kinds.
+if [ -n "$STATIC_ROOT" ]; then
+  if [ ! -d "$STATIC_ROOT" ]; then
+    echo "::error::--static-root $STATIC_ROOT is not a directory" >&2
+    exit 2
+  fi
+  find "$STATIC_ROOT/terraform" -name inputs.schema.json -type f -delete 2>/dev/null || true
+  rm -f "$STATIC_ROOT/schemas/workload/v1.json"
+
+  kinds_json='{}'
+  schema_count=0
+  for wmodule in scaleway/project scaleway/iam-application scaleway/bucket scaleway/iam-api-key; do
+    wversions="$(templates_tags "terraform/${wmodule}/v*" \
+      | sed -nE 's#.*/v([0-9]+\.[0-9]+\.[0-9]+)$#\1#p' \
+      | sort -t. -k1,1n -k2,2n -k3,3n -u)"
+    [ -z "$wversions" ] && continue
+    while IFS= read -r v; do
+      out="$STATIC_ROOT/terraform/${wmodule}/v${v}"
+      mkdir -p "$out"
+      tree="$(mktemp -d)"
+      git -C "$LIB_ROOT" archive "terraform/${wmodule}/v${v}" "terraform/${wmodule}" | tar -x -C "$tree"
+      "$LIB_ROOT/.github/scripts/module-inputs-schema.sh" "$tree/terraform/${wmodule}" \
+        --id "${SCHEMA_BASE_URL}/terraform/${wmodule}/v${v}/inputs.schema.json" >"$out/inputs.schema.json"
+      rm -rf "$tree"
+      schema_count=$((schema_count + 1))
+    done <<<"$wversions"
+
+    # A kind: null (declared with no inputs), or a mapping whose `version`,
+    # if any, is one of the pins that exist, checked against the schema of
+    # the newest version that pin matches. $vs is oldest first.
+    kinds_json="$(jq --arg m "$wmodule" --arg versions "$wversions" --arg base "$SCHEMA_BASE_URL" '
+      ($versions | split("\n") | map(select(. != ""))) as $vs
+      | ([$vs[] | split(".") as $p | $p[0], "\($p[0]).\($p[1])", .] | unique) as $pins
+      | def url($v): "\($base)/terraform/\($m)/v\($v)/inputs.schema.json";
+      . + {($m): {anyOf: [
+          {type: "null"},
+          {
+            type: "object",
+            properties: {version: {type: "string", enum: $pins}},
+            allOf: (
+              [{if: {not: {required: ["version"]}}, then: {"$ref": url($vs[-1])}}]
+              + [$pins[] as $pin | {
+                  if: {properties: {version: {const: $pin}}, required: ["version"]},
+                  then: {"$ref": url([$vs[] | select(. == $pin or startswith($pin + "."))] | last)}
+                }]
+            )
+          }
+        ]}}
+    ' <<<"$kinds_json")"
+  done
+
+  mkdir -p "$STATIC_ROOT/schemas/workload"
+  jq --arg base "$SCHEMA_BASE_URL" '. as $k | {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "\($base)/schemas/workload/v1.json",
+    title: "Workload values.yaml (LIB-0023)",
+    type: "object",
+    additionalProperties: false,
+    required: ["prefix", "suffix"],
+    properties: {
+      prefix: {type: "string", minLength: 1},
+      suffix: {type: "string", minLength: 1},
+      scaleway: {
+        type: ["object", "null"],
+        additionalProperties: false,
+        properties: {
+          project: ($k["scaleway/project"] // {}),
+          bucket: {
+            type: ["object", "null"],
+            propertyNames: {pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"},
+            additionalProperties: ($k["scaleway/bucket"] // {})
+          },
+          iam: {
+            type: ["object", "null"],
+            additionalProperties: false,
+            properties: {
+              application: ($k["scaleway/iam-application"] // {}),
+              apiKey: ($k["scaleway/iam-api-key"] // {})
+            }
+          }
+        }
+      }
+    }
+  }' <<<"$kinds_json" >"$STATIC_ROOT/schemas/workload/v1.json"
+
+  echo "Generated ${schema_count} module inputs schema(s) and the workload schema under ${STATIC_ROOT}."
+fi
 
 mkdir -p "$THEME_CONTENT_DIR"
 find "$THEME_CONTENT_DIR" -maxdepth 1 -name '*.md' ! -name '_index.md' -delete

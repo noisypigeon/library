@@ -43,6 +43,11 @@ on:
         type: string
         required: false
         default: "0.23.6"
+      terraform_docs:
+        description: "Install terraform-docs before extra_step -- generate-module-redirects.sh --static-root needs it for LIB-0023's schemas."
+        type: boolean
+        required: false
+        default: false
       fetch_script:
         description: "Optional script (relative to the caller's repo root) to run before resolving the theme -- materializes the library version this site pins."
         type: string
@@ -78,6 +83,14 @@ jobs:
         env:
           THEME_SCRIPT: ${{ inputs.theme_script }}
         run: '"$(git rev-parse --show-toplevel)/$THEME_SCRIPT"'
+
+      - name: Install terraform-docs
+        if: inputs.terraform_docs
+        env:
+          TERRAFORM_DOCS_VERSION: "0.24.0"
+        run: |
+          curl -sSL "https://github.com/terraform-docs/terraform-docs/releases/download/v${TERRAFORM_DOCS_VERSION}/terraform-docs-v${TERRAFORM_DOCS_VERSION}-linux-amd64.tar.gz" \
+            | tar -xz -C /usr/local/bin terraform-docs
 
       - name: Run site-specific pre-build step
         if: inputs.extra_step != ''
