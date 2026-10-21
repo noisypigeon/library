@@ -58,6 +58,12 @@
 # `version` at every plan, and writes the module call into
 # workload_generated.tf. Its state sits in the same bucket as every other
 # leaf's, keyed by its path.
+#
+# Since v4.4.0 (LIB-0024) a workload with a project also gets its own
+# deployer, scaleway/terraform-deployer-iam/main, and each kind says whose
+# credentials it runs with. A `workload` kind's provider signs in with the
+# deployer's key, which its stub passes as two sensitive variables, in place
+# of the spoke's.
 
 locals {
   # The spoke's instance values. Missing spoke.hcl is a hard error, which is
@@ -323,8 +329,8 @@ locals {
 
   # The kinds (LIB-0023 §2): each module a workload can call, whether this
   # leaf's values.yaml declares its instance, the entry itself, the inputs a
-  # dependency fills (§4's wiring, which the stub sets), and the name
-  # defaults. resolve-workloads.sh's KINDS and generate-module-redirects.sh's
+  # dependency fills and their types (§4's wiring, which the stub sets), the
+  # defaults, and whose credentials it signs in with (LIB-0024 §2). resolve-workloads.sh's KINDS and generate-module-redirects.sh's
   # schema list are this table's twins: change one and change all three.
   # A YAML key with nothing under it is null, so every lookup goes through
   # try(); a conditional can't stand in, since HCL wants both of its arms to
@@ -334,32 +340,50 @@ locals {
   workload_buckets  = try(local.workload_scaleway.bucket, null)
   workload_kinds = {
     "scaleway/project" = {
-      declared  = local.workload_instance == "main" && contains(try(keys(local.workload_scaleway), []), "project")
-      entry     = try(local.workload_scaleway.project, null)
-      wiring    = []
-      defaults  = { name = "${local.workload_prefix}-${local.workload_suffix}" }
-      sensitive = false
+      declared    = local.workload_instance == "main" && contains(try(keys(local.workload_scaleway), []), "project")
+      entry       = try(local.workload_scaleway.project, null)
+      wiring      = {}
+      defaults    = { name = "${local.workload_prefix}-${local.workload_suffix}" }
+      sensitive   = false
+      credentials = "spoke"
     }
     "scaleway/iam-application" = {
-      declared  = local.workload_instance == "main" && contains(try(keys(local.workload_iam), []), "application")
-      entry     = try(local.workload_iam.application, null)
-      wiring    = []
-      defaults  = { name = "${local.workload_prefix}-${local.workload_suffix}" }
-      sensitive = false
+      declared    = local.workload_instance == "main" && contains(try(keys(local.workload_iam), []), "application")
+      entry       = try(local.workload_iam.application, null)
+      wiring      = {}
+      defaults    = { name = "${local.workload_prefix}-${local.workload_suffix}" }
+      sensitive   = false
+      credentials = "spoke"
+    }
+    # Implicit (LIB-0024 §1): every workload with a project has one, and a
+    # scaleway.deployer entry only overrides its inputs.
+    "scaleway/terraform-deployer-iam" = {
+      declared  = local.workload_instance == "main" && contains(try(keys(local.workload_scaleway), []), "project")
+      entry     = try(local.workload_scaleway.deployer, null)
+      wiring    = { project_ids = "list(string)", default_project_id = "string" }
+      defaults = {
+        name                    = "${local.workload_prefix}-${local.workload_suffix}-deployer"
+        project_permission_sets = ["ObjectStorageFullAccess"]
+        rotation_days           = 30
+      }
+      sensitive   = true
+      credentials = "spoke"
     }
     "scaleway/bucket" = {
-      declared  = contains(try(keys(local.workload_buckets), []), local.workload_instance)
-      entry     = try(local.workload_buckets[local.workload_instance], null)
-      wiring    = ["project_id"]
-      defaults  = { name_prefix = "${local.workload_prefix}-${local.workload_instance}", name_suffix = local.workload_suffix }
-      sensitive = false
+      declared    = contains(try(keys(local.workload_buckets), []), local.workload_instance)
+      entry       = try(local.workload_buckets[local.workload_instance], null)
+      wiring      = { project_id = "string" }
+      defaults    = { name_prefix = "${local.workload_prefix}-${local.workload_instance}", name_suffix = local.workload_suffix }
+      sensitive   = false
+      credentials = "workload"
     }
     "scaleway/iam-api-key" = {
-      declared  = local.workload_instance == "main" && contains(try(keys(local.workload_iam), []), "apiKey")
-      entry     = try(local.workload_iam.apiKey, null)
-      wiring    = ["default_project_id", "application_id"]
-      defaults  = {}
-      sensitive = true
+      declared    = local.workload_instance == "main" && contains(try(keys(local.workload_iam), []), "apiKey")
+      entry       = try(local.workload_iam.apiKey, null)
+      wiring      = { default_project_id = "string", application_id = "string" }
+      defaults    = {}
+      sensitive   = true
+      credentials = "spoke"
     }
   }
   workload_kind  = try(local.workload_kinds[local.workload_module], null)
@@ -371,7 +395,11 @@ locals {
     try(local.workload_kind.defaults, {}),
     { for k, v in local.workload_entry : k => v if k != "version" },
   )
-  workload_wiring = [for k in try(local.workload_kind.wiring, []) : k if !contains(keys(local.workload_inputs), k)]
+  workload_wiring = { for k, type in try(local.workload_kind.wiring, {}) : k => type if !contains(keys(local.workload_inputs), k) }
+
+  # A `workload` kind signs its provider in with the workload deployer's key
+  # (LIB-0024 §2), which the stub passes from its deployer dependency.
+  workload_credentials = local.is_workload_leaf && try(local.workload_kind.credentials, "spoke") == "workload"
 
   # The version (LIB-0023 §3): X.Y.Z exactly, X.Y or X as the newest release
   # within it, or the newest release when unset, by git's own version sort.
@@ -405,19 +433,32 @@ locals {
   # module is one output, so a dependent reads dependency.<name>.outputs.module.id.
   workload_tf = <<EOF
 # Generated by root.hcl from ${local.workload_file} (LIB-0023) -- do not edit.
-%{for k in local.workload_wiring~}
+%{for k, type in local.workload_wiring~}
 variable "${k}" {
-  type    = string
+  type    = ${type}
   default = null
 }
 
 %{endfor~}
+%{if local.workload_credentials~}
+# The workload deployer's key (LIB-0024 §2), for provider_scaleway_generated.tf.
+variable "scaleway_access_key" {
+  type      = string
+  sensitive = true
+}
+
+variable "scaleway_secret_key" {
+  type      = string
+  sensitive = true
+}
+
+%{endif~}
 module "this" {
   source = "https://noisypigeon.garden/terraform/${local.workload_module}/v${local.workload_version}"
 %{for k, v in local.workload_inputs~}
   ${k} = ${replace(replace(jsonencode(v), "$${", "$$${"), "%%{", "%%%{")}
 %{endfor~}
-%{for k in local.workload_wiring~}
+%{for k, type in local.workload_wiring~}
   ${k} = var.${k}
 %{endfor~}
 }
@@ -620,8 +661,8 @@ generate "provider_scaleway" {
   if_exists = "overwrite"
   contents  = !local.scaleway_enabled ? local.provider_off : <<EOF
 provider "scaleway" {
-  access_key      = "${local.scaleway_access_key}"
-  secret_key      = "${local.scaleway_secret_key}"
+  access_key      = ${local.workload_credentials ? "var.scaleway_access_key" : "\"${local.scaleway_access_key}\""}
+  secret_key      = ${local.workload_credentials ? "var.scaleway_secret_key" : "\"${local.scaleway_secret_key}\""}
   organization_id = "${local.scaleway_organization_id}"
   zone            = "${local.scaleway_zone}"
   region          = "${local.scaleway_region}"

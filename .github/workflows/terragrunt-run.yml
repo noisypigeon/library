@@ -26,6 +26,11 @@
 # Both commands plan and apply the PR's head, never the merge ref, so what was
 # planned is the tree that gets applied.
 #
+# Since v4.3.0 a workload's leaves are planned one at a time, and a leaf whose
+# workload dependencies are new or changing is deferred to the next stage: an
+# apply that leaves any deferred keeps terragrunt/apply pending and doesn't
+# merge, and a `terragrunt plan` comment plans the next stage (LIB-0024).
+#
 # Since v4.2.0 a spoke's workload leaves (LIB-0023) are generated here, from
 # each workloads/<workload>/values.yaml, rather than committed. "Select units"
 # runs resolve-workloads.sh, plans every leaf of a workload whose values.yaml
@@ -353,14 +358,65 @@ jobs:
           set -e
 
           # Workload leaves (LIB-0023), in an invocation of their own: see
-          # "Select units".
+          # "Select units". A plan takes them one at a time, in DAG order, and
+          # defers any whose workload dependency is deferred or changing, since
+          # a stub carries no mock_outputs and a changing dependency -- a new
+          # one, or a rotating deployer key -- would leave its dependents'
+          # saved plans stale (LIB-0024 §3). A deferred unit has no saved plan,
+          # so apply applies exactly the units that have one.
           WORKLOAD_ARGS=()
           while IFS= read -r arg; do [ -n "$arg" ] && WORKLOAD_ARGS+=("$arg"); done < "$RUNNER_TEMP/workload-args"
+          : > "$RUNNER_TEMP/deferred-units.txt"
           if [ ${#WORKLOAD_ARGS[@]} -gt 0 ] && [ "$code" -eq 0 ]; then
-            set +e
-            terragrunt --no-color run --all "${WORKLOAD_ARGS[@]}" --non-interactive --out-dir "$PLAN_DIR" -- "${TF_ARGS[@]}" >> output.txt 2>&1
-            code=$?
-            set -e
+            terragrunt --no-color find "${WORKLOAD_ARGS[@]}" --dag --dependencies --format json \
+              | jq -r '.[] | [(.path | sub("^\\./"; "")), ((.dependencies // []) | map(sub("^\\./"; "")) | join(" "))] | @tsv' \
+              > "$RUNNER_TEMP/workload-dag.tsv"
+            if [ "$COMMAND" = plan ]; then
+              settled_not=" "
+              while IFS=$'\t' read -r unit deps; do
+                blocked=""
+                for dep in $deps; do
+                  case "$settled_not" in *" $dep "*) blocked="${blocked:+$blocked, }$dep" ;; esac
+                done
+                if [ -n "$blocked" ]; then
+                  echo "$unit" >> "$RUNNER_TEMP/deferred-units.txt"
+                  settled_not="$settled_not$unit "
+                  echo "=== $unit: deferred until $blocked is applied ===" >> output.txt
+                  continue
+                fi
+                set +e
+                terragrunt --no-color run --all --filter "./$unit" --non-interactive --out-dir "$PLAN_DIR" -- plan -detailed-exitcode >> output.txt 2>&1
+                rc=$?
+                set -e
+                case "$rc" in
+                  0) ;;
+                  2) settled_not="$settled_not$unit " ;;
+                  *) code=$rc; break ;;
+                esac
+              done < "$RUNNER_TEMP/workload-dag.tsv"
+            else
+              APPLY_ARGS=()
+              while IFS=$'\t' read -r unit _; do
+                if [ -f "$PLAN_DIR/$unit/tfplan.tfplan" ]; then
+                  APPLY_ARGS+=(--filter "./$unit")
+                else
+                  echo "$unit" >> "$RUNNER_TEMP/deferred-units.txt"
+                fi
+              done < "$RUNNER_TEMP/workload-dag.tsv"
+              if [ ${#APPLY_ARGS[@]} -gt 0 ]; then
+                set +e
+                terragrunt --no-color run --all "${APPLY_ARGS[@]}" --non-interactive --out-dir "$PLAN_DIR" -- "${TF_ARGS[@]}" >> output.txt 2>&1
+                code=$?
+                set -e
+              fi
+            fi
+          fi
+          if [ -s "$RUNNER_TEMP/deferred-units.txt" ]; then
+            echo "deferred=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "=== Deferred until their dependencies are applied (LIB-0024): ==="
+              sed 's/^/  /' "$RUNNER_TEMP/deferred-units.txt"
+            } >> output.txt
           fi
 
           # Workload instances values.yaml no longer has (LIB-0023), planned
@@ -437,6 +493,7 @@ jobs:
           UNITS_MATCH: ${{ steps.unpack.outputs.matches }}
           STALE: ${{ steps.run.outputs.stale }}
           EXIT_CODE: ${{ steps.run.outputs.exit_code }}
+          DEFERRED: ${{ steps.run.outputs.deferred }}
         with:
           script: |
             const fs = require('fs');
@@ -487,8 +544,12 @@ jobs:
                 truncated = true;
               }
               let footer = '';
+              const deferred = process.env.DEFERRED === 'true';
               if (command !== 'apply' && success) {
                 footer = `Planned \`${sha}\`. Comment \`terragrunt apply\` on this PR to apply exactly this plan.`;
+                if (deferred) footer += ' Some workload leaves are deferred until what they depend on is applied: after the apply, comment `terragrunt plan` for the next stage.';
+              } else if (command === 'apply' && success && deferred) {
+                footer = 'Applied this stage. Some workload leaves are still deferred: comment `terragrunt plan` for the next stage.';
               } else if (command === 'apply' && process.env.STALE === 'true') {
                 footer = `Another apply has changed or is holding this state since \`${sha}\` was planned. ${replan}`;
               }
@@ -538,9 +599,13 @@ jobs:
         env:
           EXIT_CODE: ${{ steps.run.outputs.exit_code }}
           HEAD_SHA: ${{ steps.head.outputs.sha }}
+          DEFERRED: ${{ steps.run.outputs.deferred }}
         with:
           script: |
             const success = process.env.EXIT_CODE === '0';
+            // An apply that left workload leaves deferred (LIB-0024 §3) is a
+            // stage, not the end: the gate stays pending and nothing merges.
+            const staged = success && process.env.DEFERRED === 'true';
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
 
             const { data: pr } = await github.rest.pulls.get({
@@ -553,13 +618,15 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               sha: process.env.HEAD_SHA || pr.head.sha,
-              state: success ? 'success' : 'failure',
+              state: staged ? 'pending' : success ? 'success' : 'failure',
               context: 'terragrunt/apply',
-              description: success ? 'terragrunt apply succeeded' : 'terragrunt apply failed',
+              description: staged
+                ? 'Deferred units remain; comment terragrunt plan'
+                : success ? 'terragrunt apply succeeded' : 'terragrunt apply failed',
               target_url: runUrl,
             });
 
-            if (success) {
+            if (success && !staged) {
               try {
                 await github.rest.pulls.merge({
                   owner: context.repo.owner,
