@@ -8,24 +8,32 @@
 # blocks its kind implies (§4's wiring), and passes their IDs on as inputs.
 # Values, defaults and the module version are root.hcl's, at plan time: it
 # writes them into the leaf's generated module block as literals, since a
-# `type = any` variable set through TF_VAR_ arrives as a string. So only adding or removing a kind or an instance changes the
-# stubs; editing an input or a `version` changes only values.yaml.
+# `type = any` variable set through TF_VAR_ arrives as a string.
 #
 # Dependencies carry no mock_outputs (LIB-0023's 2026-10-20 amendment, item
 # 3): apply runs the saved plan (LIB-0022), and a mock baked into one would be
 # applied. A dependent plans once its dependencies are applied.
 #
-# The spoke commits the stubs, for the reason resolve-root-hcl.sh's copies are
-# committed: Terragrunt's [main...HEAD] filter plans inside git worktrees,
-# where only tracked files exist.
+# The stubs are generated, never committed: a workload commits only its
+# values.yaml, and the spoke gitignores /workloads/*/*/ (LIB-0023's second
+# 2026-10-20 amendment). A spoke's terraform-prepare task runs this before
+# terragrunt, and terragrunt-run.yml runs it in CI. Terragrunt's [main...HEAD]
+# filter plans in worktrees holding only tracked files, so it can't see a stub;
+# terragrunt-run.yml selects workload leaves by their values.yaml instead, and
+# plans the destroy of an instance values.yaml no longer has from stubs this
+# script generates in a worktree of the base.
 #
-# --check writes nothing. It exits 1 if any stub is missing, stale or edited,
-# and if any input in values.yaml isn't one of its module's inputs at the
-# version it resolves to, read from that version's published
-# inputs.schema.json (LIB-0023 §6). Types are left to terraform plan. Without
-# --check, the script (re)writes every stub and removes the ones values.yaml no
-# longer implies -- only files carrying the GENERATED header below, so a
-# hand-written file under workloads/ is never deleted.
+# Without a flag, the script (re)writes every stub and removes the ones
+# values.yaml no longer implies -- only files carrying the GENERATED header
+# below, so a hand-written file under workloads/ is never deleted.
+#
+# --list writes nothing and prints each stub directory values.yaml implies,
+# one per line, for terragrunt-run.yml to compare a base with its head.
+#
+# --check writes nothing. It exits 1 if values.yaml is malformed, if any input
+# in it isn't one of its module's inputs at the version it resolves to, read
+# from that version's published inputs.schema.json (LIB-0023 §6), and if any
+# stub is tracked by git. Types are left to terraform plan.
 #
 # The kind table below has a twin in terragrunt/root-hcl/root.hcl
 # (workload_kinds) and a third copy in generate-module-redirects.sh
@@ -37,10 +45,12 @@
 set -euo pipefail
 
 CHECK=false
+LIST=false
 case "${1:-}" in
   --check) CHECK=true ;;
+  --list) LIST=true ;;
   "") ;;
-  *) echo "usage: $0 [--check]" >&2; exit 2 ;;
+  *) echo "usage: $0 [--check | --list]" >&2; exit 2 ;;
 esac
 
 SPOKE_DIR="$(pwd)"
@@ -257,7 +267,7 @@ if [ "$errors" -gt 0 ]; then
   exit 1
 fi
 
-# Every committed stub, by its GENERATED header.
+# Every generated stub on disk, by its GENERATED header.
 generated_stubs() {
   [ -d "$SPOKE_DIR/workloads" ] || return 0
   (cd "$SPOKE_DIR" && find workloads -mindepth 5 -maxdepth 5 -name terragrunt.hcl -type f) |
@@ -269,19 +279,18 @@ expected_stubs() {
   (cd "$EXPECTED_DIR" && find workloads -name terragrunt.hcl -type f 2>/dev/null) | LC_ALL=C sort
 }
 
+if [ "$LIST" = true ]; then
+  expected_stubs | sed 's|/terragrunt.hcl$||'
+  exit 0
+fi
+
 if [ "$CHECK" = true ]; then
-  while IFS= read -r f; do
-    [ -z "$f" ] && continue
-    if [ ! -f "$SPOKE_DIR/$f" ]; then
-      fail "No committed $f; run resolve-workloads.sh and commit the result"
-    elif ! cmp -s "$EXPECTED_DIR/$f" "$SPOKE_DIR/$f"; then
-      fail "$f differs from what values.yaml implies; run resolve-workloads.sh and commit the result, never edit it by hand"
-    fi
-  done < <(expected_stubs)
-  while IFS= read -r f; do
-    [ -z "$f" ] && continue
-    [ -f "$EXPECTED_DIR/$f" ] || fail "$f is no longer implied by its values.yaml; run resolve-workloads.sh and commit the result"
-  done < <(generated_stubs)
+  if git -C "$SPOKE_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      fail "$f is committed, but stubs are generated, never committed (LIB-0023); git rm --cached it and gitignore /workloads/*/*/"
+    done < <(git -C "$SPOKE_DIR" ls-files -- 'workloads/*/*/*/*/terragrunt.hcl')
+  fi
 
   for inst in ${instances[@]+"${instances[@]}"}; do
     IFS='|' read -r workload module name jq_path declared_deps <<<"$inst"
@@ -320,7 +329,7 @@ if [ "$CHECK" = true ]; then
   if [ "$errors" -gt 0 ]; then
     exit 1
   fi
-  echo "Workload stubs match values.yaml"
+  echo "Workload values.yaml files are valid"
   exit 0
 fi
 
