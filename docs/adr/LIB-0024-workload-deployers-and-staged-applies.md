@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-20.
-- **Status**: Proposed. Amends LIB-0023, which gains a kind and a credentials
+- **Status**: Accepted. Amends LIB-0023, which gains a kind and a credentials
   column, and LIB-0022, whose merge gate now waits for every stage.
 
 ## Context
@@ -174,16 +174,30 @@ alike.
 
 ## Verification
 
-To be completed when §§1–5 ship.
+Recorded 2026-10-21, against runway's `workloads/poc`. Item 3's apply half
+remains open.
 
 1. **A new workload bootstraps in one PR.** A fresh `values.yaml` with a
    project, an application, an API key and a bucket plans in three stages,
    and each stage's apply succeeds. The gate goes green only after the third.
+   - **Passed, from an existing workload:** [runway#38](https://github.com/noisypigeon/runway/pull/38)
+     planned the new deployer and deferred the bucket. It applied that stage,
+     with the gate left pending and no auto-merge. It then re-planned the
+     bucket, and applied it. A fresh workload from nothing is the same path
+     with one more stage.
 2. **The bucket signs in with the workload's key.** Its apply succeeds in a
    project the spoke's deployer has no project grants on, which is where
    runway#35 failed.
+   - **Passed:** #38's second apply created `poc-scratch-8nx0we-lib-0023` in
+     the POC project, signed in with the POC deployer's key.
 3. **Rotation defers.** With rotation forced, the deployer's plan replaces
    the key, and the bucket is deferred. After the apply, the re-plan shows the
    bucket `No changes.`, signed in with the new key.
+   - **Plan half passed:** on [runway#42](https://github.com/noisypigeon/runway/pull/42), forcing rotation
+     (`scaleway.deployer.rotation_days: 1`) planned the API key "must be
+     replaced", and deferred the bucket. Applying it, and the re-plan after,
+     are open.
 4. **Adoption selects nothing first.** runway's workflows-only PR plans no
    units.
+   - **Passed:** [runway#37](https://github.com/noisypigeon/runway/pull/37) and [#40](https://github.com/noisypigeon/runway/pull/40)
+     changed only `.lib-version` and the callers, and selected nothing.
