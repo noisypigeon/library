@@ -69,13 +69,21 @@ for tool in yq jq; do
   fi
 done
 
-# YAML path | module | shape | dependencies. The twin of root.hcl's
-# workload_kinds; see the header.
+# YAML path | module | shape | dependencies | credentials. The twin of
+# root.hcl's workload_kinds; see the header.
+#
+# - shape: a singleton's instance is `main`, a map's is each key, and the
+#   implicit deployer (LIB-0024 §1) exists whenever the workload declares a
+#   project, with or without a `scaleway.deployer` entry.
+# - credentials (LIB-0024 §2): `spoke` kinds sign in with the spoke's key;
+#   `workload` kinds with the workload deployer's, which they then also depend
+#   on.
 KINDS=(
-  "scaleway.project|scaleway/project|singleton|"
-  "scaleway.iam.application|scaleway/iam-application|singleton|"
-  "scaleway.bucket|scaleway/bucket|map|project"
-  "scaleway.iam.apiKey|scaleway/iam-api-key|singleton|project application"
+  "scaleway.project|scaleway/project|singleton||spoke"
+  "scaleway.iam.application|scaleway/iam-application|singleton||spoke"
+  "scaleway.deployer|scaleway/terraform-deployer-iam|implicit|project|spoke"
+  "scaleway.bucket|scaleway/bucket|map|project|workload"
+  "scaleway.iam.apiKey|scaleway/iam-api-key|singleton|project application|spoke"
 )
 
 # A dependency's stub, relative to its provider directory.
@@ -83,23 +91,34 @@ dep_dir() {
   case "$1" in
     project) echo "project/main" ;;
     application) echo "iam-application/main" ;;
+    deployer) echo "terraform-deployer-iam/main" ;;
   esac
 }
 
-# The module input a dependency's ID fills (LIB-0023 §4).
-wiring_input() {
+# The inputs a dependency fills (LIB-0023 §4, LIB-0024 §§1-2), one
+# "<input>|<expression>" per line. scaleway_access_key and scaleway_secret_key
+# aren't module inputs: root.hcl signs the leaf's provider in with them.
+wiring_lines() {
   case "$1:$2" in
-    scaleway/bucket:project) echo "project_id" ;;
-    scaleway/iam-api-key:project) echo "default_project_id" ;;
-    scaleway/iam-api-key:application) echo "application_id" ;;
+    scaleway/bucket:project) echo "project_id|dependency.project.outputs.module.id" ;;
+    scaleway/iam-api-key:project) echo "default_project_id|dependency.project.outputs.module.id" ;;
+    scaleway/iam-api-key:application) echo "application_id|dependency.application.outputs.module.id" ;;
+    scaleway/terraform-deployer-iam:project)
+      echo "project_ids|[dependency.project.outputs.module.id]"
+      echo "default_project_id|dependency.project.outputs.module.id"
+      ;;
+    *:deployer)
+      echo "scaleway_access_key|dependency.deployer.outputs.module.access_key"
+      echo "scaleway_secret_key|dependency.deployer.outputs.module.secret_key"
+      ;;
   esac
 }
 
-# The YAML path a dependency is declared at, to tell whether this workload
-# declares it.
+# Whether this workload has a dependency: its YAML key for the declared kinds,
+# and the project for the implicit deployer.
 dep_yaml_path() {
   case "$1" in
-    project) echo "scaleway.project" ;;
+    project | deployer) echo "scaleway.project" ;;
     application) echo "scaleway.iam.application" ;;
   esac
 }
@@ -123,20 +142,21 @@ terraform {
 }
 EOF
   [ ${#deps[@]} -eq 0 ] && return 0
-  local dep
+  local dep lines="" width=0 input expr
   for dep in "${deps[@]}"; do
     printf '\ndependency "%s" {\n  config_path = "../../%s"\n}\n' "$dep" "$(dep_dir "$dep")"
+    lines="$lines$(wiring_lines "$module" "$dep")"$'\n'
   done
   # Aligned on `=`, as terragrunt hcl format would leave it.
-  local width=0 input
-  for dep in "${deps[@]}"; do
-    input=$(wiring_input "$module" "$dep")
+  while IFS='|' read -r input expr; do
+    [ -z "$input" ] && continue
     if [ "${#input}" -gt "$width" ]; then width=${#input}; fi
-  done
+  done <<<"$lines"
   printf '\ninputs = {\n'
-  for dep in "${deps[@]}"; do
-    printf '  %-*s = dependency.%s.outputs.module.id\n' "$width" "$(wiring_input "$module" "$dep")" "$dep"
-  done
+  while IFS='|' read -r input expr; do
+    [ -z "$input" ] && continue
+    printf '  %-*s = %s\n' "$width" "$input" "$expr"
+  done <<<"$lines"
   printf '}\n'
 }
 
@@ -207,8 +227,10 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
       (if (.prefix | type) != "string" or .prefix == "" then "prefix must be a non-empty string" else empty end),
       (if (.suffix | type) != "string" or .suffix == "" then "suffix must be a non-empty string" else empty end),
       (.scaleway // {} | if type != "object" then "scaleway must be a mapping" else
-        keys_in("scaleway"; ["project", "bucket", "iam"]),
+        keys_in("scaleway"; ["project", "deployer", "bucket", "iam"]),
         (.project | entry_ok("scaleway.project")),
+        (.deployer | entry_ok("scaleway.deployer")),
+        (if has("deployer") and (has("project") | not) then "scaleway.deployer configures the workload deployer, which exists only with a scaleway.project (LIB-0024)" else empty end),
         (.iam // {} | if type != "object" then "scaleway.iam must be a mapping" else
           keys_in("scaleway.iam"; ["application", "apiKey"]),
           (.application | entry_ok("scaleway.iam.application")),
@@ -220,7 +242,7 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
             (.value | entry_ok("scaleway.bucket.\(.key)"))
         end)
       end),
-      ([.scaleway.project, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?)]
+      ([.scaleway.project, .scaleway.deployer, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?)]
         | .[] | objects | select(has("version")) | .version
         | if type == "string" and test("^[0-9]+(\\.[0-9]+){0,2}$") then empty
           else "version \(tojson) must be a quoted X, X.Y or X.Y.Z" end)
@@ -232,10 +254,13 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
   fi
 
   for kind in "${KINDS[@]}"; do
-    IFS='|' read -r yaml_path module shape deps <<<"$kind"
+    IFS='|' read -r yaml_path module shape deps credentials <<<"$kind"
     jq_path=".${yaml_path}"
+    [ "$credentials" = workload ] && deps="$deps deployer"
     if [ "$shape" = map ]; then
       names=$(jq -r "$jq_path // {} | keys[]" <<<"$json")
+    elif [ "$shape" = implicit ]; then
+      names=$(jq -r 'if (.scaleway // {}) | has("project") then "main" else empty end' <<<"$json")
     else
       names=$(jq -r "if ($jq_path | type) == \"null\" and ((${jq_path%.*} // {}) | has(\"${yaml_path##*.}\") | not) then empty else \"main\" end" <<<"$json")
     fi
@@ -311,11 +336,13 @@ if [ "$CHECK" = true ]; then
     # pin can predate it (iam-api-key v0.1.0 has no default_project_id).
     missing_wiring=""
     for dep in $declared_deps; do
-      input=$(wiring_input "$module" "$dep")
-      if ! jq -e --arg i "$input" 'has($i)' <<<"$entry" >/dev/null &&
-         ! jq -e --arg i "$input" 'index($i) != null' <<<"$props" >/dev/null; then
-        missing_wiring="${missing_wiring:+$missing_wiring, }$input"
-      fi
+      while IFS='|' read -r input _; do
+        case "$input" in "" | scaleway_access_key | scaleway_secret_key) continue ;; esac
+        if ! jq -e --arg i "$input" 'has($i)' <<<"$entry" >/dev/null &&
+           ! jq -e --arg i "$input" 'index($i) != null' <<<"$props" >/dev/null; then
+          missing_wiring="${missing_wiring:+$missing_wiring, }$input"
+        fi
+      done < <(wiring_lines "$module" "$dep")
     done
     if [ -n "$unknown" ]; then
       fail "$where: $module v$version has no input(s) $unknown"

@@ -368,6 +368,18 @@ template:
   variables the stub sets from its dependencies, and the whole module as
   `output "module"`.
 
+A workload with a project also gets its own deployer (v4.4.0, LIB-0024), at
+`workloads/<workload>/scaleway/terraform-deployer-iam/main`. It needs no entry
+in `values.yaml`, and an optional `scaleway.deployer` overrides its inputs. It
+is scoped to the workload's project, defaults to `ObjectStorageFullAccess`, and
+rotates its key every 30 days. Projects, deployers and IAM objects sign in with
+the spoke's key. Project-scoped kinds, buckets today, sign in with the
+deployer's key instead. The stub passes it as `scaleway_access_key` and
+`scaleway_secret_key`, and this template's `provider "scaleway"` reads them.
+`terragrunt-run.yml` (`workflows/v4.3.0`) plans a workload's leaves one at a
+time and defers those whose dependencies are new or changing, so a new
+workload lands in a few staged applies.
+
 Every input written in `values.yaml` wins over a default or a dependency. A
 dependency has no `mock_outputs`, since apply runs the saved plan (LIB-0022):
 a dependent plans only once what it depends on is applied, so land a workload's

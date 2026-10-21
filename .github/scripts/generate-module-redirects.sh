@@ -237,7 +237,7 @@ if [ -n "$STATIC_ROOT" ]; then
 
   kinds_json='{}'
   schema_count=0
-  for wmodule in scaleway/project scaleway/iam-application scaleway/bucket scaleway/iam-api-key; do
+  for wmodule in scaleway/project scaleway/iam-application scaleway/terraform-deployer-iam scaleway/bucket scaleway/iam-api-key; do
     wversions="$(templates_tags "terraform/${wmodule}/v*" \
       | sed -nE 's#.*/v([0-9]+\.[0-9]+\.[0-9]+)$#\1#p' \
       | sort -t. -k1,1n -k2,2n -k3,3n -u)"
@@ -293,6 +293,7 @@ if [ -n "$STATIC_ROOT" ]; then
         additionalProperties: false,
         properties: {
           project: ($k["scaleway/project"] // {}),
+          deployer: ($k["scaleway/terraform-deployer-iam"] // {}),
           bucket: {
             type: ["object", "null"],
             propertyNames: {pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"},
