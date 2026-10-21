@@ -6,6 +6,8 @@ The leaf that calls it manages the key every other leaf deploys with, so it must
 
 `policy_name` is used exactly as given (unlike `iam-policy`, which appends `-policy`), so an existing policy can be adopted under its current name. The API key's `expires_at` defaults to 30 days after first creation, anchored by `time_static`, as in `iam-api-key`.
 
+With `rotation_days`, the key is instead replaced every `rotation_days`, by a `time_rotating` resource, and expires a week after each scheduled rotation (LIB-0024 §4). It's created before the old one is destroyed. That suits a key Terraform hands to other leaves, such as a LIB-0024 workload deployer, where the next plan after a rotation picks up the new key. It doesn't suit a key that is hand-copied into a secrets file, like a spoke's own deployer.
+
 ## Usage
 
 ```hcl
