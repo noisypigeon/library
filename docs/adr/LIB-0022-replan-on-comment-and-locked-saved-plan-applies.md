@@ -4,6 +4,8 @@
 - **Date**: 2026-10-20.
 - **Status**: Accepted. Amends LIB-0003's spoke Terragrunt CI. Settles the
   state-locking item that LIB-0007 and LIB-0016 left out of scope.
+- **Amended 2026-10-20**: LIB-0024 keeps `terragrunt/apply` pending after an
+  apply whose plan deferred workload leaves, until a re-plan defers nothing.
 
 ## Context
 
