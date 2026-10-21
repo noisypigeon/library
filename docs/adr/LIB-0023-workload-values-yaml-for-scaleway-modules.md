@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-20.
-- **Status**: Proposed; amended twice on 2026-10-20 (see `## Amendments`), by LIB-0024, which adds the implicit `scaleway.deployer` kind and a `credentials` column to §2's table, and by LIB-0025, which adds a sops-encrypted `secrets.yaml` beside `values.yaml` and `secretRef` within it. Adds a second home for leaves, `workloads/`, beside
+- **Status**: Accepted; amended twice on 2026-10-20 (see `## Amendments`), by LIB-0024, which adds the implicit `scaleway.deployer` kind and a `credentials` column to §2's table, and by LIB-0025, which adds a sops-encrypted `secrets.yaml` beside `values.yaml` and `secretRef` within it. Adds a second home for leaves, `workloads/`, beside
   `terraform/`. Makes bounded exceptions to LIB-0001 invariants 2 and 4 for
   those leaves only. LIB-0004's layout does not govern them.
 
@@ -275,27 +275,55 @@ The spoke CI also assumes that every leaf is under `terraform/`.
 
 ## Verification
 
-To be completed when §§3–8 ship.
+Recorded 2026-10-21, against runway's `workloads/poc`. Items 4 and 7 remain
+open.
 
 1. **The stubs match the file.** `resolve-workloads.sh --check` passes in
    runway, and fails after a bucket key is added to `values.yaml` without
    regenerating.
+   - **Passed, as amended:** stubs aren't committed any more, so `--check`
+     passes with only `values.yaml` committed, and fails on a tracked stub,
+     as it did for all four stubs on a scratch spoke. In runway it passes in
+     every plan's prepare step.
 2. **The POC touches only itself.** The first plan of
    `workloads/poc/` creates four modules' resources, all under that
    path, and every other leaf plans `No changes.`
+   - **Passed:** [runway#31](https://github.com/noisypigeon/runway/pull/31) planned the project and the
+     application, 1 to add each, and every one of the 22 hand-written leaves
+     `No changes.` The bucket and API key came in later PRs, since they
+     depend on those two (the first amendment, item 3).
 3. **It converges, in the same bucket.** The apply writes keys under
    `workloads/poc/` in runway's existing state bucket, and nothing else. A
    second plan of every `poc` leaf shows `No changes.`
+   - **Passed:** state is at `workloads/poc/scaleway/<module>/<instance>/`
+     in runway's existing bucket, and each later plan
+     ([runway#38](https://github.com/noisypigeon/runway/pull/38), [#41](https://github.com/noisypigeon/runway/pull/41)) shows the applied
+     leaves `No changes.`
 4. **Latest is latest.** A `scaleway/bucket` release, with no runway commit,
    appears as a new source version on a `terragrunt plan` comment.
+   - **Open:** no POC module has had a release since. The resolution itself
+     works: `scaleway/terraform-deployer-iam` v0.2.0 was picked up the
+     moment it was tagged.
 5. **A pin holds.** Setting `version` to the previous `X.Y.Z` plans that
    version.
+   - **Passed:** on [runway#42](https://github.com/noisypigeon/runway/pull/42), `version: "2.0.2"`
+     downloaded `scaleway/project/v2.0.2` and planned `No changes.`
 6. **The schema rejects a typo.** A misspelt bucket input fails
    `resolve-workloads.sh --check` before any plan runs.
+   - **Passed:** on [runway#42](https://github.com/noisypigeon/runway/pull/42), `force_destory` failed the
+     prepare step with "scaleway/bucket v5.0.0 has no input(s)
+     force_destory", and Terragrunt never ran.
 7. **It tears down.** Removing `bucket.scratch` from `values.yaml` and
    regenerating plans the destroy of that leaf only.
+   - **Planned, not applied:** on a plan-only draft
+     ([runway#33](https://github.com/noisypigeon/runway/pull/33)), removing the application planned its
+     destroy from the base, and nothing else. Applying a destroy is open,
+     and waits for a decision on keeping the POC (#98).
 8. **It is backed up.** The next `state-backup.yml` run copies the
    `workloads/poc/` keys to B2, and its post-copy check passes.
+   - **Passed as far as it can:** runway's state isn't on R2, so this ran
+     against garden's R2 bucket, read-only. The new filter selects exactly
+     the old filter's 6 files. No R2 spoke has a workload yet to copy.
 
 ## Amendments
 

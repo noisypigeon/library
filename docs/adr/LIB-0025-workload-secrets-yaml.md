@@ -165,16 +165,29 @@ Sources:
 
 ## Verification
 
-To be completed when §§1–4 ship.
+Recorded 2026-10-21. Item 4 remains open, until runway#41 is merged.
 
 1. **Plaintext is refused.** `--check` fails on a `secrets.yaml` without
    `sops` metadata, and on one with a plaintext value.
+   - **Passed** on a scratch spoke, for both, and for unknown keys, an input
+     in both files, a secret for an undeclared instance, and an unknown
+     input.
 2. **Secrets never reach a generated file.** With a dummy secret in a workload
    leaf, `workload_generated.tf` holds only a sensitive variable, and the
    secret appears nowhere in the leaf's `.terragrunt-cache` except the plan.
+   - **Passed** on a scratch spoke. The rendered leaf's generate blocks
+     contain no secret text. The values travel only in its inputs.
 3. **The plan hides it.** The PR's plan comment shows `(sensitive value)`, and
    the job log shows no secret.
+   - **Passed:** on the plan-only draft [runway#39](https://github.com/noisypigeon/runway/pull/39), a
+     secret `expiration_days` planned as `days = (sensitive value)`. Neither
+     dummy value appeared in the comment or the job log.
 4. **A secrets-only change re-plans.** Editing only `secrets.yaml` selects its
    workload.
+   - **Open:** #39 couldn't isolate it, since its diff also changed
+     `root.hcl`. It needs a `secrets.yaml`-only PR after runway#41.
 5. **`secretRef` resolves,** and a `secretRef` to a name `env` lacks fails the
    plan.
+   - **Passed:** `website_index_document: { secretRef: … }` resolved on #39
+     and on [runway#41](https://github.com/noisypigeon/runway/pull/41). A `secretRef` to a missing name
+     failed on a scratch spoke, both in root.hcl's guard and in `--check`.
