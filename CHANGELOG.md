@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-20
 
+- [scaleway/terraform-deployer-iam] Rotate the deployer API key every rotation_days ([#113](https://github.com/noisypigeon/library/pull/113))
 - [adr] Propose LIB-0024, workload deployers and staged applies ([#112](https://github.com/noisypigeon/library/pull/112))
 - [terragrunt/root-hcl] Stop telling spokes to commit workload stubs ([#106](https://github.com/noisypigeon/library/pull/106))
 - [workflows] Generate workload stubs in CI and plan removals as destroys (LIB-0023) ([#107](https://github.com/noisypigeon/library/pull/107))
