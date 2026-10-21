@@ -141,6 +141,13 @@ jobs:
               echo "::add-mask::$value"
             done < <(sops --decrypt --input-type dotenv --output-type dotenv "$file")
           done
+          # A workload's secrets.yaml (LIB-0025), every value, one line at a
+          # time so a multi-line secret is masked whole.
+          for file in workloads/*/secrets.yaml; do
+            while IFS= read -r value; do
+              [ -n "$value" ] && echo "::add-mask::$value"
+            done < <(sops --decrypt --output-type json "$file" | jq -r '.. | scalars | tostring')
+          done
 
       - name: Prepare
         if: inputs.prepare_cmd != ''
@@ -226,7 +233,7 @@ jobs:
             if grep -qE '^(root\.hcl|spoke\.hcl|terraform/secrets/)' <<<"$changed"; then
               names=$(find workloads -mindepth 2 -maxdepth 2 -name values.yaml | cut -d/ -f2)
             else
-              names=$(grep -E '^workloads/[^/]+/values\.yaml$' <<<"$changed" | cut -d/ -f2 || true)
+              names=$(grep -E '^workloads/[^/]+/(values|secrets)\.yaml$' <<<"$changed" | cut -d/ -f2 | sort -u || true)
             fi
             # Their own filters, run by their own terragrunt invocation, never
             # beside the git expression: with one in play, terragrunt resolves

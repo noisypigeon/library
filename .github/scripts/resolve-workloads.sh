@@ -35,6 +35,12 @@
 # from that version's published inputs.schema.json (LIB-0023 §6), and if any
 # stub is tracked by git. Types are left to terraform plan.
 #
+# It also checks a workload's secrets.yaml (LIB-0025 §2) without decrypting
+# it: sops YAML encrypts values and keeps keys in clear. It fails on a file
+# without sops metadata or with a plaintext value, on keys other than `env`
+# and the kind paths, on a kind path values.yaml doesn't declare, on an input
+# set in both files, and on a `secretRef` to a name `env` doesn't have.
+#
 # The kind table below has a twin in terragrunt/root-hcl/root.hcl
 # (workload_kinds) and a third copy in generate-module-redirects.sh
 # (workload schema). Change one and change all three.
@@ -317,12 +323,70 @@ if [ "$CHECK" = true ]; then
     done < <(git -C "$SPOKE_DIR" ls-files -- 'workloads/*/*/*/*/terragrunt.hcl')
   fi
 
+  # Each secrets.yaml's shape, by its clear-text keys (LIB-0025 §2).
+  for secrets in "$SPOKE_DIR"/workloads/*/secrets.yaml; do
+    workload="$(basename "$(dirname "$secrets")")"
+    rel="workloads/$workload/secrets.yaml"
+    values="$SPOKE_DIR/workloads/$workload/values.yaml"
+    if [ ! -f "$values" ]; then
+      fail "$rel has no values.yaml beside it"
+      continue
+    fi
+    if ! sjson=$(yq -o=json '.' "$secrets"); then
+      fail "$rel: not valid YAML"
+      continue
+    fi
+    vjson=$(yq -o=json '.' "$values")
+    problems=$(jq -r --argjson v "$vjson" '
+      def leaves: paths(scalars) as $p | {path: $p, value: getpath($p)};
+      if (type != "object") or (has("sops") | not) then
+        "has no sops metadata: encrypt it with sops, never commit a secret in clear"
+      else
+        (del(.sops) | leaves | select((.value | type) != "string" or (.value | test("^ENC\\[") | not))
+          | "\(.path | map(tostring) | join(".")) is not encrypted"),
+        ((keys - ["sops", "env", "scaleway"])[] | "unknown key \(.); known: env, scaleway"),
+        (.env // {} | to_entries[] | select((.value | type) != "string") | "env.\(.key) must be one value, not a list or a map"),
+        (.scaleway // {} | to_entries[] as $k |
+          if $k.key == "project" or $k.key == "deployer" then
+            (if ($v.scaleway // {} | has("project")) then empty else "scaleway.\($k.key): values.yaml declares no scaleway.project" end)
+          elif $k.key == "bucket" then
+            ($k.value // {} | keys[] as $b | select($v.scaleway.bucket // {} | has($b) | not) | "scaleway.bucket.\($b): values.yaml declares no such bucket")
+          elif $k.key == "iam" then
+            ($k.value // {} | keys[] | select(. != "application" and . != "apiKey") | "unknown key scaleway.iam.\(.)"),
+            ($k.value // {} | keys[] as $i | select($v.scaleway.iam // {} | has($i) | not) | "scaleway.iam.\($i): values.yaml declares no such entry")
+          else "unknown key scaleway.\($k.key)" end),
+        ([.scaleway.project, .scaleway.deployer, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?)]
+          | .[] | objects | to_entries[] | select((.value | type) == "object" or (.value | type) == "array")
+          | "\(.key) must be one value, not a list or a map")
+      end
+    ' <<<"$sjson")
+    if [ -n "$problems" ]; then
+      while IFS= read -r msg; do fail "$rel: $msg"; done <<<"$problems"
+    fi
+  done
+
   for inst in ${instances[@]+"${instances[@]}"}; do
     IFS='|' read -r workload module name jq_path declared_deps <<<"$inst"
     values="$SPOKE_DIR/workloads/$workload/values.yaml"
+    secrets="$SPOKE_DIR/workloads/$workload/secrets.yaml"
     entry=$(yq -o=json '.' "$values" | jq -c "$jq_path // {}")
+    sentry='{}'
+    env_names='[]'
+    if [ -f "$secrets" ]; then
+      sentry=$(yq -o=json '.' "$secrets" | jq -c "$jq_path // {}")
+      env_names=$(yq -o=json '.' "$secrets" | jq -c '.env // {} | keys')
+    fi
+    both=$(jq -r --argjson s "$sentry" 'del(.version) | keys - (keys - ($s | keys)) | join(", ")' <<<"$entry")
+    if [ -n "$both" ]; then
+      fail "workloads/$workload: $module/$name sets $both in both values.yaml and secrets.yaml; keep each input in one"
+    fi
+    refs=$(jq -r --argjson env "$env_names" 'to_entries[] | select((.value | type) == "object" and (.value | has("secretRef"))) | .value.secretRef | select(. as $n | $env | index($n) | not)' <<<"$entry")
+    while IFS= read -r ref; do
+      [ -n "$ref" ] && fail "workloads/$workload/values.yaml: $module/$name has secretRef $ref, which secrets.yaml's env doesn't have"
+    done <<<"$refs"
+    entry=$(jq -c --argjson s "$sentry" '. + $s' <<<"$entry")
     pin=$(jq -r '.version // empty' <<<"$entry")
-    where="workloads/$workload/values.yaml: $module/$name"
+    where="workloads/$workload: $module/$name"
     if ! version=$(resolve_version "$module" "$pin"); then
       fail "$where: no terraform/$module tag matches version '${pin:-<newest>}'"
       continue

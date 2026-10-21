@@ -17,6 +17,9 @@
 #   requires, such as name and application_id, and Terraform still rejects a
 #   missing input at plan time.
 #
+# Any input may instead be `{ secretRef: NAME }`, which root.hcl resolves from
+# the workload's secrets.yaml (LIB-0025 §3).
+#
 # Types are mapped coarsely from terraform-docs' type strings: primitives to
 # their JSON types, list/set/tuple to array, map/object to object, anything
 # else (any) to no constraint. Element and attribute types are left to
@@ -41,7 +44,7 @@ if [ ! -d "$MODULE_DIR" ]; then
   exit 1
 fi
 
-terraform-docs json --show inputs "$MODULE_DIR" | jq --arg id "$ID" '
+terraform-docs json --show inputs "$MODULE_DIR" | jq --arg id "$ID" --argjson secret_ref '{"type": "object", "required": ["secretRef"], "additionalProperties": false, "properties": {"secretRef": {"type": "string", "description": "A name in the workload secrets.yaml env map (LIB-0025)"}}}' '
   def json_type:
     if . == "string" then {type: "string"}
     elif . == "number" then {type: "number"}
@@ -65,9 +68,11 @@ terraform-docs json --show inputs "$MODULE_DIR" | jq --arg id "$ID" '
       } + (
         [ (.inputs // [])[] | {
             key: .name,
-            value: ((.type | json_type)
-              + (if (.description // "") != "" then {description: .description} else {} end)
-              + (if .default != null then {default: .default} else {} end))
+            value: ({anyOf: [
+                ((.type | json_type) + (if .default != null then {default: .default} else {} end)),
+                $secret_ref
+              ]}
+              + (if (.description // "") != "" then {description: .description} else {} end))
           } ] | from_entries
       )
     )

@@ -64,6 +64,12 @@
 # credentials it runs with. A `workload` kind's provider signs in with the
 # deployer's key, which its stub passes as two sensitive variables, in place
 # of the spoke's.
+#
+# Since v4.5.0 (LIB-0025) a workload may also have a sops-encrypted
+# secrets.yaml: secret inputs under the same kind paths, and an `env` map that
+# a values.yaml input reaches as { secretRef: NAME }. Secrets reach the module
+# as sensitive variables, through this file's inputs, and are never written
+# into a generated file.
 
 locals {
   # The spoke's instance values. Missing spoke.hcl is a hard error, which is
@@ -324,6 +330,19 @@ locals {
   workload_instance = try(local.path_segments[4], "")
   workload_file     = "workloads/${local.workload}/values.yaml"
   workload_values   = try(yamldecode(file(mark_as_read("${get_parent_terragrunt_dir()}/${local.workload_file}"))), null)
+  # The workload's secrets.yaml (LIB-0025), decrypted the way terraform/secrets/
+  # is: a for whose filter, not a conditional, keeps sops from running for a
+  # hand-written leaf or a workload without one. A file that won't decrypt
+  # fails the run.
+  workload_secrets_file = "workloads/${local.workload}/secrets.yaml"
+  workload_secrets = merge({}, [
+    for f in ["${get_parent_terragrunt_dir()}/${local.workload_secrets_file}"] :
+    jsondecode(run_cmd("--terragrunt-quiet", "sops", "--decrypt", "--output-type", "json", mark_as_read(f)))
+    if local.is_workload_leaf && fileexists(f)
+  ]...)
+  workload_secrets_scaleway = try(local.workload_secrets.scaleway, null)
+  workload_env              = { for k, v in try(local.workload_secrets.env, {}) : k => tostring(v) }
+
   workload_prefix = try(tostring(local.workload_values.prefix), "")
   workload_suffix = try(tostring(local.workload_values.suffix), "")
 
@@ -342,6 +361,7 @@ locals {
     "scaleway/project" = {
       declared    = local.workload_instance == "main" && contains(try(keys(local.workload_scaleway), []), "project")
       entry       = try(local.workload_scaleway.project, null)
+      secrets     = try(local.workload_secrets_scaleway.project, null)
       wiring      = {}
       defaults    = { name = "${local.workload_prefix}-${local.workload_suffix}" }
       sensitive   = false
@@ -350,6 +370,7 @@ locals {
     "scaleway/iam-application" = {
       declared    = local.workload_instance == "main" && contains(try(keys(local.workload_iam), []), "application")
       entry       = try(local.workload_iam.application, null)
+      secrets     = try(local.workload_secrets_scaleway.iam.application, null)
       wiring      = {}
       defaults    = { name = "${local.workload_prefix}-${local.workload_suffix}" }
       sensitive   = false
@@ -358,9 +379,10 @@ locals {
     # Implicit (LIB-0024 §1): every workload with a project has one, and a
     # scaleway.deployer entry only overrides its inputs.
     "scaleway/terraform-deployer-iam" = {
-      declared  = local.workload_instance == "main" && contains(try(keys(local.workload_scaleway), []), "project")
-      entry     = try(local.workload_scaleway.deployer, null)
-      wiring    = { project_ids = "list(string)", default_project_id = "string" }
+      declared = local.workload_instance == "main" && contains(try(keys(local.workload_scaleway), []), "project")
+      entry    = try(local.workload_scaleway.deployer, null)
+      secrets  = try(local.workload_secrets_scaleway.deployer, null)
+      wiring   = { project_ids = "list(string)", default_project_id = "string" }
       defaults = {
         name                    = "${local.workload_prefix}-${local.workload_suffix}-deployer"
         project_permission_sets = ["ObjectStorageFullAccess"]
@@ -372,6 +394,7 @@ locals {
     "scaleway/bucket" = {
       declared    = contains(try(keys(local.workload_buckets), []), local.workload_instance)
       entry       = try(local.workload_buckets[local.workload_instance], null)
+      secrets     = try(local.workload_secrets_scaleway.bucket[local.workload_instance], null)
       wiring      = { project_id = "string" }
       defaults    = { name_prefix = "${local.workload_prefix}-${local.workload_instance}", name_suffix = local.workload_suffix }
       sensitive   = false
@@ -380,6 +403,7 @@ locals {
     "scaleway/iam-api-key" = {
       declared    = local.workload_instance == "main" && contains(try(keys(local.workload_iam), []), "apiKey")
       entry       = try(local.workload_iam.apiKey, null)
+      secrets     = try(local.workload_secrets_scaleway.iam.apiKey, null)
       wiring      = { default_project_id = "string", application_id = "string" }
       defaults    = {}
       sensitive   = true
@@ -389,13 +413,26 @@ locals {
   workload_kind  = try(local.workload_kinds[local.workload_module], null)
   workload_entry = merge({}, try(local.workload_kind.entry, null))
 
-  # The module's inputs: the name defaults, then the entry, which wins. A
-  # wiring input the entry doesn't set is left to the stub's dependency.
-  workload_inputs = merge(
-    try(local.workload_kind.defaults, {}),
-    { for k, v in local.workload_entry : k => v if k != "version" },
+  # Secret inputs (LIB-0025 §3): this leaf's slice of secrets.yaml, and every
+  # values.yaml input written as { secretRef: NAME }, resolved from `env`.
+  # They become sensitive variables, never literals.
+  workload_secret_entry = merge({}, try(local.workload_kind.secrets, null))
+  workload_refs         = { for k, v in local.workload_entry : k => v.secretRef if can(v.secretRef) }
+  workload_sensitive = merge(
+    { for k, v in local.workload_secret_entry : k => try(tostring(v), null) },
+    { for k, name in local.workload_refs : k => lookup(local.workload_env, name, null) },
   )
-  workload_wiring = { for k, type in try(local.workload_kind.wiring, {}) : k => type if !contains(keys(local.workload_inputs), k) }
+
+  # The module's plaintext inputs: the defaults, then the entry, which wins.
+  # A wiring input the entry doesn't set is left to the stub's dependency, and
+  # a secret input to workload_sensitive.
+  workload_inputs = {
+    for k, v in merge(
+      try(local.workload_kind.defaults, {}),
+      { for k, v in local.workload_entry : k => v if k != "version" && !can(v.secretRef) },
+    ) : k => v if !contains(keys(local.workload_sensitive), k)
+  }
+  workload_wiring = { for k, type in try(local.workload_kind.wiring, {}) : k => type if !contains(keys(local.workload_inputs), k) && !contains(keys(local.workload_sensitive), k) }
 
   # A `workload` kind signs its provider in with the workload deployer's key
   # (LIB-0024 §2), which the stub passes from its deployer dependency.
@@ -424,6 +461,9 @@ locals {
   guard_workload_names    = local.is_workload_leaf && (local.workload_prefix == "" || local.workload_suffix == "") ? file("${local.workload_file} needs a non-empty prefix and suffix (LIB-0023 §4)") : true
   guard_workload_inputs   = local.is_workload_leaf && !alltrue([for k in keys(local.workload_inputs) : can(regex("^[a-z_][a-z0-9_]*$", k))]) ? file("${path_relative_to_include()}: ${local.workload_file} has an input name that isn't a Terraform identifier") : true
   guard_workload_pin      = local.is_workload_leaf && !can(regex("^([0-9]+(\\.[0-9]+){0,2})?$", local.workload_pin)) ? file("${path_relative_to_include()}: version \"${local.workload_pin}\" must be X, X.Y or X.Y.Z (LIB-0023 §3)") : true
+  guard_workload_both     = local.is_workload_leaf && length(setintersection(keys(local.workload_secret_entry), [for k in keys(local.workload_entry) : k if k != "version"])) > 0 ? file("${path_relative_to_include()}: ${join(", ", setintersection(keys(local.workload_secret_entry), keys(local.workload_entry)))} set in both ${local.workload_file} and ${local.workload_secrets_file}; keep each input in one (LIB-0025)") : true
+  guard_workload_refs     = local.is_workload_leaf && !alltrue([for k, name in local.workload_refs : contains(keys(local.workload_env), name)]) ? file("${path_relative_to_include()}: a secretRef in ${local.workload_file} names something ${local.workload_secrets_file}'s env doesn't have (LIB-0025)") : true
+  guard_workload_scalars  = local.is_workload_leaf && !alltrue(concat([for k, v in local.workload_sensitive : v != null], [for k, v in try(local.workload_secrets.env, {}) : can(tostring(v))])) ? file("${path_relative_to_include()}: every value in ${local.workload_secrets_file} must be one value, not a list or a map (LIB-0025)") : true
   guard_workload_version  = local.is_workload_leaf && local.workload_version == "" ? file("${path_relative_to_include()}: no terraform/${local.workload_module} tag matches version \"${local.workload_pin}\" (LIB-0023 §3)") : true
 
   # The leaf's module call. Inputs are written as literals -- JSON is HCL
@@ -440,6 +480,20 @@ variable "${k}" {
 }
 
 %{endfor~}
+%{for k, v in local.workload_sensitive~}
+variable "${k}" {
+  type      = string
+  sensitive = true
+}
+
+%{endfor~}
+# The workload's secrets.yaml env (LIB-0025 §3), for kinds that take one.
+variable "workload_env" {
+  type      = map(string)
+  sensitive = true
+  default   = {}
+}
+
 %{if local.workload_credentials~}
 # The workload deployer's key (LIB-0024 §2), for provider_scaleway_generated.tf.
 variable "scaleway_access_key" {
@@ -459,6 +513,9 @@ module "this" {
   ${k} = ${replace(replace(jsonencode(v), "$${", "$$${"), "%%{", "%%%{")}
 %{endfor~}
 %{for k, type in local.workload_wiring~}
+  ${k} = var.${k}
+%{endfor~}
+%{for k, v in local.workload_sensitive~}
   ${k} = var.${k}
 %{endfor~}
 }
@@ -603,6 +660,14 @@ exclude {
   if      = !local.is_valid_leaf
   actions = ["all_except_output"]
 }
+
+# A workload leaf's secrets (LIB-0025 §3), as TF_VAR_s for the sensitive
+# variables in workload_generated.tf. Merged with the stub's own inputs, its
+# wiring, which never share a name with these. Empty for every other leaf.
+inputs = merge(
+  { for k, v in local.workload_sensitive : k => v if local.is_workload_leaf },
+  { for k in(local.is_workload_leaf ? ["workload_env"] : []) : k => local.workload_env },
+)
 
 # Every env.enc key, in every leaf (LIB-0012 §1).
 generate "env_secrets" {
