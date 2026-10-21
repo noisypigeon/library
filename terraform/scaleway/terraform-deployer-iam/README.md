@@ -40,6 +40,7 @@ module "terraform_deployer_iam" {
 | <a name="input_policy_name"></a> [policy\_name](#input\_policy\_name) | IAM policy name, used exactly as given (defaults to "<name>-policy") | `string` | `null` | no |
 | <a name="input_project_ids"></a> [project\_ids](#input\_project\_ids) | Project ids | `list(string)` | `null` | no |
 | <a name="input_project_permission_sets"></a> [project\_permission\_sets](#input\_project\_permission\_sets) | Project permission set grants | `list(string)` | `null` | no |
+| <a name="input_rotation_days"></a> [rotation\_days](#input\_rotation\_days) | Replace the API key every this many days, expiring it a week after each scheduled rotation (LIB-0024). Unset, the key expires 30 days after it was first created and is never replaced. | `number` | `null` | no |
 
 ## Outputs
 
