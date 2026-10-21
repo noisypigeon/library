@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-21
 
+- [adr] Record LIB-0023, LIB-0024 and LIB-0025 verification ([#120](https://github.com/noisypigeon/library/pull/120))
 - [workflows] Add a workload secrets.yaml in SOPS YAML (LIB-0025) ([#119](https://github.com/noisypigeon/library/pull/119))
 - [terragrunt/root-hcl] Add a workload secrets.yaml in SOPS YAML (LIB-0025) ([#119](https://github.com/noisypigeon/library/pull/119))
 - [adr] Propose LIB-0025, a workload's secrets.yaml ([#118](https://github.com/noisypigeon/library/pull/118))
