@@ -380,6 +380,15 @@ deployer's key instead. The stub passes it as `scaleway_access_key` and
 time and defers those whose dependencies are new or changing, so a new
 workload lands in a few staged applies.
 
+A workload may also have a `workloads/<workload>/secrets.yaml` (v4.5.0,
+LIB-0025), encrypted with sops as YAML. Its rule in the spoke's `.sops.yaml` is
+`^workloads/[^/]+/secrets\.yaml$`. It holds secret inputs under the same kind
+paths as `values.yaml`, and an `env` map that any `values.yaml` input reaches
+as `{ secretRef: NAME }`. This template decrypts it for that workload's leaves
+only, and passes each secret as a sensitive variable. It never writes one
+into a generated file. `resolve-workloads.sh --check` refuses a plaintext
+`secrets.yaml`, and an input set in both files.
+
 Every input written in `values.yaml` wins over a default or a dependency. A
 dependency has no `mock_outputs`, since apply runs the saved plan (LIB-0022):
 a dependent plans only once what it depends on is applied, so land a workload's
