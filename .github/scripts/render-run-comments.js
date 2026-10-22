@@ -127,7 +127,8 @@ function fenceFor(text) {
 
 function section(unit, row, body, part, parts) {
   const fence = fenceFor(body);
-  const title = parts > 1 ? `\`${unit}\` (part ${part} of ${parts})` : `\`${unit}\``;
+  // HTML, not backticks: GitHub doesn't reliably render Markdown in <summary>.
+  const title = parts > 1 ? `<code>${unit}</code> (part ${part} of ${parts})` : `<code>${unit}</code>`;
   return [
     `<details${row.open ? ' open' : ''}><summary>${title} — ${row.label}</summary>`,
     '',

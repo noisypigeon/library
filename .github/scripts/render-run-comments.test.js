@@ -101,7 +101,7 @@ test('nothing is truncated: a large plan is packed and split, within budget', ()
   const all = r.details.join('\n');
   for (const probe of ['attribute_0 ', 'attribute_399 ', 'line_0 ', 'line_3999 ']) assert.ok(all.includes(probe), probe);
   // The huge leaf is split, and labelled as parts.
-  const parts = all.match(/`t\/m\/huge` \(part (\d+) of (\d+)\)/g) || [];
+  const parts = all.match(/<code>t\/m\/huge<\/code> \(part (\d+) of (\d+)\)/g) || [];
   assert.ok(parts.length >= 3, `huge leaf in ${parts.length} parts`);
   // Fences balance in every comment, so each renders on its own.
   for (const d of r.details) {
