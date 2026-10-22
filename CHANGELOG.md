@@ -44,6 +44,10 @@ ADR-0154 and ADR-0084 each made before it.
 
 <!-- entries below; newest first -->
 
+## 2026-10-22
+
+- [adr] Propose LIB-0026, plan and apply comments segmented by leaf ([#126](https://github.com/noisypigeon/library/pull/126))
+
 ## 2026-10-21
 
 - [adr] Accept LIB-0025 ([#121](https://github.com/noisypigeon/library/pull/121))
