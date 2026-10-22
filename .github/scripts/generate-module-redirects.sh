@@ -227,12 +227,17 @@ echo "Generated ${overview_count} module overview page(s) under ${CONTENT_DIR#"$
 #
 # The module list is the third copy of the kind table; its twins are
 # resolve-workloads.sh's KINDS and root.hcl's workload_kinds.
+#
+# The workload state bucket, scaleway.state (LIB-0028), is a scaleway/bucket
+# with one input of its own, `prefix`. Each inputs schema refuses properties it
+# doesn't list, which a $ref can't relax, so every scaleway/bucket version also
+# gets a state.schema.json: its inputs schema plus `prefix`.
 if [ -n "$STATIC_ROOT" ]; then
   if [ ! -d "$STATIC_ROOT" ]; then
     echo "::error::--static-root $STATIC_ROOT is not a directory" >&2
     exit 2
   fi
-  find "$STATIC_ROOT/terraform" -name inputs.schema.json -type f -delete 2>/dev/null || true
+  find "$STATIC_ROOT/terraform" \( -name inputs.schema.json -o -name state.schema.json \) -type f -delete 2>/dev/null || true
   rm -f "$STATIC_ROOT/schemas/workload/v1.json"
 
   kinds_json='{}'
@@ -251,37 +256,52 @@ if [ -n "$STATIC_ROOT" ]; then
         --id "${SCHEMA_BASE_URL}/terraform/${wmodule}/v${v}/inputs.schema.json" >"$out/inputs.schema.json"
       rm -rf "$tree"
       schema_count=$((schema_count + 1))
+      if [ "$wmodule" = scaleway/bucket ]; then
+        jq --arg id "${SCHEMA_BASE_URL}/terraform/${wmodule}/v${v}/state.schema.json" '
+          ."$id" = $id
+          | .properties.prefix = {
+              type: "string",
+              pattern: "^[^/].*/$",
+              description: "Where this workload'"'"'s state keys start in its state bucket (LIB-0028 §3). Default: workloads/<workload>/"
+            }
+        ' "$out/inputs.schema.json" >"$out/state.schema.json"
+        schema_count=$((schema_count + 1))
+      fi
     done <<<"$wversions"
 
     # A kind: null (declared with no inputs), or a mapping whose `version`,
     # if any, is one of the pins that exist, checked against the schema of
     # the newest version that pin matches. $vs is oldest first.
-    kinds_json="$(jq --arg m "$wmodule" --arg versions "$wversions" --arg base "$SCHEMA_BASE_URL" '
-      ($versions | split("\n") | map(select(. != ""))) as $vs
-      | ([$vs[] | split(".") as $p | $p[0], "\($p[0]).\($p[1])", .] | unique) as $pins
-      | def url($v): "\($base)/terraform/\($m)/v\($v)/inputs.schema.json";
-      . + {($m): {anyOf: [
-          {type: "null"},
-          {
-            type: "object",
-            properties: {version: {type: "string", enum: $pins}},
-            allOf: (
-              [{if: {not: {required: ["version"]}}, then: {"$ref": url($vs[-1])}}]
-              + [$pins[] as $pin | {
-                  if: {properties: {version: {const: $pin}}, required: ["version"]},
-                  then: {"$ref": url([$vs[] | select(. == $pin or startswith($pin + "."))] | last)}
-                }]
-            )
-          }
-        ]}}
-    ' <<<"$kinds_json")"
+    kinds=("$wmodule|inputs")
+    if [ "$wmodule" = scaleway/bucket ]; then kinds+=("$wmodule#state|state"); fi
+    for wkind in "${kinds[@]}"; do
+      kinds_json="$(jq --arg m "$wmodule" --arg key "${wkind%|*}" --arg file "${wkind#*|}" --arg versions "$wversions" --arg base "$SCHEMA_BASE_URL" '
+        ($versions | split("\n") | map(select(. != ""))) as $vs
+        | ([$vs[] | split(".") as $p | $p[0], "\($p[0]).\($p[1])", .] | unique) as $pins
+        | def url($v): "\($base)/terraform/\($m)/v\($v)/\($file).schema.json";
+        . + {($key): {anyOf: [
+            {type: "null"},
+            {
+              type: "object",
+              properties: {version: {type: "string", enum: $pins}},
+              allOf: (
+                [{if: {not: {required: ["version"]}}, then: {"$ref": url($vs[-1])}}]
+                + [$pins[] as $pin | {
+                    if: {properties: {version: {const: $pin}}, required: ["version"]},
+                    then: {"$ref": url([$vs[] | select(. == $pin or startswith($pin + "."))] | last)}
+                  }]
+              )
+            }
+          ]}}
+      ' <<<"$kinds_json")"
+    done
   done
 
   mkdir -p "$STATIC_ROOT/schemas/workload"
   jq --arg base "$SCHEMA_BASE_URL" '. as $k | {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "$id": "\($base)/schemas/workload/v1.json",
-    title: "Workload values.yaml (LIB-0023)",
+    title: "Workload values.yaml (LIB-0023, LIB-0028)",
     type: "object",
     additionalProperties: false,
     required: ["prefix", "suffix"],
@@ -294,9 +314,10 @@ if [ -n "$STATIC_ROOT" ]; then
         properties: {
           project: ($k["scaleway/project"] // {}),
           deployer: ($k["scaleway/terraform-deployer-iam"] // {}),
+          state: ($k["scaleway/bucket#state"] // {}),
           bucket: {
             type: ["object", "null"],
-            propertyNames: {pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"},
+            propertyNames: {pattern: "^[a-z0-9]+(-[a-z0-9]+)*$", not: {const: "state"}},
             additionalProperties: ($k["scaleway/bucket"] // {})
           },
           iam: {
