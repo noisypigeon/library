@@ -6,6 +6,9 @@
   state-locking item that LIB-0007 and LIB-0016 left out of scope.
 - **Amended 2026-10-20**: LIB-0024 keeps `terragrunt/apply` pending after an
   apply whose plan deferred workload leaves, until a re-plan defers nothing.
+- **Amended 2026-10-22**: LIB-0026 replaces the single, truncated plan or apply
+  comment with a summary of one row per leaf, and detail comments of one
+  section per leaf, never truncated.
 
 ## Context
 
