@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-22.
-- **Status**: Proposed. Amends LIB-0022's apply, and LIB-0024's staged
+- **Status**: Accepted. Amends LIB-0022's apply, and LIB-0024's staged
   applies.
 
 ## Context
@@ -92,11 +92,20 @@ comment with `GITHUB_TOKEN`: the comment wouldn't start the plan workflow.
 
 ## Verification
 
-To be completed when §§1–3 ship.
+Recorded 2026-10-22, on [runway#48](https://github.com/noisypigeon/runway/pull/48). Every item passed, on `workflows/v4.7.1`;
+v4.7.0's merge step crashed after applying (`getOctokit is not defined`),
+which [#134](https://github.com/noisypigeon/library/pull/134) fixed.
 
 1. **A staged apply re-plans by itself.** On runway, an apply that leaves a
    leaf deferred is followed, without a comment, by a plan of the next stage.
+   - **Passed:** stage 1's apply was followed, with no comment, by a plan
+     "[_Planned automatically after the previous stage's apply_](https://github.com/noisypigeon/runway/pull/48#issuecomment-6348550487)",
+     which found `0 with changes, 5 with no changes`.
 2. **The last apply merges.** The final stage's apply turns the gate green,
    and the PR merges without a hand.
+   - **Passed:** the final apply turned the gate green, and the PR merged
+     itself, as the bot token's user.
 3. **The merge is a real merge event.** The root changelog gets the PR's
    entry.
+   - **Passed:** [`root-changelog`](https://github.com/noisypigeon/runway/actions/runs/39834281164)
+     ran for the merge, which a `GITHUB_TOKEN` merge wouldn't have started.
