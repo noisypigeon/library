@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-22
 
+- [adr] Accept LIB-0026 ([#128](https://github.com/noisypigeon/library/pull/128))
 - [workflows] Segment Terragrunt plan and apply comments by leaf, never truncated (LIB-0026) ([#127](https://github.com/noisypigeon/library/pull/127))
 - [adr] Propose LIB-0026, plan and apply comments segmented by leaf ([#126](https://github.com/noisypigeon/library/pull/126))
 
