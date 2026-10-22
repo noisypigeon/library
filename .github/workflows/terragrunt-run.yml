@@ -26,6 +26,11 @@
 # Both commands plan and apply the PR's head, never the merge ref, so what was
 # planned is the tree that gets applied.
 #
+# Since v4.5.0 a run reports as a summary comment with a row per leaf, then
+# detail comments with a section per leaf, never truncated (LIB-0026).
+# render-run-comments.js in scripts_dir builds the bodies, from output.txt,
+# each unit's JSON plan and the masked values; this file only posts them.
+#
 # Since v4.3.0 a workload's leaves are planned one at a time, and a leaf whose
 # workload dependencies are new or changing is deferred to the next stage: an
 # apply that leaves any deferred keeps terragrunt/apply pending and doesn't
@@ -91,6 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PLAN_DIR: ${{ github.workspace }}/.terragrunt-plans
+      JSON_DIR: ${{ github.workspace }}/.terragrunt-plans-json
       ARTIFACT_PREFIX: terragrunt-plan-${{ github.event.pull_request.number || github.event.issue.number }}
     steps:
       - name: React to triggering comment
@@ -135,17 +141,24 @@ jobs:
           if [ -z "$SECRETS_FILES" ]; then
             echo "::warning::No secrets files to mask: terraform/secrets/ has no .enc files"
           fi
+          # Each masked value is also kept, readable by this job only, so the
+          # comment step can mask its comments too (LIB-0026 §7). "Forget
+          # masked values" deletes the file whatever happens.
+          masked="$RUNNER_TEMP/masked.txt"
+          : > "$masked"
+          chmod 600 "$masked"
           for file in $SECRETS_FILES; do
             while IFS='=' read -r key value; do
               [[ -z "$key" || "$key" == \#* || "$key" == sops_* ]] && continue
               echo "::add-mask::$value"
+              printf '%s\n' "$value" >> "$masked"
             done < <(sops --decrypt --input-type dotenv --output-type dotenv "$file")
           done
           # A workload's secrets.yaml (LIB-0025), every value, one line at a
           # time so a multi-line secret is masked whole.
           for file in workloads/*/secrets.yaml; do
             while IFS= read -r value; do
-              [ -n "$value" ] && echo "::add-mask::$value"
+              [ -n "$value" ] && echo "::add-mask::$value" && printf '%s\n' "$value" >> "$masked"
             done < <(sops --decrypt --output-type json "$file" | jq -r '.. | scalars | tostring')
           done
 
@@ -358,9 +371,12 @@ jobs:
           TF_ARGS=("$COMMAND")
           [ "$COMMAND" = apply ] && TF_ARGS+=(-lock-timeout=0s)
           [ "$COMMAND" = plan ] && rm -rf "$PLAN_DIR"
+          # Each unit's plan as JSON too, for the comment's counts (LIB-0026).
+          JSON_ARGS=()
+          [ "$COMMAND" = plan ] && JSON_ARGS=(--json-out-dir "$JSON_DIR")
 
           set +e
-          terragrunt --no-color run --all "${FILTER_ARGS[@]}" --filter-allow-destroy --non-interactive --out-dir "$PLAN_DIR" -- "${TF_ARGS[@]}" > output.txt 2>&1
+          terragrunt --no-color run --all "${FILTER_ARGS[@]}" --filter-allow-destroy --non-interactive --out-dir "$PLAN_DIR" ${JSON_ARGS[@]+"${JSON_ARGS[@]}"} -- "${TF_ARGS[@]}" > output.txt 2>&1
           code=$?
           set -e
 
@@ -392,7 +408,7 @@ jobs:
                   continue
                 fi
                 set +e
-                terragrunt --no-color run --all --filter "./$unit" --non-interactive --out-dir "$PLAN_DIR" -- plan -detailed-exitcode >> output.txt 2>&1
+                terragrunt --no-color run --all --filter "./$unit" --non-interactive --out-dir "$PLAN_DIR" --json-out-dir "$JSON_DIR" -- plan -detailed-exitcode >> output.txt 2>&1
                 rc=$?
                 set -e
                 case "$rc" in
@@ -437,7 +453,7 @@ jobs:
             echo "=== Removed from values.yaml: planned as destroys from $(git merge-base main HEAD | cut -c1-7) ===" >> output.txt
             set +e
             if [ "$COMMAND" = plan ]; then
-              (cd "$RUNNER_TEMP/base" && terragrunt --no-color run --all "${DESTROY_ARGS[@]}" --non-interactive --out-dir "$PLAN_DIR" -- plan -destroy) >> output.txt 2>&1
+              (cd "$RUNNER_TEMP/base" && terragrunt --no-color run --all "${DESTROY_ARGS[@]}" --non-interactive --out-dir "$PLAN_DIR" --json-out-dir "$JSON_DIR" -- plan -destroy) >> output.txt 2>&1
               code=$?
             else
               order=$(cd "$RUNNER_TEMP/base" && terragrunt --no-color find "${DESTROY_ARGS[@]}" --dag --json | jq -r '.[].path' | sed 's|^\./||' | awk '{ u[NR] = $0 } END { for (i = NR; i > 0; i--) print u[i] }')
@@ -501,9 +517,11 @@ jobs:
           STALE: ${{ steps.run.outputs.stale }}
           EXIT_CODE: ${{ steps.run.outputs.exit_code }}
           DEFERRED: ${{ steps.run.outputs.deferred }}
+          SCRIPTS_DIR: ${{ inputs.scripts_dir }}
         with:
           script: |
             const fs = require('fs');
+            const path = require('path');
             const command = '${{ inputs.command }}';
             const marker = `<!-- terragrunt-${command} -->`;
             const exitCode = process.env.EXIT_CODE;
@@ -521,6 +539,7 @@ jobs:
             }
 
             let body;
+            let details = [];
             if (command === 'apply' && process.env.SAVED_FOUND === 'false') {
               body = [
                 marker,
@@ -544,12 +563,6 @@ jobs:
                 `_Job failed before \`terragrunt ${label}\` ran — see the [full log](${runUrl})._`,
               ].join('\n');
             } else {
-              const limit = 55000;
-              let truncated = false;
-              if (output.length > limit) {
-                output = output.slice(output.length - limit);
-                truncated = true;
-              }
               let footer = '';
               const deferred = process.env.DEFERRED === 'true';
               if (command !== 'apply' && success) {
@@ -560,19 +573,40 @@ jobs:
               } else if (command === 'apply' && process.env.STALE === 'true') {
                 footer = `Another apply has changed or is holding this state since \`${sha}\` was planned. ${replan}`;
               }
-              body = [
+              // A summary with a row per leaf, then detail comments with a
+              // section per leaf, never truncated (LIB-0026).
+              const read = (f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } };
+              const lines = (f) => read(f).split('\n').filter(Boolean);
+              const jsonPlans = {};
+              const walk = (dir) => {
+                let entries = [];
+                try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+                for (const e of entries) {
+                  const p = path.join(dir, e.name);
+                  if (e.isDirectory()) walk(p);
+                  else if (e.name.endsWith('.json')) {
+                    try { jsonPlans[path.relative(process.env.JSON_DIR, path.dirname(p))] = JSON.parse(read(p)); } catch {}
+                  }
+                }
+              };
+              walk(process.env.JSON_DIR);
+              const { render } = require(path.join(process.env.GITHUB_WORKSPACE, process.env.SCRIPTS_DIR, 'render-run-comments.js'));
+              const rendered = render({
+                command: label,
+                success,
+                sha,
+                runUrl,
                 marker,
-                `### ${success ? '✅' : '❌'} Terragrunt ${label}`,
-                truncated ? `_Output truncated — [full log](${runUrl})._` : '',
-                `<details><summary>Show ${label} output</summary>`,
-                '',
-                '```',
                 output,
-                '```',
-                '</details>',
-                '',
+                jsonPlans,
+                deferred: lines(`${process.env.RUNNER_TEMP}/deferred-units.txt`),
+                destroys: lines(`${process.env.RUNNER_TEMP}/destroy-units.txt`),
+                masked: lines(`${process.env.RUNNER_TEMP}/masked.txt`),
+                roots: [process.env.GITHUB_WORKSPACE, `${process.env.RUNNER_TEMP}/base`],
                 footer,
-              ].join('\n');
+              });
+              body = rendered.summary;
+              details = rendered.details;
             }
 
             const comments = await github.paginate(github.rest.issues.listComments, {
@@ -584,12 +618,30 @@ jobs:
             for (const c of comments.filter(c => c.body.includes(marker))) {
               await github.graphql(minimize, { id: c.node_id });
             }
-            await github.rest.issues.createComment({
+            // The summary first, then each detail comment about a second
+            // apart, then the summary again with its rows linked.
+            const post = (text) => github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body,
+              body: text,
             });
+            const { data: summary } = await post(details.length ? body.replace(/\{\{detail:[^}]*\}\}/g, '…') : body);
+            const urls = [];
+            for (const d of details) {
+              await new Promise((r) => setTimeout(r, 1000));
+              const { data } = await post(d);
+              urls.push(data.html_url);
+            }
+            if (details.length) {
+              const { linkSummary } = require(path.join(process.env.GITHUB_WORKSPACE, process.env.SCRIPTS_DIR, 'render-run-comments.js'));
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: summary.id,
+                body: linkSummary(body, urls),
+              });
+            }
 
             if (context.eventName === 'issue_comment') {
               await github.rest.reactions.createForIssueComment({
@@ -656,6 +708,10 @@ jobs:
                 });
               }
             }
+
+      - name: Forget masked values
+        if: always()
+        run: rm -f "$RUNNER_TEMP/masked.txt"
 
       - name: Fail if ${{ inputs.command }} failed
         env:

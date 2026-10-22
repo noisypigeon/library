@@ -1,0 +1,376 @@
+0 destroyed.
+04:06:29.312 STDOUT [terraform/scaleway/iam-application/pigeon-cli-grafana] terraform: Outputs:
+04:06:29.312 STDOUT [terraform/scaleway/iam-application/pigeon-cli-grafana] terraform: id = "00000000-0000-0000-0000-000000000000"
+04:06:29.913 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/original-2026-06-01] terraform: - Installed backblaze/b2 v0.14.0 (signed by a HashiCorp partner, key ID 83D9CAF4848490D6)
+04:06:29.962 STDOUT [terraform/scaleway/terraform-deployer-iam/runway] terraform: Acquiring state lock. This may take a few moments...
+04:06:29.996 STDOUT [terraform/scaleway/iam-application/pigeon-cli] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:06:29.996 STDOUT [terraform/scaleway/iam-application/pigeon-cli] terraform: Outputs:
+04:06:29.996 STDOUT [terraform/scaleway/iam-application/pigeon-cli] terraform: id = "00000000-0000-0000-0000-000000000000"
+04:06:30.003 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/snapshot-2026-10-17] terraform: - Installed backblaze/b2 v0.14.0 (signed by a HashiCorp partner, key ID 83D9CAF4848490D6)
+04:06:30.005 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/api-key/original-2026-06-01] terraform: - Installed scaleway/scaleway v2.87.0 (signed by a HashiCorp partner, key ID F5BF26CADF6F9614)
+04:06:30.101 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/original-2026-06-01] terraform: - Installing hashicorp/random v3.9.1...
+04:06:30.107 STDOUT [terraform/scaleway/cockpit-observability/pigeon-cli] terraform: Acquiring state lock. This may take a few moments...
+04:06:30.130 STDOUT [terraform/backblaze/bucket/deduplicated-misc] terraform: Acquiring state lock. This may take a few moments...
+04:06:30.136 STDOUT [terraform/scaleway/bucket/pigeon-cli-email-reports] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:06:30.231 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/snapshot-2026-10-17] terraform: - Installing scaleway/scaleway v2.87.0...
+04:06:30.243 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/api-key/original-2026-06-01] terraform: - Installing backblaze/b2 v0.14.0...
+04:06:30.429 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/original-2026-06-01] terraform: - Installed hashicorp/random v3.9.1 (signed by HashiCorp)
+04:06:30.429 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/original-2026-06-01] terraform: Partner and community providers are signed by their developers.
+04:06:30.429 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/original-2026-06-01] terraform: If you'd like to know more about provider signing, you can read about it here:
+04:06:30.429 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/original-2026-06-01] terraform: https://developer.hashicorp.com/terraform/cli/plugins/signing
+04:06:30.430 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/original-2026-06-01] terraform: Terraform has created a lock file .terraform.lock.hcl to record the provider
+04:06:30.430 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/original-2026-06-01] terraform: selections it made above. Include this file in your version control repository
+04:06:30.430 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/original-2026-06-01] terraform: so that Terraform can guarantee to make the same selections by default when
+04:06:30.430 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/original-2026-06-01] terraform: you run "terraform init" in the future.
+04:06:30.430 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/original-2026-06-01] terraform: Terraform has been successfully initialized!
+04:06:30.430 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/original-2026-06-01] terraform: You may now begin working with Terraform. Try running "terraform plan" to see
+04:06:30.430 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/original-2026-06-01] terraform: any changes that are required for your infrastructure. All Terraform commands
+04:06:30.430 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/original-2026-06-01] terraform: should now work.
+04:06:30.430 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/original-2026-06-01] terraform: If you ever set or change modules or backend configuration for Terraform,
+04:06:30.430 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/original-2026-06-01] terraform: rerun this command to reinitialize your working directory. If you forget, other
+04:06:30.430 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/original-2026-06-01] terraform: commands will detect it and remind you to do so if necessary.
+04:06:30.506 STDOUT [terraform/scaleway/iam-api-key/pigeon-deduplicate-local-key] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:06:30.506 STDOUT [terraform/scaleway/iam-api-key/pigeon-deduplicate-local-key] terraform: Outputs:
+04:06:30.506 STDOUT [terraform/scaleway/iam-api-key/pigeon-deduplicate-local-key] terraform: access_key = <sensitive>
+04:06:30.506 STDOUT [terraform/scaleway/iam-api-key/pigeon-deduplicate-local-key] terraform: secret_key = <sensitive>
+04:06:30.545 STDOUT [terraform/backblaze/bucket/custodial-duck-jellyfish] terraform: Acquiring state lock. This may take a few moments...
+04:06:30.590 STDOUT [terraform/scaleway/bucket/pigeon-transform] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:06:30.651 STDOUT [terraform/scaleway/bucket/terraform-state] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:06:30.651 STDOUT [terraform/scaleway/bucket/terraform-state] terraform: Outputs:
+04:06:30.651 STDOUT [terraform/scaleway/bucket/terraform-state] terraform: name = "example-terraform-state-bucket"
+04:06:30.792 STDOUT [terraform/scaleway/bucket/pigeon-cli-reports-transform] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:06:30.850 STDOUT [terraform/backblaze/bucket/snapshot-2026-10-09] terraform: Releasing state lock. This may take a few moments...
+04:06:30.911 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/snapshot-2026-10-17] terraform: - Installed scaleway/scaleway v2.87.0 (signed by a HashiCorp partner, key ID F5BF26CADF6F9614)
+04:06:30.911 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/snapshot-2026-10-17] terraform: Partner and community providers are signed by their developers.
+04:06:30.911 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/snapshot-2026-10-17] terraform: If you'd like to know more about provider signing, you can read about it here:
+04:06:30.911 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/snapshot-2026-10-17] terraform: https://developer.hashicorp.com/terraform/cli/plugins/signing
+04:06:30.911 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/snapshot-2026-10-17] terraform: Terraform has created a lock file .terraform.lock.hcl to record the provider
+04:06:30.911 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/snapshot-2026-10-17] terraform: selections it made above. Include this file in your version control repository
+04:06:30.912 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/snapshot-2026-10-17] terraform: so that Terraform can guarantee to make the same selections by default when
+04:06:30.912 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/snapshot-2026-10-17] terraform: you run "terraform init" in the future.
+04:06:30.912 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/snapshot-2026-10-17] terraform: Terraform has been successfully initialized!
+04:06:30.912 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/snapshot-2026-10-17] terraform: You may now begin working with Terraform. Try running "terraform plan" to see
+04:06:30.912 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/snapshot-2026-10-17] terraform: any changes that are required for your infrastructure. All Terraform commands
+04:06:30.912 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/snapshot-2026-10-17] terraform: should now work.
+04:06:30.912 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/snapshot-2026-10-17] terraform: If you ever set or change modules or backend configuration for Terraform,
+04:06:30.912 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/snapshot-2026-10-17] terraform: rerun this command to reinitialize your working directory. If you forget, other
+04:06:30.912 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/bucket/snapshot-2026-10-17] terraform: commands will detect it and remind you to do so if necessary.
+04:06:30.932 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/api-key/original-2026-06-01] terraform: - Installed backblaze/b2 v0.14.0 (signed by a HashiCorp partner, key ID 83D9CAF4848490D6)
+04:06:30.932 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/api-key/original-2026-06-01] terraform: Partner and community providers are signed by their developers.
+04:06:30.932 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/api-key/original-2026-06-01] terraform: If you'd like to know more about provider signing, you can read about it here:
+04:06:30.932 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/api-key/original-2026-06-01] terraform: https://developer.hashicorp.com/terraform/cli/plugins/signing
+04:06:30.932 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/api-key/original-2026-06-01] terraform: Terraform has created a lock file .terraform.lock.hcl to record the provider
+04:06:30.932 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/api-key/original-2026-06-01] terraform: selections it made above. Include this file in your version control repository
+04:06:30.932 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/api-key/original-2026-06-01] terraform: so that Terraform can guarantee to make the same selections by default when
+04:06:30.932 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/api-key/original-2026-06-01] terraform: you run "terraform init" in the future.
+04:06:30.932 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/api-key/original-2026-06-01] terraform: Terraform has been successfully initialized!
+04:06:30.932 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/api-key/original-2026-06-01] terraform: You may now begin working with Terraform. Try running "terraform plan" to see
+04:06:30.932 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/api-key/original-2026-06-01] terraform: any changes that are required for your infrastructure. All Terraform commands
+04:06:30.932 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/api-key/original-2026-06-01] terraform: should now work.
+04:06:30.932 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/api-key/original-2026-06-01] terraform: If you ever set or change modules or backend configuration for Terraform,
+04:06:30.932 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/api-key/original-2026-06-01] terraform: rerun this command to reinitialize your working directory. If you forget, other
+04:06:30.932 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/backblaze/api-key/original-2026-06-01] terraform: commands will detect it and remind you to do so if necessary.
+04:06:31.072 STDOUT [terraform/scaleway/terraform-deployer-iam/runway] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:06:31.072 STDOUT [terraform/scaleway/terraform-deployer-iam/runway] terraform: Outputs:
+04:06:31.072 STDOUT [terraform/scaleway/terraform-deployer-iam/runway] terraform: access_key = <sensitive>
+04:06:31.072 STDOUT [terraform/scaleway/terraform-deployer-iam/runway] terraform: secret_key = <sensitive>
+04:06:31.101 STDOUT [terraform/scaleway/iam-policy/pigeon-deduplicate-local-key] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:06:31.281 STDOUT [terraform/backblaze/bucket/snapshot-2026-10-09] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:06:31.288 STDOUT [terraform/scaleway/bucket/pigeon-cli-email] terraform: Releasing state lock. This may take a few moments...
+04:06:31.375 INFO   [terraform/scaleway/iam-policy/pigeon-cli-grafana] Downloading Terraform configurations from ../../../../../tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana into ../../../../../tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana/.terragrunt-cache/hOzOtsX5qUdFfTHVz-jp73ocu90/jwDJLxEb4SlZspxEOykZ_Uoat2Y
+04:06:31.376 INFO   [terraform/scaleway/iam-api-key/pigeon-cli-grafana] Downloading Terraform configurations from ../../../../../tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana into ../../../../../tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana/.terragrunt-cache/kQZjnyiwPheYK_aF2JTfXO-91nY/cCrIfj_CN1sOSShlp_dSCC1H0YU
+04:06:31.403 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: Initializing the backend...
+04:06:31.405 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: Initializing the backend...
+04:06:31.412 STDOUT [terraform/scaleway/bucket/pigeon-cli-email] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:06:31.685 STDOUT [terraform/backblaze/bucket/original-2026-06-01] terraform: Acquiring state lock. This may take a few moments...
+04:06:32.002 STDOUT [terraform/backblaze/bucket/deduplicated-misc] terraform: Releasing state lock. This may take a few moments...
+04:06:32.029 STDOUT [terraform/scaleway/cockpit-observability/pigeon-cli] terraform: Releasing state lock. This may take a few moments...
+04:06:32.054 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: Successfully configured the backend "s3"! Terraform will automatically
+04:06:32.054 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: use this backend unless the backend configuration changes.
+04:06:32.277 STDOUT [terraform/backblaze/bucket/snapshot-2026-10-17] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:06:32.411 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: Initializing modules...
+04:06:32.412 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: Downloading https://noisypigeon.garden/terraform/scaleway/iam-policy/v4.0.0 for iam_policy...
+04:06:32.565 STDOUT [terraform/scaleway/cockpit-observability/pigeon-cli] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:06:32.565 STDOUT [terraform/scaleway/cockpit-observability/pigeon-cli] terraform: Outputs:
+04:06:32.565 STDOUT [terraform/scaleway/cockpit-observability/pigeon-cli] terraform: logs_push_url = "https://00000000-0000-0000-0000-000000000000.logs.cockpit.fr-par.scw.cloud/loki/api/v1/push"
+04:06:32.565 STDOUT [terraform/scaleway/cockpit-observability/pigeon-cli] terraform: metrics_push_url = "https://00000000-0000-0000-0000-000000000000.metrics.cockpit.fr-par.scw.cloud/api/v1/push"
+04:06:32.565 STDOUT [terraform/scaleway/cockpit-observability/pigeon-cli] terraform: token_secret = <sensitive>
+04:06:32.650 STDOUT [terraform/backblaze/bucket/deduplicated-misc] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:06:32.675 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: Successfully configured the backend "s3"! Terraform will automatically
+04:06:32.675 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: use this backend unless the backend configuration changes.
+04:06:33.029 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: Initializing modules...
+04:06:33.030 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: Downloading https://noisypigeon.garden/terraform/scaleway/iam-api-key/v0.2.0 for iam_api_key...
+04:06:33.206 STDOUT [terraform/backblaze/bucket/custodial-duck-jellyfish] terraform: Releasing state lock. This may take a few moments...
+04:06:33.347 STDOUT [terraform/backblaze/api-key/original-2026-06-01] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:06:33.347 STDOUT [terraform/backblaze/api-key/original-2026-06-01] terraform: Outputs:
+04:06:33.347 STDOUT [terraform/backblaze/api-key/original-2026-06-01] terraform: application_key = <sensitive>
+04:06:33.347 STDOUT [terraform/backblaze/api-key/original-2026-06-01] terraform: application_key_id = "006e8e64a0937fe0000000010"
+04:06:33.797 STDOUT [terraform/backblaze/bucket/custodial-duck-jellyfish] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:06:34.010 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: - iam_policy in .terraform/modules/iam_policy
+04:06:34.011 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: Initializing provider plugins...
+04:06:34.011 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: - Finding scaleway/scaleway versions matching "~> 2.0"...
+04:06:34.251 STDOUT [terraform/backblaze/bucket/original-2026-06-01] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:06:34.301 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: - Installing scaleway/scaleway v2.87.0...
+04:06:34.892 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: - Installed scaleway/scaleway v2.87.0 (signed by a HashiCorp partner, key ID F5BF26CADF6F9614)
+04:06:34.892 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: Partner and community providers are signed by their developers.
+04:06:34.892 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: If you'd like to know more about provider signing, you can read about it here:
+04:06:34.892 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: https://developer.hashicorp.com/terraform/cli/plugins/signing
+04:06:34.892 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: Terraform has created a lock file .terraform.lock.hcl to record the provider
+04:06:34.892 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: selections it made above. Include this file in your version control repository
+04:06:34.892 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: so that Terraform can guarantee to make the same selections by default when
+04:06:34.892 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: you run "terraform init" in the future.
+04:06:34.892 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: Terraform has been successfully initialized!
+04:06:34.892 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: You may now begin working with Terraform. Try running "terraform plan" to see
+04:06:34.892 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: any changes that are required for your infrastructure. All Terraform commands
+04:06:34.892 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: should now work.
+04:06:34.892 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: If you ever set or change modules or backend configuration for Terraform,
+04:06:34.892 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: rerun this command to reinitialize your working directory. If you forget, other
+04:06:34.893 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: commands will detect it and remind you to do so if necessary.
+04:06:35.746 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: - iam_api_key in .terraform/modules/iam_api_key
+04:06:35.747 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: Initializing provider plugins...
+04:06:35.747 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: - Finding scaleway/scaleway versions matching "~> 2.0"...
+04:06:35.820 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: - Finding hashicorp/time versions matching "~> 0.9"...
+04:06:36.076 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: - Installing scaleway/scaleway v2.87.0...
+04:06:36.202 STDOUT [terraform/scaleway/iam-policy/pigeon-cli-grafana] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:06:36.601 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: - Installed scaleway/scaleway v2.87.0 (signed by a HashiCorp partner, key ID F5BF26CADF6F9614)
+04:06:36.761 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: - Installing hashicorp/time v0.14.2...
+04:06:37.025 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: - Installed hashicorp/time v0.14.2 (signed by HashiCorp)
+04:06:37.025 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: Partner and community providers are signed by their developers.
+04:06:37.025 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: If you'd like to know more about provider signing, you can read about it here:
+04:06:37.025 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: https://developer.hashicorp.com/terraform/cli/plugins/signing
+04:06:37.025 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: Terraform has created a lock file .terraform.lock.hcl to record the provider
+04:06:37.025 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: selections it made above. Include this file in your version control repository
+04:06:37.025 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: so that Terraform can guarantee to make the same selections by default when
+04:06:37.026 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: you run "terraform init" in the future.
+04:06:37.026 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: Terraform has been successfully initialized!
+04:06:37.026 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: You may now begin working with Terraform. Try running "terraform plan" to see
+04:06:37.026 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: any changes that are required for your infrastructure. All Terraform commands
+04:06:37.026 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: should now work.
+04:06:37.026 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: If you ever set or change modules or backend configuration for Terraform,
+04:06:37.026 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: rerun this command to reinitialize your working directory. If you forget, other
+04:06:37.026 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: commands will detect it and remind you to do so if necessary.
+04:06:38.353 STDOUT [terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:06:38.353 STDOUT [terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: Outputs:
+04:06:38.353 STDOUT [terraform/scaleway/iam-api-key/pigeon-cli-grafana] terraform: secret_key = <sensitive>
+04:06:39.138 INFO   [terraform/grafana/dashboard/pigeon-cli] Downloading Terraform configurations from ../../../../../tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli into ../../../../../tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli/.terragrunt-cache/7XYHySeCrDPmlWAboYWHUrUc418/R8A7XxNaVPIbDZeL0TwrPVn-LMk
+04:06:39.159 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: Initializing the backend...
+04:06:39.517 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: Successfully configured the backend "s3"! Terraform will automatically
+04:06:39.517 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: use this backend unless the backend configuration changes.
+04:06:39.984 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: Initializing modules...
+04:06:39.984 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: Downloading https://noisypigeon.garden/terraform/grafana/dashboard/v0.1.0 for grafana_dashboard...
+04:06:40.654 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: - grafana_dashboard in .terraform/modules/grafana_dashboard
+04:06:40.655 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: Initializing provider plugins...
+04:06:40.655 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: - terraform.io/builtin/terraform is built in to Terraform
+04:06:40.655 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: - Finding scaleway/scaleway versions matching "~> 2.0"...
+04:06:40.738 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: - Finding grafana/grafana versions matching "~> 4.0"...
+04:06:40.782 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: - Finding hashicorp/http versions matching "~> 3.4"...
+04:06:41.053 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: - Installing scaleway/scaleway v2.87.0...
+04:06:41.549 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: - Installed scaleway/scaleway v2.87.0 (signed by a HashiCorp partner, key ID F5BF26CADF6F9614)
+04:06:41.951 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: - Installing grafana/grafana v4.50.0...
+04:06:42.825 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: - Installed grafana/grafana v4.50.0 (signed by a HashiCorp partner, key ID 570AA42029AE241A)
+04:06:42.980 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: - Installing hashicorp/http v3.6.2...
+04:06:43.256 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: - Installed hashicorp/http v3.6.2 (signed by HashiCorp)
+04:06:43.256 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: Partner and community providers are signed by their developers.
+04:06:43.256 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: If you'd like to know more about provider signing, you can read about it here:
+04:06:43.256 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: https://developer.hashicorp.com/terraform/cli/plugins/signing
+04:06:43.256 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: Terraform has created a lock file .terraform.lock.hcl to record the provider
+04:06:43.256 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: selections it made above. Include this file in your version control repository
+04:06:43.256 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: so that Terraform can guarantee to make the same selections by default when
+04:06:43.256 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: you run "terraform init" in the future.
+04:06:43.256 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: Terraform has been successfully initialized!
+04:06:43.256 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: You may now begin working with Terraform. Try running "terraform plan" to see
+04:06:43.256 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: any changes that are required for your infrastructure. All Terraform commands
+04:06:43.256 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: should now work.
+04:06:43.256 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: If you ever set or change modules or backend configuration for Terraform,
+04:06:43.256 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: rerun this command to reinitialize your working directory. If you forget, other
+04:06:43.256 INFO   [/tmp/terragrunt-worktree-HEAD-406064140/terraform/grafana/dashboard/pigeon-cli] terraform: commands will detect it and remind you to do so if necessary.
+04:06:45.745 STDOUT [terraform/grafana/dashboard/pigeon-cli] terraform: Acquiring state lock. This may take a few moments...
+04:06:47.666 STDOUT [terraform/grafana/dashboard/pigeon-cli] terraform: Releasing state lock. This may take a few moments...
+04:06:48.400 STDOUT [terraform/grafana/dashboard/pigeon-cli] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+
+❯❯ Run Summary  22 units  25s
+   ────────────────────────────
+   Succeeded    22
+
+04:06:50.031 INFO   The following units will be run, starting with dependencies and then their dependents:
+.
+├── workloads/poc/scaleway/iam-application/main
+│   ╰── workloads/poc/scaleway/iam-api-key/main
+╰── workloads/poc/scaleway/project/main
+    ├── workloads/poc/scaleway/iam-api-key/main
+    ├── workloads/poc/scaleway/terraform-deployer-iam/main
+    │   ╰── workloads/poc/scaleway/bucket/scratch
+    ╰── workloads/poc/scaleway/bucket/scratch
+04:06:50.091 INFO   [workloads/poc/scaleway/project/main] Downloading Terraform configurations from ./workloads/poc/scaleway/project/main into ./workloads/poc/scaleway/project/main/.terragrunt-cache/_pgb8QbZ3E54sPpk9sUpI3wnHoE/Iva1QtlZFlD-IGTyj2_1O7Ib_eQ
+04:06:50.091 INFO   [workloads/poc/scaleway/iam-application/main] Downloading Terraform configurations from ./workloads/poc/scaleway/iam-application/main into ./workloads/poc/scaleway/iam-application/main/.terragrunt-cache/dHAws2E72OFqqWFrrXKxt6bs-lw/f7TCI30DkKtv56CQigmwdJ6niE0
+04:06:50.115 INFO   [workloads/poc/scaleway/project/main] terraform: Initializing the backend...
+04:06:50.115 INFO   [workloads/poc/scaleway/iam-application/main] terraform: Initializing the backend...
+04:06:50.983 INFO   [workloads/poc/scaleway/project/main] terraform: Successfully configured the backend "s3"! Terraform will automatically
+04:06:50.983 INFO   [workloads/poc/scaleway/project/main] terraform: use this backend unless the backend configuration changes.
+04:06:51.658 INFO   [workloads/poc/scaleway/iam-application/main] terraform: Successfully configured the backend "s3"! Terraform will automatically
+04:06:51.659 INFO   [workloads/poc/scaleway/iam-application/main] terraform: use this backend unless the backend configuration changes.
+04:06:52.868 INFO   [workloads/poc/scaleway/project/main] terraform: Initializing modules...
+04:06:52.869 INFO   [workloads/poc/scaleway/project/main] terraform: Downloading https://noisypigeon.garden/terraform/scaleway/project/v2.0.3 for this...
+04:06:52.954 INFO   [workloads/poc/scaleway/iam-application/main] terraform: Initializing modules...
+04:06:52.955 INFO   [workloads/poc/scaleway/iam-application/main] terraform: Downloading https://noisypigeon.garden/terraform/scaleway/iam-application/v0.1.0 for this...
+04:06:53.555 INFO   [workloads/poc/scaleway/project/main] terraform: - this in .terraform/modules/this
+04:06:53.556 INFO   [workloads/poc/scaleway/project/main] terraform: Initializing provider plugins...
+04:06:53.556 INFO   [workloads/poc/scaleway/project/main] terraform: - Finding scaleway/scaleway versions matching "~> 2.0"...
+04:06:53.584 INFO   [workloads/poc/scaleway/iam-application/main] terraform: - this in .terraform/modules/this
+04:06:53.586 INFO   [workloads/poc/scaleway/iam-application/main] terraform: Initializing provider plugins...
+04:06:53.586 INFO   [workloads/poc/scaleway/iam-application/main] terraform: - Finding scaleway/scaleway versions matching "~> 2.0"...
+04:06:53.873 INFO   [workloads/poc/scaleway/iam-application/main] terraform: - Installing scaleway/scaleway v2.87.0...
+04:06:53.897 INFO   [workloads/poc/scaleway/project/main] terraform: - Installing scaleway/scaleway v2.87.0...
+04:06:54.399 INFO   [workloads/poc/scaleway/iam-application/main] terraform: - Installed scaleway/scaleway v2.87.0 (signed by a HashiCorp partner, key ID F5BF26CADF6F9614)
+04:06:54.399 INFO   [workloads/poc/scaleway/iam-application/main] terraform: Partner and community providers are signed by their developers.
+04:06:54.399 INFO   [workloads/poc/scaleway/iam-application/main] terraform: If you'd like to know more about provider signing, you can read about it here:
+04:06:54.399 INFO   [workloads/poc/scaleway/iam-application/main] terraform: https://developer.hashicorp.com/terraform/cli/plugins/signing
+04:06:54.399 INFO   [workloads/poc/scaleway/iam-application/main] terraform: Terraform has created a lock file .terraform.lock.hcl to record the provider
+04:06:54.399 INFO   [workloads/poc/scaleway/iam-application/main] terraform: selections it made above. Include this file in your version control repository
+04:06:54.400 INFO   [workloads/poc/scaleway/iam-application/main] terraform: so that Terraform can guarantee to make the same selections by default when
+04:06:54.400 INFO   [workloads/poc/scaleway/iam-application/main] terraform: you run "terraform init" in the future.
+04:06:54.400 INFO   [workloads/poc/scaleway/iam-application/main] terraform: Terraform has been successfully initialized!
+04:06:54.400 INFO   [workloads/poc/scaleway/iam-application/main] terraform: You may now begin working with Terraform. Try running "terraform plan" to see
+04:06:54.400 INFO   [workloads/poc/scaleway/iam-application/main] terraform: any changes that are required for your infrastructure. All Terraform commands
+04:06:54.400 INFO   [workloads/poc/scaleway/iam-application/main] terraform: should now work.
+04:06:54.400 INFO   [workloads/poc/scaleway/iam-application/main] terraform: If you ever set or change modules or backend configuration for Terraform,
+04:06:54.400 INFO   [workloads/poc/scaleway/iam-application/main] terraform: rerun this command to reinitialize your working directory. If you forget, other
+04:06:54.400 INFO   [workloads/poc/scaleway/iam-application/main] terraform: commands will detect it and remind you to do so if necessary.
+04:06:54.431 INFO   [workloads/poc/scaleway/project/main] terraform: - Installed scaleway/scaleway v2.87.0 (signed by a HashiCorp partner, key ID F5BF26CADF6F9614)
+04:06:54.431 INFO   [workloads/poc/scaleway/project/main] terraform: Partner and community providers are signed by their developers.
+04:06:54.431 INFO   [workloads/poc/scaleway/project/main] terraform: If you'd like to know more about provider signing, you can read about it here:
+04:06:54.431 INFO   [workloads/poc/scaleway/project/main] terraform: https://developer.hashicorp.com/terraform/cli/plugins/signing
+04:06:54.431 INFO   [workloads/poc/scaleway/project/main] terraform: Terraform has created a lock file .terraform.lock.hcl to record the provider
+04:06:54.431 INFO   [workloads/poc/scaleway/project/main] terraform: selections it made above. Include this file in your version control repository
+04:06:54.431 INFO   [workloads/poc/scaleway/project/main] terraform: so that Terraform can guarantee to make the same selections by default when
+04:06:54.431 INFO   [workloads/poc/scaleway/project/main] terraform: you run "terraform init" in the future.
+04:06:54.431 INFO   [workloads/poc/scaleway/project/main] terraform: Terraform has been successfully initialized!
+04:06:54.431 INFO   [workloads/poc/scaleway/project/main] terraform: You may now begin working with Terraform. Try running "terraform plan" to see
+04:06:54.431 INFO   [workloads/poc/scaleway/project/main] terraform: any changes that are required for your infrastructure. All Terraform commands
+04:06:54.431 INFO   [workloads/poc/scaleway/project/main] terraform: should now work.
+04:06:54.431 INFO   [workloads/poc/scaleway/project/main] terraform: If you ever set or change modules or backend configuration for Terraform,
+04:06:54.431 INFO   [workloads/poc/scaleway/project/main] terraform: rerun this command to reinitialize your working directory. If you forget, other
+04:06:54.431 INFO   [workloads/poc/scaleway/project/main] terraform: commands will detect it and remind you to do so if necessary.
+04:06:55.916 STDOUT [workloads/poc/scaleway/iam-application/main] terraform: Releasing state lock. This may take a few moments...
+04:06:55.963 STDOUT [workloads/poc/scaleway/project/main] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:06:55.964 STDOUT [workloads/poc/scaleway/project/main] terraform: Outputs:
+04:06:55.964 STDOUT [workloads/poc/scaleway/project/main] terraform: module = {
+04:06:55.964 STDOUT [workloads/poc/scaleway/project/main] terraform:   "id" = "00000000-0000-0000-0000-000000000000"
+04:06:55.964 STDOUT [workloads/poc/scaleway/project/main] terraform:   "name" = "poc-lib-0023"
+04:06:55.964 STDOUT [workloads/poc/scaleway/project/main] terraform:   "ssh_key_id" = null
+04:06:55.964 STDOUT [workloads/poc/scaleway/project/main] terraform: }
+04:06:55.990 STDOUT [workloads/poc/scaleway/iam-application/main] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:06:55.990 STDOUT [workloads/poc/scaleway/iam-application/main] terraform: Outputs:
+04:06:55.990 STDOUT [workloads/poc/scaleway/iam-application/main] terraform: module = {
+04:06:55.990 STDOUT [workloads/poc/scaleway/iam-application/main] terraform:   "id" = "00000000-0000-0000-0000-000000000000"
+04:06:55.990 STDOUT [workloads/poc/scaleway/iam-application/main] terraform:   "name" = "poc-lib-0023"
+04:06:55.990 STDOUT [workloads/poc/scaleway/iam-application/main] terraform: }
+04:06:57.039 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] Downloading Terraform configurations from ./workloads/poc/scaleway/terraform-deployer-iam/main into ./workloads/poc/scaleway/terraform-deployer-iam/main/.terragrunt-cache/LEU33nWWZ8ziUSDhwmh3exX2LPo/tfo47vIVX6fqhh7tahglaCU4nWg
+04:06:57.039 INFO   [workloads/poc/scaleway/iam-api-key/main] Downloading Terraform configurations from ./workloads/poc/scaleway/iam-api-key/main into ./workloads/poc/scaleway/iam-api-key/main/.terragrunt-cache/TijOeQdJHmmYGEHAMawwkJK7OzM/VEjrwFUKZ9zjvZfg5I9J1TkLlBM
+04:06:57.064 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: Initializing the backend...
+04:06:57.064 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Initializing the backend...
+04:06:57.429 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Successfully configured the backend "s3"! Terraform will automatically
+04:06:57.429 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: use this backend unless the backend configuration changes.
+04:06:57.434 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: Successfully configured the backend "s3"! Terraform will automatically
+04:06:57.434 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: use this backend unless the backend configuration changes.
+04:06:57.809 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: Initializing modules...
+04:06:57.810 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: Downloading https://noisypigeon.garden/terraform/scaleway/iam-api-key/v0.2.0 for this...
+04:06:57.892 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Initializing modules...
+04:06:57.893 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Downloading https://noisypigeon.garden/terraform/scaleway/terraform-deployer-iam/v0.2.0 for this...
+04:06:58.447 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: - this in .terraform/modules/this
+04:06:58.449 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: Initializing provider plugins...
+04:06:58.449 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: - Finding scaleway/scaleway versions matching "~> 2.0"...
+04:06:58.528 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: - Finding hashicorp/time versions matching "~> 0.9"...
+04:06:58.533 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: - this in .terraform/modules/this
+04:06:58.534 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Initializing provider plugins...
+04:06:58.534 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: - terraform.io/builtin/terraform is built in to Terraform
+04:06:58.534 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: - Finding hashicorp/time versions matching "~> 0.9"...
+04:06:58.607 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: - Finding scaleway/scaleway versions matching "~> 2.0"...
+04:06:58.784 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: - Installing hashicorp/time v0.14.2...
+04:06:58.909 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: - Installing scaleway/scaleway v2.87.0...
+04:06:59.037 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: - Installed hashicorp/time v0.14.2 (signed by HashiCorp)
+04:06:59.252 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: - Installing scaleway/scaleway v2.87.0...
+04:06:59.477 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: - Installed scaleway/scaleway v2.87.0 (signed by a HashiCorp partner, key ID F5BF26CADF6F9614)
+04:06:59.633 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: - Installing hashicorp/time v0.14.2...
+04:06:59.694 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: - Installed scaleway/scaleway v2.87.0 (signed by a HashiCorp partner, key ID F5BF26CADF6F9614)
+04:06:59.694 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Partner and community providers are signed by their developers.
+04:06:59.694 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: If you'd like to know more about provider signing, you can read about it here:
+04:06:59.694 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: https://developer.hashicorp.com/terraform/cli/plugins/signing
+04:06:59.694 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Terraform has created a lock file .terraform.lock.hcl to record the provider
+04:06:59.694 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: selections it made above. Include this file in your version control repository
+04:06:59.694 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: so that Terraform can guarantee to make the same selections by default when
+04:06:59.694 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: you run "terraform init" in the future.
+04:06:59.695 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Terraform has been successfully initialized!
+04:06:59.695 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: You may now begin working with Terraform. Try running "terraform plan" to see
+04:06:59.695 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: any changes that are required for your infrastructure. All Terraform commands
+04:06:59.695 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: should now work.
+04:06:59.695 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: If you ever set or change modules or backend configuration for Terraform,
+04:06:59.695 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: rerun this command to reinitialize your working directory. If you forget, other
+04:06:59.695 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: commands will detect it and remind you to do so if necessary.
+04:06:59.886 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: - Installed hashicorp/time v0.14.2 (signed by HashiCorp)
+04:06:59.886 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: Partner and community providers are signed by their developers.
+04:06:59.886 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: If you'd like to know more about provider signing, you can read about it here:
+04:06:59.886 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: https://developer.hashicorp.com/terraform/cli/plugins/signing
+04:06:59.886 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: Terraform has created a lock file .terraform.lock.hcl to record the provider
+04:06:59.886 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: selections it made above. Include this file in your version control repository
+04:06:59.886 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: so that Terraform can guarantee to make the same selections by default when
+04:06:59.886 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: you run "terraform init" in the future.
+04:06:59.886 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: Terraform has been successfully initialized!
+04:06:59.886 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: You may now begin working with Terraform. Try running "terraform plan" to see
+04:06:59.886 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: any changes that are required for your infrastructure. All Terraform commands
+04:06:59.886 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: should now work.
+04:06:59.886 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: If you ever set or change modules or backend configuration for Terraform,
+04:06:59.886 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: rerun this command to reinitialize your working directory. If you forget, other
+04:06:59.886 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: commands will detect it and remind you to do so if necessary.
+04:07:01.065 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:07:01.065 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Outputs:
+04:07:01.065 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: module = <sensitive>
+04:07:01.746 STDOUT [workloads/poc/scaleway/iam-api-key/main] terraform: Releasing state lock. This may take a few moments...
+04:07:01.761 STDOUT [workloads/poc/scaleway/iam-api-key/main] terraform: Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+04:07:01.761 STDOUT [workloads/poc/scaleway/iam-api-key/main] terraform: Outputs:
+04:07:01.761 STDOUT [workloads/poc/scaleway/iam-api-key/main] terraform: module = <sensitive>
+04:07:01.859 INFO   [workloads/poc/scaleway/bucket/scratch] Downloading Terraform configurations from ./workloads/poc/scaleway/bucket/scratch into ./workloads/poc/scaleway/bucket/scratch/.terragrunt-cache/iavpRVSlTKU2AYunyBK1qwVZ0nk/DU6iJqMf3umOzIRkWRu_gj9_J04
+04:07:01.880 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: Initializing the backend...
+04:07:02.724 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: Successfully configured the backend "s3"! Terraform will automatically
+04:07:02.724 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: use this backend unless the backend configuration changes.
+04:07:03.066 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: Initializing modules...
+04:07:03.067 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: Downloading https://noisypigeon.garden/terraform/scaleway/bucket/v5.0.0 for this...
+04:07:03.829 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: - this in .terraform/modules/this
+04:07:03.830 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: Initializing provider plugins...
+04:07:03.830 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: - Finding hashicorp/random versions matching "~> 3.0"...
+04:07:03.915 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: - Finding scaleway/scaleway versions matching "~> 2.0"...
+04:07:04.078 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: - Installing hashicorp/random v3.9.1...
+04:07:04.328 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: - Installed hashicorp/random v3.9.1 (signed by HashiCorp)
+04:07:04.558 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: - Installing scaleway/scaleway v2.87.0...
+04:07:05.012 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: - Installed scaleway/scaleway v2.87.0 (signed by a HashiCorp partner, key ID F5BF26CADF6F9614)
+04:07:05.012 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: Partner and community providers are signed by their developers.
+04:07:05.012 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: If you'd like to know more about provider signing, you can read about it here:
+04:07:05.012 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: https://developer.hashicorp.com/terraform/cli/plugins/signing
+04:07:05.012 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: Terraform has created a lock file .terraform.lock.hcl to record the provider
+04:07:05.012 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: selections it made above. Include this file in your version control repository
+04:07:05.012 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: so that Terraform can guarantee to make the same selections by default when
+04:07:05.012 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: you run "terraform init" in the future.
+04:07:05.012 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: Terraform has been successfully initialized!
+04:07:05.012 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: You may now begin working with Terraform. Try running "terraform plan" to see
+04:07:05.012 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: any changes that are required for your infrastructure. All Terraform commands
+04:07:05.012 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: should now work.
+04:07:05.012 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: If you ever set or change modules or backend configuration for Terraform,
+04:07:05.012 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: rerun this command to reinitialize your working directory. If you forget, other
+04:07:05.012 INFO   [workloads/poc/scaleway/bucket/scratch] terraform: commands will detect it and remind you to do so if necessary.
+04:07:06.024 STDOUT [workloads/poc/scaleway/bucket/scratch] terraform: module.this.scaleway_object_bucket.bucket: Creating...
+04:07:15.061 STDOUT [workloads/poc/scaleway/bucket/scratch] terraform: module.this.scaleway_object_bucket.bucket: Creation complete after 9s [id=fr-par/poc-scratch-8nx0we-lib-0023]
+04:07:16.699 STDOUT [workloads/poc/scaleway/bucket/scratch] terraform: Releasing state lock. This may take a few moments...
+04:07:16.778 STDOUT [workloads/poc/scaleway/bucket/scratch] terraform: Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
+04:07:16.778 STDOUT [workloads/poc/scaleway/bucket/scratch] terraform: Outputs:
+04:07:16.778 STDOUT [workloads/poc/scaleway/bucket/scratch] terraform: module = {
+04:07:16.778 STDOUT [workloads/poc/scaleway/bucket/scratch] terraform:   "endpoint" = "https://s3.fr-par.scw.cloud"
+04:07:16.778 STDOUT [workloads/poc/scaleway/bucket/scratch] terraform:   "id" = "fr-par/poc-scratch-8nx0we-lib-0023"
+04:07:16.778 STDOUT [workloads/poc/scaleway/bucket/scratch] terraform:   "name" = "poc-scratch-8nx0we-lib-0023"
+04:07:16.778 STDOUT [workloads/poc/scaleway/bucket/scratch] terraform:   "website_endpoint" = "https://poc-scratch-8nx0we-lib-0023.s3-website.fr-par.scw.cloud"
+04:07:16.778 STDOUT [workloads/poc/scaleway/bucket/scratch] terraform: }
+
+❯❯ Run Summary  5 units  26s
+   ────────────────────────────
+   Succeeded    5
+
+

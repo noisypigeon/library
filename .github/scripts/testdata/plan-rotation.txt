@@ -1,0 +1,203 @@
+17:10:06.853 WARN   No units discovered. Creating an empty runner.
+17:10:06.853 INFO   The following units will be run, starting with dependencies and then their dependents:
+.
+17:10:08.535 INFO   The following units will be run, starting with dependencies and then their dependents:
+.
+╰── workloads/poc/scaleway/iam-application/main
+17:10:08.597 INFO   [workloads/poc/scaleway/iam-application/main] Downloading Terraform configurations from ./workloads/poc/scaleway/iam-application/main into ./workloads/poc/scaleway/iam-application/main/.terragrunt-cache/dHAws2E72OFqqWFrrXKxt6bs-lw/f7TCI30DkKtv56CQigmwdJ6niE0
+17:10:08.622 INFO   [workloads/poc/scaleway/iam-application/main] terraform: Initializing the backend...
+17:10:09.624 INFO   [workloads/poc/scaleway/iam-application/main] terraform: Successfully configured the backend "s3"! Terraform will automatically
+17:10:09.624 INFO   [workloads/poc/scaleway/iam-application/main] terraform: use this backend unless the backend configuration changes.
+17:10:10.040 INFO   [workloads/poc/scaleway/iam-application/main] terraform: Initializing modules...
+17:10:10.041 INFO   [workloads/poc/scaleway/iam-application/main] terraform: Downloading https://noisypigeon.garden/terraform/scaleway/iam-application/v0.1.0 for this...
+17:10:11.082 INFO   [workloads/poc/scaleway/iam-application/main] terraform: - this in .terraform/modules/this
+17:10:11.083 INFO   [workloads/poc/scaleway/iam-application/main] terraform: Initializing provider plugins...
+17:10:11.083 INFO   [workloads/poc/scaleway/iam-application/main] terraform: - Finding scaleway/scaleway versions matching "~> 2.0"...
+17:10:11.362 INFO   [workloads/poc/scaleway/iam-application/main] terraform: - Installing scaleway/scaleway v2.88.0...
+17:10:11.839 INFO   [workloads/poc/scaleway/iam-application/main] terraform: - Installed scaleway/scaleway v2.88.0 (signed by a HashiCorp partner, key ID F5BF26CADF6F9614)
+17:10:11.839 INFO   [workloads/poc/scaleway/iam-application/main] terraform: Partner and community providers are signed by their developers.
+17:10:11.839 INFO   [workloads/poc/scaleway/iam-application/main] terraform: If you'd like to know more about provider signing, you can read about it here:
+17:10:11.839 INFO   [workloads/poc/scaleway/iam-application/main] terraform: https://developer.hashicorp.com/terraform/cli/plugins/signing
+17:10:11.839 INFO   [workloads/poc/scaleway/iam-application/main] terraform: Terraform has created a lock file .terraform.lock.hcl to record the provider
+17:10:11.839 INFO   [workloads/poc/scaleway/iam-application/main] terraform: selections it made above. Include this file in your version control repository
+17:10:11.839 INFO   [workloads/poc/scaleway/iam-application/main] terraform: so that Terraform can guarantee to make the same selections by default when
+17:10:11.839 INFO   [workloads/poc/scaleway/iam-application/main] terraform: you run "terraform init" in the future.
+17:10:11.839 INFO   [workloads/poc/scaleway/iam-application/main] terraform: Terraform has been successfully initialized!
+17:10:11.839 INFO   [workloads/poc/scaleway/iam-application/main] terraform: You may now begin working with Terraform. Try running "terraform plan" to see
+17:10:11.839 INFO   [workloads/poc/scaleway/iam-application/main] terraform: any changes that are required for your infrastructure. All Terraform commands
+17:10:11.839 INFO   [workloads/poc/scaleway/iam-application/main] terraform: should now work.
+17:10:11.839 INFO   [workloads/poc/scaleway/iam-application/main] terraform: If you ever set or change modules or backend configuration for Terraform,
+17:10:11.839 INFO   [workloads/poc/scaleway/iam-application/main] terraform: rerun this command to reinitialize your working directory. If you forget, other
+17:10:11.839 INFO   [workloads/poc/scaleway/iam-application/main] terraform: commands will detect it and remind you to do so if necessary.
+17:10:13.157 STDOUT [workloads/poc/scaleway/iam-application/main] terraform: module.this.scaleway_iam_application.application: Refreshing state... [id=00000000-0000-0000-0000-000000000000]
+17:10:14.180 STDOUT [workloads/poc/scaleway/iam-application/main] terraform: No changes. Your infrastructure matches the configuration.
+17:10:14.180 STDOUT [workloads/poc/scaleway/iam-application/main] terraform: Terraform has compared your real infrastructure against your configuration
+17:10:14.180 STDOUT [workloads/poc/scaleway/iam-application/main] terraform: and found no differences, so no changes are needed.
+
+❯❯ Run Summary  1 units  5s
+   ────────────────────────────
+   Succeeded    1
+
+17:10:15.013 INFO   The following units will be run, starting with dependencies and then their dependents:
+.
+╰── workloads/poc/scaleway/project/main
+17:10:15.077 INFO   [workloads/poc/scaleway/project/main] Downloading Terraform configurations from ./workloads/poc/scaleway/project/main into ./workloads/poc/scaleway/project/main/.terragrunt-cache/_pgb8QbZ3E54sPpk9sUpI3wnHoE/Iva1QtlZFlD-IGTyj2_1O7Ib_eQ
+17:10:15.102 INFO   [workloads/poc/scaleway/project/main] terraform: Initializing the backend...
+17:10:16.130 INFO   [workloads/poc/scaleway/project/main] terraform: Successfully configured the backend "s3"! Terraform will automatically
+17:10:16.130 INFO   [workloads/poc/scaleway/project/main] terraform: use this backend unless the backend configuration changes.
+17:10:16.688 INFO   [workloads/poc/scaleway/project/main] terraform: Initializing modules...
+17:10:16.689 INFO   [workloads/poc/scaleway/project/main] terraform: Downloading https://noisypigeon.garden/terraform/scaleway/project/v2.0.3 for this...
+17:10:18.482 INFO   [workloads/poc/scaleway/project/main] terraform: - this in .terraform/modules/this
+17:10:18.483 INFO   [workloads/poc/scaleway/project/main] terraform: Initializing provider plugins...
+17:10:18.483 INFO   [workloads/poc/scaleway/project/main] terraform: - Finding scaleway/scaleway versions matching "~> 2.0"...
+17:10:18.764 INFO   [workloads/poc/scaleway/project/main] terraform: - Installing scaleway/scaleway v2.88.0...
+17:10:19.302 INFO   [workloads/poc/scaleway/project/main] terraform: - Installed scaleway/scaleway v2.88.0 (signed by a HashiCorp partner, key ID F5BF26CADF6F9614)
+17:10:19.302 INFO   [workloads/poc/scaleway/project/main] terraform: Partner and community providers are signed by their developers.
+17:10:19.302 INFO   [workloads/poc/scaleway/project/main] terraform: If you'd like to know more about provider signing, you can read about it here:
+17:10:19.302 INFO   [workloads/poc/scaleway/project/main] terraform: https://developer.hashicorp.com/terraform/cli/plugins/signing
+17:10:19.302 INFO   [workloads/poc/scaleway/project/main] terraform: Terraform has created a lock file .terraform.lock.hcl to record the provider
+17:10:19.302 INFO   [workloads/poc/scaleway/project/main] terraform: selections it made above. Include this file in your version control repository
+17:10:19.302 INFO   [workloads/poc/scaleway/project/main] terraform: so that Terraform can guarantee to make the same selections by default when
+17:10:19.302 INFO   [workloads/poc/scaleway/project/main] terraform: you run "terraform init" in the future.
+17:10:19.302 INFO   [workloads/poc/scaleway/project/main] terraform: Terraform has been successfully initialized!
+17:10:19.302 INFO   [workloads/poc/scaleway/project/main] terraform: You may now begin working with Terraform. Try running "terraform plan" to see
+17:10:19.302 INFO   [workloads/poc/scaleway/project/main] terraform: any changes that are required for your infrastructure. All Terraform commands
+17:10:19.302 INFO   [workloads/poc/scaleway/project/main] terraform: should now work.
+17:10:19.302 INFO   [workloads/poc/scaleway/project/main] terraform: If you ever set or change modules or backend configuration for Terraform,
+17:10:19.302 INFO   [workloads/poc/scaleway/project/main] terraform: rerun this command to reinitialize your working directory. If you forget, other
+17:10:19.302 INFO   [workloads/poc/scaleway/project/main] terraform: commands will detect it and remind you to do so if necessary.
+17:10:20.484 STDOUT [workloads/poc/scaleway/project/main] terraform: module.this.scaleway_account_project.project: Refreshing state... [id=00000000-0000-0000-0000-000000000000]
+17:10:21.247 STDOUT [workloads/poc/scaleway/project/main] terraform: No changes. Your infrastructure matches the configuration.
+17:10:21.247 STDOUT [workloads/poc/scaleway/project/main] terraform: Terraform has compared your real infrastructure against your configuration
+17:10:21.247 STDOUT [workloads/poc/scaleway/project/main] terraform: and found no differences, so no changes are needed.
+
+❯❯ Run Summary  1 units  6s
+   ────────────────────────────
+   Succeeded    1
+
+17:10:22.067 INFO   The following units will be run, starting with dependencies and then their dependents:
+.
+╰── workloads/poc/scaleway/iam-api-key/main
+17:10:24.559 INFO   [workloads/poc/scaleway/iam-api-key/main] Downloading Terraform configurations from ./workloads/poc/scaleway/iam-api-key/main into ./workloads/poc/scaleway/iam-api-key/main/.terragrunt-cache/TijOeQdJHmmYGEHAMawwkJK7OzM/VEjrwFUKZ9zjvZfg5I9J1TkLlBM
+17:10:24.584 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: Initializing the backend...
+17:10:25.002 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: Successfully configured the backend "s3"! Terraform will automatically
+17:10:25.002 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: use this backend unless the backend configuration changes.
+17:10:25.982 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: Initializing modules...
+17:10:25.983 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: Downloading https://noisypigeon.garden/terraform/scaleway/iam-api-key/v0.2.0 for this...
+17:10:27.271 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: - this in .terraform/modules/this
+17:10:27.273 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: Initializing provider plugins...
+17:10:27.273 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: - Finding hashicorp/time versions matching "~> 0.9"...
+17:10:27.293 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: - Finding scaleway/scaleway versions matching "~> 2.0"...
+17:10:27.513 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: - Installing hashicorp/time v0.14.2...
+17:10:27.711 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: - Installed hashicorp/time v0.14.2 (signed by HashiCorp)
+17:10:27.974 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: - Installing scaleway/scaleway v2.88.0...
+17:10:28.519 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: - Installed scaleway/scaleway v2.88.0 (signed by a HashiCorp partner, key ID F5BF26CADF6F9614)
+17:10:28.520 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: Partner and community providers are signed by their developers.
+17:10:28.520 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: If you'd like to know more about provider signing, you can read about it here:
+17:10:28.520 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: https://developer.hashicorp.com/terraform/cli/plugins/signing
+17:10:28.520 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: Terraform has created a lock file .terraform.lock.hcl to record the provider
+17:10:28.520 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: selections it made above. Include this file in your version control repository
+17:10:28.520 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: so that Terraform can guarantee to make the same selections by default when
+17:10:28.520 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: you run "terraform init" in the future.
+17:10:28.520 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: Terraform has been successfully initialized!
+17:10:28.520 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: You may now begin working with Terraform. Try running "terraform plan" to see
+17:10:28.520 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: any changes that are required for your infrastructure. All Terraform commands
+17:10:28.520 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: should now work.
+17:10:28.520 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: If you ever set or change modules or backend configuration for Terraform,
+17:10:28.520 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: rerun this command to reinitialize your working directory. If you forget, other
+17:10:28.520 INFO   [workloads/poc/scaleway/iam-api-key/main] terraform: commands will detect it and remind you to do so if necessary.
+17:10:30.304 STDOUT [workloads/poc/scaleway/iam-api-key/main] terraform: Acquiring state lock. This may take a few moments...
+17:10:30.974 STDOUT [workloads/poc/scaleway/iam-api-key/main] terraform: module.this.time_static.created: Refreshing state... [id=2026-10-21T03:26:28Z]
+17:10:30.987 STDOUT [workloads/poc/scaleway/iam-api-key/main] terraform: module.this.scaleway_iam_api_key.api_key: Refreshing state... [id=SCWXXXXXXXXXXXXXXXXX]
+17:10:31.600 STDOUT [workloads/poc/scaleway/iam-api-key/main] terraform: No changes. Your infrastructure matches the configuration.
+17:10:31.600 STDOUT [workloads/poc/scaleway/iam-api-key/main] terraform: Terraform has compared your real infrastructure against your configuration
+17:10:31.600 STDOUT [workloads/poc/scaleway/iam-api-key/main] terraform: and found no differences, so no changes are needed.
+17:10:32.000 STDOUT [workloads/poc/scaleway/iam-api-key/main] terraform: Releasing state lock. This may take a few moments...
+
+❯❯ Run Summary  1 units  7s
+   ────────────────────────────
+   Succeeded    1
+
+17:10:32.561 INFO   The following units will be run, starting with dependencies and then their dependents:
+.
+╰── workloads/poc/scaleway/terraform-deployer-iam/main
+17:10:34.161 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] Downloading Terraform configurations from ./workloads/poc/scaleway/terraform-deployer-iam/main into ./workloads/poc/scaleway/terraform-deployer-iam/main/.terragrunt-cache/LEU33nWWZ8ziUSDhwmh3exX2LPo/tfo47vIVX6fqhh7tahglaCU4nWg
+17:10:34.186 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Initializing the backend...
+17:10:35.011 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Successfully configured the backend "s3"! Terraform will automatically
+17:10:35.011 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: use this backend unless the backend configuration changes.
+17:10:35.662 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Initializing modules...
+17:10:35.663 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Downloading https://noisypigeon.garden/terraform/scaleway/terraform-deployer-iam/v0.2.0 for this...
+17:10:37.854 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: - this in .terraform/modules/this
+17:10:37.855 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Initializing provider plugins...
+17:10:37.855 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: - terraform.io/builtin/terraform is built in to Terraform
+17:10:37.855 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: - Finding hashicorp/time versions matching "~> 0.9"...
+17:10:37.875 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: - Finding scaleway/scaleway versions matching "~> 2.0"...
+17:10:38.013 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: - Installing hashicorp/time v0.14.2...
+17:10:38.207 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: - Installed hashicorp/time v0.14.2 (signed by HashiCorp)
+17:10:38.479 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: - Installing scaleway/scaleway v2.88.0...
+17:10:38.945 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: - Installed scaleway/scaleway v2.88.0 (signed by a HashiCorp partner, key ID F5BF26CADF6F9614)
+17:10:38.945 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Partner and community providers are signed by their developers.
+17:10:38.945 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: If you'd like to know more about provider signing, you can read about it here:
+17:10:38.945 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: https://developer.hashicorp.com/terraform/cli/plugins/signing
+17:10:38.945 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Terraform has created a lock file .terraform.lock.hcl to record the provider
+17:10:38.945 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: selections it made above. Include this file in your version control repository
+17:10:38.945 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: so that Terraform can guarantee to make the same selections by default when
+17:10:38.945 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: you run "terraform init" in the future.
+17:10:38.945 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Terraform has been successfully initialized!
+17:10:38.945 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: You may now begin working with Terraform. Try running "terraform plan" to see
+17:10:38.945 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: any changes that are required for your infrastructure. All Terraform commands
+17:10:38.945 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: should now work.
+17:10:38.945 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: If you ever set or change modules or backend configuration for Terraform,
+17:10:38.945 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: rerun this command to reinitialize your working directory. If you forget, other
+17:10:38.945 INFO   [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: commands will detect it and remind you to do so if necessary.
+17:10:40.310 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: module.this.time_static.created: Refreshing state... [id=2026-10-21T03:59:02Z]
+17:10:40.311 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: module.this.time_rotating.key[0]: Refreshing state... [id=2026-10-21T03:59:02Z]
+17:10:40.312 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: module.this.scaleway_iam_application.application: Refreshing state... [id=00000000-0000-0000-0000-000000000000]
+17:10:40.328 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: module.this.terraform_data.rotation: Refreshing state... [id=00000000-0000-0000-0000-000000000000]
+17:10:41.058 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: module.this.scaleway_iam_api_key.api_key: Refreshing state... [id=SCWXXXXXXXXXXXXXXXXX]
+17:10:41.059 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: module.this.scaleway_iam_policy.policy[0]: Refreshing state... [id=00000000-0000-0000-0000-000000000000]
+17:10:41.421 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Terraform used the selected providers to generate the following execution
+17:10:41.421 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: plan. Resource actions are indicated with the following symbols:
+17:10:41.421 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:   ~ update in-place
+17:10:41.421 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: +/- create replacement and then destroy
+17:10:41.421 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Terraform will perform the following actions:
+17:10:41.421 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:   # module.this.scaleway_iam_api_key.api_key must be replaced
+17:10:41.421 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: +/- resource "scaleway_iam_api_key" "api_key" {
+17:10:41.421 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:       ~ access_key         = "SCWXXXXXXXXXXXXXXXXX" -> (known after apply)
+17:10:41.421 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:       ~ created_at         = "2026-10-21T03:59:03Z" -> (known after apply)
+17:10:41.421 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:       ~ creation_ip        = "13.78.166.244" -> (known after apply)
+17:10:41.421 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:       ~ editable           = true -> (known after apply)
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:       ~ expires_at         = "2026-11-27T03:59:02Z" -> "2026-10-29T03:59:02Z" # forces replacement
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:       ~ id                 = "SCWXXXXXXXXXXXXXXXXX" -> (known after apply)
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:       ~ secret_key         = (sensitive value)
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:       ~ srn                = "srn://iam.scw.eu/api-keys/SCWXXXXXXXXXXXXXXXXX" -> (known after apply)
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:       ~ updated_at         = "2026-10-21T03:59:03Z" -> (known after apply)
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:         # (3 unchanged attributes hidden)
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:     }
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:   # module.this.time_rotating.key[0] will be updated in-place
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:   ~ resource "time_rotating" "key" {
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:       ~ day              = 20 -> 22
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:         id               = "2026-10-21T03:59:02Z"
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:       ~ month            = 11 -> 10
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:       ~ rotation_days    = 30 -> 1
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:       ~ rotation_rfc3339 = "2026-11-20T03:59:02Z" -> "2026-10-22T03:59:02Z"
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:       ~ unix             = 1795147142 -> 1792641542
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:         # (5 unchanged attributes hidden)
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:     }
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Plan: 1 to add, 1 to change, 1 to destroy.
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Changes to Outputs:
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:   ~ module = (sensitive value)
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: ─────────────────────────────────────────────────────────────────────────────
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: Saved the plan to:
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: /home/runner/work/runway/runway/.terragrunt-plans/workloads/poc/scaleway/terraform-deployer-iam/main/tfplan.tfplan
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform: To perform exactly these actions, run the following command to apply:
+17:10:41.422 STDOUT [workloads/poc/scaleway/terraform-deployer-iam/main] terraform:     terraform apply "/home/runner/work/runway/runway/.terragrunt-plans/workloads/poc/scaleway/terraform-deployer-iam/main/tfplan.tfplan"
+
+❯❯ Run Summary  1 units  7s
+   ────────────────────────────
+   Succeeded    1
+
+=== workloads/poc/scaleway/bucket/scratch: deferred until workloads/poc/scaleway/terraform-deployer-iam/main is applied ===
+=== Deferred until their dependencies are applied (LIB-0024): ===
+  workloads/poc/scaleway/bucket/scratch
+

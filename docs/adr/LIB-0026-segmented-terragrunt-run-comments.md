@@ -105,9 +105,10 @@ minimizes all of the previous run's comments, summary and details alike.
 ### 7. A comment never carries a masked value
 
 Comments carry Terraform's own output, so a sensitive variable still shows as
-`(sensitive value)` (LIB-0025). On top of that, the renderer drops any line
-containing a value the run masked in its log. A provider error that echoes a
-secret can then reach neither the log nor a comment.
+`(sensitive value)` (LIB-0025). But comments are built from `output.txt`, a
+file GitHub never masks. So the renderer replaces every value the run masked
+in its log with `***`, as the log does. A secret that reaches Terraform's
+output, such as a provider error that echoes it, appears in neither.
 
 ### 8. Release impact
 
