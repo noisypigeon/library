@@ -62,8 +62,9 @@ test('the staged fixture: a deployer to create, a bucket deferred behind it', ()
   const r = plan({ output: fixture('plan-staged.txt'), deferred: ['workloads/poc/scaleway/bucket/scratch'] });
   assert.match(r.summary, /\| `workloads\/poc\/scaleway\/terraform-deployer-iam\/main` \| \+6 ~0 -0 \|/);
   assert.match(r.summary, /\| `workloads\/poc\/scaleway\/bucket\/scratch` \| deferred until `workloads\/poc\/scaleway\/terraform-deployer-iam\/main` \|/);
-  assert.match(r.summary, /leaves with no changes/);
-  // Changes are listed before the deferred leaf, and the unchanged leaves are folded away.
+  // Unchanged leaves are counted, not listed; changes come before the deferred leaf.
+  assert.match(r.summary, /: 1 with changes, \d+ with no changes, \d+ failed to plan, 1 deferred\./);
+  assert.doesNotMatch(r.summary, /No changes \|/);
   assert.ok(r.summary.indexOf('terraform-deployer-iam/main` | +6') < r.summary.indexOf('bucket/scratch` | deferred'));
 });
 
@@ -75,7 +76,8 @@ test('the rotation fixture: a replace, and the bucket deferred', () => {
 test('the apply fixture reads as applied', () => {
   const r = render({ ...base, command: 'apply', marker: '<!-- terragrunt-apply -->', output: fixture('apply-stage2.txt') });
   assert.match(r.summary, /\| `workloads\/poc\/scaleway\/bucket\/scratch` \| applied \+1 ~0 -0 \|/);
-  assert.match(r.summary, /applied, no changes/);
+  assert.doesNotMatch(r.summary, /applied, no changes/);
+  assert.match(r.summary, /: 1 with changes, \d+ with no changes, \d+ failed to apply\./);
 });
 
 test('a removed instance is labelled as a destroy', () => {
@@ -139,4 +141,52 @@ test('linkSummary fills each row with its detail comment', () => {
   const linked = linkSummary(r.summary, ['https://example.test/c/1']);
   assert.doesNotMatch(linked, /\{\{detail/);
   assert.match(linked, /\[detail 1\]\(https:\/\/example\.test\/c\/1\)/);
+});
+
+const leafLine = (unit, text) => `00:00:00.000 STDOUT [${unit}] terraform: ${text}`;
+const noChanges = (unit) => leafLine(unit, 'No changes. Your infrastructure matches the configuration.');
+
+test('unchanged leaves are counted, never listed or given a section', () => {
+  const output = [
+    leafLine('w/changed', 'Plan: 1 to add, 0 to change, 0 to destroy.'),
+    ...Array.from({ length: 14 }, (_, i) => noChanges(`w/same-${i}`)),
+  ].join('\n');
+  const r = plan({ output });
+  assert.match(r.summary, /`abc1234`: 1 with changes, 14 with no changes, 0 failed to plan\. /);
+  assert.doesNotMatch(r.summary, /same-/);
+  assert.equal(r.details.length, 1);
+  assert.doesNotMatch(r.details[0], /same-/);
+  assert.match(r.details[0], /<code>w\/changed<\/code>/);
+});
+
+test('an apply counts what failed to apply', () => {
+  const output = [
+    leafLine('w/a', 'Apply complete! Resources: 1 added, 0 changed, 0 destroyed.'),
+    leafLine('w/b', 'Apply complete! Resources: 0 added, 0 changed, 0 destroyed.'),
+    '00:00:00.000 STDERR [w/c] terraform: Error: boom',
+  ].join('\n');
+  const r = render({ ...base, success: false, command: 'apply', marker: '<!-- terragrunt-apply -->', output });
+  assert.match(r.summary, /: 1 with changes, 1 with no changes, 1 failed to apply\./);
+  assert.doesNotMatch(r.summary, /w\/b/);
+});
+
+test('a run with nothing to change posts only its summary', () => {
+  const output = [noChanges('w/a'), noChanges('w/b'), '❯❯ Run Summary  2 units  4s'].join('\n');
+  const r = plan({ output });
+  assert.match(r.summary, /: 0 with changes, 2 with no changes, 0 failed to plan\./);
+  assert.match(r.summary, /_Nothing changes\._/);
+  assert.equal(r.details.length, 0);
+  assert.doesNotMatch(r.summary, /Run section/);
+});
+
+test('deferred is counted only when there is one', () => {
+  const r = plan({ output: noChanges('w/a') });
+  assert.doesNotMatch(r.summary, /deferred/);
+});
+
+test("Terragrunt's own output is kept when a leaf fails", () => {
+  const output = ['00:00:00.000 STDERR [w/a] terraform: Error: boom', '❯❯ Run Summary  1 units  1s'].join('\n');
+  const r = render({ ...base, success: false, command: 'plan', marker: '<!-- terragrunt-plan -->', output });
+  assert.match(r.summary, /Run section/);
+  assert.ok(r.details.some((d) => d.includes('<code>Run</code>')));
 });
