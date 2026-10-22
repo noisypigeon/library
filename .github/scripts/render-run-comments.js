@@ -225,6 +225,7 @@ function render(input) {
     `### ${input.success ? '✅' : '❌'} Terragrunt ${input.command}`,
     '',
     `\`${input.sha}\`: ${tally}. [Full log](${input.runUrl}).`,
+    ...(input.note ? ['', input.note] : []),
     '',
     shown.length ? table(shown) : '_Nothing changes._',
     '',
