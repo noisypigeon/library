@@ -4,6 +4,33 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.9.0] - 2026-10-22
+
+### Every workload gets its own project, deployer and state bucket (LIB-0028)
+
+Implements the stub and schema half of [LIB-0028](https://github.com/noisypigeon/library/blob/main/docs/adr/LIB-0028-workload-projects-and-state-buckets.md) (#139). It needs `terragrunt/root-hcl` v5.0.0, which ships next: take this release first and alone, as LIB-0024 §5 asks, and plan no workload until the template follows.
+
+**`resolve-workloads.sh`** now generates three stubs for every `workloads/<workload>/values.yaml`, whatever it declares:
+- `scaleway/project/main`;
+- `scaleway/terraform-deployer-iam/main`;
+- a new `scaleway/bucket/state`, the workload's versioned state bucket.
+
+`scaleway.project`, `scaleway.deployer` and the new `scaleway.state` only override their module's inputs, so a file with just `prefix` and `suffix` is a complete workload.
+
+- **A leaf whose state lives in the workload's bucket** (the IAM application, the API key and every `scaleway.bucket` entry) depends on the state bucket and the deployer. Its stub declares its own `remote_state`: the bucket comes from the state stub's outputs, and it signs in with the deployer's key.
+- **`--check` and generation refuse four things:**
+  - a `scaleway.bucket.state` entry;
+  - a `scaleway.state.prefix` that starts with `/` or doesn't end with one;
+  - `scaleway.state.enable_versioning: false`;
+  - a `scaleway.deployer.project_permission_sets` without `ObjectStorageFullAccess`.
+- **`secrets.yaml`** may now set inputs for the project, deployer and state bucket without a `values.yaml` entry for them.
+
+**`generate-module-redirects.sh`** publishes a `state.schema.json` beside every `scaleway/bucket` version's `inputs.schema.json`: the bucket's inputs plus `prefix`. The workload schema gains `scaleway.state` and rejects the bucket key `state`.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#141](https://github.com/noisypigeon/library/pull/141)
+
 ## [4.8.0] - 2026-10-22
 
 ### Merge a settled automatic re-plan without a last apply (LIB-0027)
