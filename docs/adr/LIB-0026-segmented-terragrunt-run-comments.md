@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-22.
-- **Status**: Proposed. Amends LIB-0022's PR comment.
+- **Status**: Accepted. Amends LIB-0022's PR comment.
 
 ## Context
 
@@ -142,7 +142,7 @@ output, such as a provider error that echoes it, appears in neither.
 
 ## Verification
 
-To be completed when §§1–8 ship.
+Recorded 2026-10-22. Item 4 remains open, until the next real apply.
 
 1. **The renderer's tests pass,** covering:
    - segmentation and stripped prefixes;
@@ -152,9 +152,26 @@ To be completed when §§1–8 ship.
    - packing within the budget;
    - a leaf split across three comments, with balanced fences;
    - masked lines dropped.
+   - **Passed:** 12 tests, locally and in `scripts-test.yml` on
+     [#127](https://github.com/noisypigeon/library/pull/127). Masked values
+     are replaced with `***`, as §7 now says, rather than their lines
+     dropped.
 2. **A large plan is complete.** On runway, a plan of every leaf posts a
    summary row per leaf and several detail comments. No output is truncated,
    and every row's link resolves.
+   - **Passed:** on the plan-only draft [runway#44](https://github.com/noisypigeon/runway/pull/44), every
+     one of runway's 27 leaves planned. The summary has one row per leaf, its
+     links resolve, and the leaves planned from git worktrees are named by
+     their real paths. Their 28 sections fit one detail comment of about
+     17,200 characters, where the old comment had cut its front at 55,000.
+     Splitting across several comments is covered by the tests, with a
+     single leaf over 200 KB.
 3. **A re-plan outdates the whole run.** A `terragrunt plan` comment minimizes
    every comment of the previous run.
+   - **Passed:** on #44, a new push's plan minimized both of the previous
+     run's comments, summary and detail. Its summary listed the one change,
+     `bucket/scratch` `+0 ~1 -0`, ahead of 26 unchanged leaves.
 4. **An apply reads the same way,** one row and one section per leaf.
+   - **Open:** the apply fixture renders that way in the tests. A real apply
+     on a spoke at `workflows/v4.5.0` (garden#63, runway#45 and blog#49)
+     will show it.
