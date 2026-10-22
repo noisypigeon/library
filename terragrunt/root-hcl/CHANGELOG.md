@@ -4,6 +4,21 @@ All notable changes to this template are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [5.0.1] - 2026-10-22
+
+### A workload's state bucket uses the standard storage class (LIB-0028)
+
+Fixes a default in LIB-0028's workload state bucket. It took `scaleway/bucket`'s default `storage_class`, `glacier`, whose lifecycle rule moves every object to `GLACIER` after 90 days. A workload leaf whose state went unwritten that long would then fail at `init`: state in `GLACIER` can't be read without a restore.
+
+- **`terragrunt/root-hcl`:** `scaleway.state` now defaults to `storage_class: standard`, and refuses `glacier`. For a state bucket created on v5.0.0, the next plan is an in-place change that removes the lifecycle rule. Nothing is replaced.
+- **`workflows/`:** `resolve-workloads.sh` refuses `scaleway.state.storage_class: glacier` before any plan runs.
+
+LIB-0028 gains an amendment recording it.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#143](https://github.com/noisypigeon/library/pull/143)
+
 ## [5.0.0] - 2026-10-22
 
 ### Workload state moves into each workload's own bucket (LIB-0028)
