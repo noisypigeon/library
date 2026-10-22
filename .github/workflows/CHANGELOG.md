@@ -4,6 +4,22 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.7.1] - 2026-10-22
+
+### Fix the apply's merge-gate step crashing on getOctokit
+
+`workflows/v4.7.0`'s merge-gate step called `getOctokit`, which `actions/github-script@v7` doesn't provide. Every apply therefore failed at that step, after applying, with `ReferenceError: getOctokit is not defined`. The gate status was never set, and a caller's `replan` job, which needs a successful apply, was skipped. noisypigeon/runway#48 hit it.
+
+The step is now two:
+- **Set merge-gate status**, with `GITHUB_TOKEN`, as before v4.7.0.
+- **Auto-merge**, which runs only after a successful, final apply. It uses `github-script`'s supported `github-token` input, set to `BOT_GITHUB_TOKEN` when the caller has it, else `GITHUB_TOKEN`.
+
+Callers change nothing; take it by moving to this version.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#134](https://github.com/noisypigeon/library/pull/134)
+
 ## [4.7.0] - 2026-10-22
 
 ### Re-plan staged applies automatically, and merge with the bot token (LIB-0027)
