@@ -198,3 +198,30 @@ test('a note, such as an automatic re-plan, sits under the count', () => {
   assert.equal(lines[at + 2], "_Planned automatically after the previous stage's apply._");
   assert.doesNotMatch(plan({ output: noChanges('w/a') }).summary, /Planned automatically/);
 });
+
+test('a run is settled only when every leaf is unchanged', () => {
+  const settled = plan({ output: [noChanges('w/a'), noChanges('w/b')].join('\n'), settledFooter: 'Nothing left to apply: merging.' });
+  assert.equal(settled.settled, true);
+  assert.match(settled.summary, /Nothing left to apply: merging\./);
+  assert.doesNotMatch(settled.summary, /FOOTER/);
+  for (const [why, extra] of [
+    ['a change', { output: leafLine('w/a', 'Plan: 1 to add, 0 to change, 0 to destroy.') }],
+    ['a deferral', { output: noChanges('w/a'), deferred: ['w/b'] }],
+    ['a failure', { output: '00:00:00.000 STDERR [w/a] terraform: Error: boom' }],
+    ['a destroy', { output: leafLine('w/a', 'Plan: 0 to add, 0 to change, 1 to destroy.'), destroys: ['w/a'] }],
+    ['a leaf with no result', { output: leafLine('w/a', 'Refreshing state...') }],
+    ['a failed run', { output: noChanges('w/a'), success: false }],
+  ]) {
+    const r = plan({ ...extra, settledFooter: 'Nothing left to apply: merging.' });
+    assert.equal(r.settled, false, why);
+    assert.doesNotMatch(r.summary, /merging/, why);
+  }
+});
+
+test('an output-only plan is a change, never settled', () => {
+  const json = { resource_changes: [{ change: { actions: ['no-op'] } }], output_changes: { id: { actions: ['update'] }, name: { actions: ['no-op'] } } };
+  assert.deepEqual(_test.countPlan(json), { add: 0, change: 1, destroy: 0 });
+  const r = plan({ output: noChanges('w/a'), jsonPlans: { 'w/a': json } });
+  assert.equal(r.settled, false);
+  assert.match(r.summary, /\| `w\/a` \| \+0 ~1 -0 \|/);
+});

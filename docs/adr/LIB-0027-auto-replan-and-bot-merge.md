@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-22.
-- **Status**: Accepted. Amends LIB-0022's apply, and LIB-0024's staged
+- **Status**: Accepted; amended 2026-10-22 (see `## Amendments`). Amends LIB-0022's apply, and LIB-0024's staged
   applies.
 
 ## Context
@@ -109,3 +109,27 @@ which [#134](https://github.com/noisypigeon/library/pull/134) fixed.
    entry.
    - **Passed:** [`root-changelog`](https://github.com/noisypigeon/runway/actions/runs/39834281164)
      ran for the merge, which a `GITHUB_TOKEN` merge wouldn't have started.
+
+## Amendments
+
+### 2026-10-22: a settled re-plan merges without a last apply
+
+On runway#48, the automatic re-plan found nothing left to change, and the PR
+still needed one more `terragrunt apply` to land. That apply did nothing.
+
+- **An automatic re-plan that settles closes the PR.** It sets
+  `terragrunt/apply` to `success` ("Re-plan found nothing left to apply") and
+  merges with the bot token, as a final apply does. A plan settles when:
+  - the run succeeded;
+  - every leaf is unchanged, with nothing to add, change or destroy;
+  - nothing is deferred or failed, and every leaf has a result.
+- **An output that changes is a change.** Counts now include a JSON plan's
+  `output_changes`, so a plan that changes only outputs, which an apply would
+  still write to state, never settles.
+- **Only the `replan` job's plan qualifies.** Its run was started by a
+  person's `terragrunt apply` on that PR. A plan from a push or from a
+  `terragrunt plan` comment never merges by itself, even with no changes
+  (LIB-0022).
+- Its summary ends "Nothing left to apply: merging."
+
+This ships as `workflows/v4.8.0`. Callers change nothing.

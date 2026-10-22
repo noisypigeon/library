@@ -69,6 +69,8 @@ function parse(output, roots) {
 }
 
 // +add ~change -destroy from a Terraform JSON plan; a replace counts as both.
+// An output that changes counts as a change: an apply would still write it to
+// state, so a plan that changes only outputs isn't settled (LIB-0027).
 function countPlan(plan) {
   const c = { add: 0, change: 0, destroy: 0 };
   for (const rc of plan.resource_changes || []) {
@@ -76,6 +78,10 @@ function countPlan(plan) {
     if (a.includes('create')) c.add++;
     if (a.includes('delete')) c.destroy++;
     if (a.length === 1 && a[0] === 'update') c.change++;
+  }
+  for (const oc of Object.values(plan.output_changes || {})) {
+    const a = oc.actions || [];
+    if (!(a.length === 1 && a[0] === 'no-op')) c.change++;
   }
   return c;
 }
@@ -213,6 +219,11 @@ function render(input) {
   // Unchanged leaves are counted, not listed.
   const link = (unit) => `{{detail:${where[unit]}}}`;
   const deferred = rows.filter((r) => r.kind === 'deferred').length;
+  // Settled: a successful run in which every leaf is unchanged, with nothing
+  // deferred, failed or without a result. An automatic re-plan that settles
+  // has nothing left to apply, and merges (LIB-0027's amendment).
+  const settled = Boolean(input.success) && rows.every((r) => r.kind === 'unchanged');
+  const footer = settled && input.settledFooter ? input.settledFooter : input.footer || '';
   const tally = [
     `${rows.filter((r) => r.kind === 'changed').length} with changes`,
     `${quiet.length} with no changes`,
@@ -230,10 +241,10 @@ function render(input) {
     shown.length ? table(shown) : '_Nothing changes._',
     '',
     where.Run !== undefined ? `Terragrunt's own output is in the Run section of ${link('Run')}.\n` : '',
-    input.footer || '',
+    footer,
   ].join('\n');
 
-  return { summary, details: bodies };
+  return { summary, details: bodies, settled };
 }
 
 // Fills the summary's {{detail:N}} placeholders with the detail comments'

@@ -26,6 +26,9 @@
 # Both commands plan and apply the PR's head, never the merge ref, so what was
 # planned is the tree that gets applied.
 #
+# Since v4.8.0 that automatic re-plan, if it finds nothing left to apply,
+# turns the gate green and merges, with no last apply.
+#
 # Since v4.7.0 a staged apply's next stage plans by itself, through a replan
 # job in the caller that this workflow's `deferred` output triggers, and the
 # final apply merges with the caller's BOT_GITHUB_TOKEN (LIB-0027).
@@ -528,6 +531,7 @@ jobs:
             });
 
       - name: Comment ${{ inputs.command }} output on PR
+        id: comment
         if: always()
         uses: actions/github-script@v7
         env:
@@ -549,7 +553,8 @@ jobs:
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const label = command === 'apply' ? 'apply' : 'plan';
             const sha = (process.env.HEAD_SHA || '').slice(0, 7);
-            const replan = 'Comment `terragrunt plan` on this PR to plan it again, rebasing first if `main` has changed the same leaves.';
+            const replanHint = 'Comment `terragrunt plan` on this PR to plan it again, rebasing first if `main` has changed the same leaves.';
+            const replan = command === 'plan' && context.eventName === 'issue_comment' && (context.payload.comment?.body || '').trim() === 'terragrunt apply';
 
             let output;
             try {
@@ -566,7 +571,7 @@ jobs:
                 `### ❌ Terragrunt apply`,
                 `_No saved plan for \`${sha}\`: the PR's head moved since its plan, the plan failed, or it expired. Nothing was applied._`,
                 '',
-                replan,
+                replanHint,
               ].join('\n');
             } else if (command === 'apply' && process.env.UNITS_MATCH === 'false') {
               body = [
@@ -574,7 +579,7 @@ jobs:
                 `### ❌ Terragrunt apply`,
                 `_The units this PR selects have changed since \`${sha}\` was planned — see the [full log](${runUrl}). Nothing was applied._`,
                 '',
-                replan,
+                replanHint,
               ].join('\n');
             } else if (output === null) {
               body = [
@@ -591,7 +596,7 @@ jobs:
               } else if (command === 'apply' && success && deferred) {
                 footer = 'Applied this stage. Some workload leaves are still deferred, and the next stage plans by itself (LIB-0027); if no plan follows, comment `terragrunt plan`.';
               } else if (command === 'apply' && process.env.STALE === 'true') {
-                footer = `Another apply has changed or is holding this state since \`${sha}\` was planned. ${replan}`;
+                footer = `Another apply has changed or is holding this state since \`${sha}\` was planned. ${replanHint}`;
               }
               // A summary with a row per leaf, then detail comments with a
               // section per leaf, never truncated (LIB-0026).
@@ -625,13 +630,14 @@ jobs:
                 roots: [process.env.GITHUB_WORKSPACE, `${process.env.RUNNER_TEMP}/base`],
                 footer,
                 // A plan started by a `terragrunt apply` comment is a caller's
-                // replan job, after a staged apply (LIB-0027 §1).
-                note: command === 'plan' && context.eventName === 'issue_comment' && (context.payload.comment?.body || '').trim() === 'terragrunt apply'
-                  ? '_Planned automatically after the previous stage\'s apply._'
-                  : '',
+                // replan job, after a staged apply (LIB-0027 §1). If it finds
+                // nothing left to apply, it merges (LIB-0027's amendment).
+                note: replan ? '_Planned automatically after the previous stage\'s apply._' : '',
+                settledFooter: replan ? 'Nothing left to apply: merging.' : '',
               });
               body = rendered.summary;
               details = rendered.details;
+              core.setOutput('settled', replan && rendered.settled ? 'true' : 'false');
             }
 
             const comments = await github.paginate(github.rest.issues.listComments, {
@@ -710,12 +716,35 @@ jobs:
               target_url: runUrl,
             });
 
+      # An automatic re-plan that finds nothing left to apply, defer or fix
+      # closes the PR without another apply (LIB-0027's amendment): an apply
+      # of its plan would do nothing. Only the replan job's plan qualifies,
+      # since its run was started by a person's `terragrunt apply`.
+      - name: Close a settled re-plan
+        if: inputs.command == 'plan' && steps.comment.outputs.settled == 'true'
+        uses: actions/github-script@v7
+        env:
+          HEAD_SHA: ${{ steps.head.outputs.sha }}
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: process.env.HEAD_SHA,
+              state: 'success',
+              context: 'terragrunt/apply',
+              description: 'Re-plan found nothing left to apply (LIB-0027)',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
       # The merge after a final apply, with the caller's bot token when it has
       # one (LIB-0027 §2): GITHUB_TOKEN can't merge under the callers'
       # contents: read, and a merge it made would start none of the workflows
       # that follow a merge. Its own step, since github-token is per step.
       - name: Auto-merge
-        if: inputs.command == 'apply' && steps.run.outputs.exit_code == '0' && steps.run.outputs.deferred != 'true'
+        if: >
+          (inputs.command == 'apply' && steps.run.outputs.exit_code == '0' && steps.run.outputs.deferred != 'true') ||
+          (inputs.command == 'plan' && steps.comment.outputs.settled == 'true')
         uses: actions/github-script@v7
         env:
           HEAD_SHA: ${{ steps.head.outputs.sha }}
