@@ -190,3 +190,11 @@ test("Terragrunt's own output is kept when a leaf fails", () => {
   assert.match(r.summary, /Run section/);
   assert.ok(r.details.some((d) => d.includes('<code>Run</code>')));
 });
+
+test('a note, such as an automatic re-plan, sits under the count', () => {
+  const r = plan({ output: noChanges('w/a'), note: '_Planned automatically after the previous stage\'s apply._' });
+  const lines = r.summary.split('\n');
+  const at = lines.findIndex((l) => l.startsWith('`abc1234`:'));
+  assert.equal(lines[at + 2], "_Planned automatically after the previous stage's apply._");
+  assert.doesNotMatch(plan({ output: noChanges('w/a') }).summary, /Planned automatically/);
+});

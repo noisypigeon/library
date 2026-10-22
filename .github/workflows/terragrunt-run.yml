@@ -26,6 +26,10 @@
 # Both commands plan and apply the PR's head, never the merge ref, so what was
 # planned is the tree that gets applied.
 #
+# Since v4.7.0 a staged apply's next stage plans by itself, through a replan
+# job in the caller that this workflow's `deferred` output triggers, and the
+# final apply merges with the caller's BOT_GITHUB_TOKEN (LIB-0027).
+#
 # Since v4.5.0 a run reports as a summary comment with a row per leaf, then
 # detail comments with a section per leaf, never truncated (LIB-0026).
 # render-run-comments.js in scripts_dir builds the bodies, from output.txt,
@@ -84,6 +88,19 @@ on:
     secrets:
       SOPS_AGE_KEY:
         required: true
+      # Merges the PR after its final apply (LIB-0027 §2). A merge made with
+      # GITHUB_TOKEN would start none of the workflows that follow a merge,
+      # and the callers' contents: read can't merge at all.
+      BOT_GITHUB_TOKEN:
+        required: false
+    # What the run did, for a caller's replan job (LIB-0027 §1).
+    outputs:
+      deferred:
+        description: "'true' when the run left workload leaves deferred (LIB-0024)."
+        value: ${{ jobs.run.outputs.deferred }}
+      exit_code:
+        description: "The run's exit code."
+        value: ${{ jobs.run.outputs.exit_code }}
 
 permissions:
   actions: write
@@ -94,6 +111,9 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-latest
+    outputs:
+      deferred: ${{ steps.run.outputs.deferred }}
+      exit_code: ${{ steps.run.outputs.exit_code }}
     env:
       PLAN_DIR: ${{ github.workspace }}/.terragrunt-plans
       JSON_DIR: ${{ github.workspace }}/.terragrunt-plans-json
@@ -567,9 +587,9 @@ jobs:
               const deferred = process.env.DEFERRED === 'true';
               if (command !== 'apply' && success) {
                 footer = `Planned \`${sha}\`. Comment \`terragrunt apply\` on this PR to apply exactly this plan.`;
-                if (deferred) footer += ' Some workload leaves are deferred until what they depend on is applied: after the apply, comment `terragrunt plan` for the next stage.';
+                if (deferred) footer += ' Some workload leaves are deferred until what they depend on is applied: after the apply, the next stage plans by itself.';
               } else if (command === 'apply' && success && deferred) {
-                footer = 'Applied this stage. Some workload leaves are still deferred: comment `terragrunt plan` for the next stage.';
+                footer = 'Applied this stage. Some workload leaves are still deferred, and the next stage plans by itself (LIB-0027); if no plan follows, comment `terragrunt plan`.';
               } else if (command === 'apply' && process.env.STALE === 'true') {
                 footer = `Another apply has changed or is holding this state since \`${sha}\` was planned. ${replan}`;
               }
@@ -604,6 +624,11 @@ jobs:
                 masked: lines(`${process.env.RUNNER_TEMP}/masked.txt`),
                 roots: [process.env.GITHUB_WORKSPACE, `${process.env.RUNNER_TEMP}/base`],
                 footer,
+                // A plan started by a `terragrunt apply` comment is a caller's
+                // replan job, after a staged apply (LIB-0027 §1).
+                note: command === 'plan' && context.eventName === 'issue_comment' && (context.payload.comment?.body || '').trim() === 'terragrunt apply'
+                  ? '_Planned automatically after the previous stage\'s apply._'
+                  : '',
               });
               body = rendered.summary;
               details = rendered.details;
@@ -659,9 +684,15 @@ jobs:
           EXIT_CODE: ${{ steps.run.outputs.exit_code }}
           HEAD_SHA: ${{ steps.head.outputs.sha }}
           DEFERRED: ${{ steps.run.outputs.deferred }}
+          BOT_GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
         with:
           script: |
             const success = process.env.EXIT_CODE === '0';
+            // The merge uses the bot token when there is one (LIB-0027 §2);
+            // the status stays on GITHUB_TOKEN.
+            const bot = process.env.BOT_GITHUB_TOKEN;
+            const merger = bot ? getOctokit(bot) : github;
+            const tokenName = bot ? 'BOT_GITHUB_TOKEN' : 'GITHUB_TOKEN';
             // An apply that left workload leaves deferred (LIB-0024 §3) is a
             // stage, not the end: the gate stays pending and nothing merges.
             const staged = success && process.env.DEFERRED === 'true';
@@ -687,14 +718,14 @@ jobs:
 
             if (success && !staged) {
               try {
-                await github.rest.pulls.merge({
+                await merger.rest.pulls.merge({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   pull_number: context.issue.number,
                   sha: process.env.HEAD_SHA,
                   merge_method: 'squash',
                 });
-                await github.rest.git.deleteRef({
+                await merger.rest.git.deleteRef({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   ref: `heads/${pr.head.ref}`,
@@ -704,7 +735,7 @@ jobs:
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   issue_number: context.issue.number,
-                  body: `⚠️ Terragrunt apply succeeded, but auto-merge failed: ${err.message}. Please merge manually.`,
+                  body: `⚠️ Terragrunt apply succeeded, but auto-merge with ${tokenName} failed: ${err.message}. The token needs Contents and Pull requests write on this repository (LIB-0027 §2). Please merge manually.`,
                 });
               }
             }
