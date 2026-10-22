@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-22
 
+- [terragrunt/root-hcl] Workload state moves into each workload's own bucket (LIB-0028) ([#142](https://github.com/noisypigeon/library/pull/142))
 - [workflows] Every workload gets its own project, deployer and state bucket (LIB-0028) ([#141](https://github.com/noisypigeon/library/pull/141))
 - [adr] docs(adr): LIB-0028, every workload gets its own project and state bucket ([#140](https://github.com/noisypigeon/library/pull/140))
 - [workflows] Merge a settled automatic re-plan without a last apply (LIB-0027) ([#136](https://github.com/noisypigeon/library/pull/136))

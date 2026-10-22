@@ -4,6 +4,30 @@ All notable changes to this template are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [5.0.0] - 2026-10-22
+
+### Workload state moves into each workload's own bucket (LIB-0028)
+
+The template half of [LIB-0028](https://github.com/noisypigeon/library/blob/main/docs/adr/LIB-0028-workload-projects-and-state-buckets.md) (#139). **Breaking for any spoke with `workloads/`.** Take it only after `workflows/v4.9.0` (#141), whose `resolve-workloads.sh` generates the stubs this version expects. A spoke with no `workloads/` plans `No changes.`: a hand-written leaf renders exactly as it does on v4.5.0.
+
+- **Every workload has a project, a deployer and a state bucket**, whether or not `values.yaml` declares them. `scaleway.project`, `scaleway.deployer` and the new `scaleway.state` only override their inputs.
+  - A workload that had no project gains one, and its deployer, on its next plan.
+- **The state bucket** is `workloads/<workload>/scaleway/bucket/state`, a `scaleway/bucket` named `<prefix>-<code>-terraform-state`. Its project is the workload's, and it signs in with the deployer's key. Versioning is on, `force_destroy` is off, and the bucket's own state stays in the spoke's bucket, with the project's and the deployer's.
+- **Every other workload leaf keeps its state in the workload's bucket**, at `<prefix><provider>/<module>/<instance>/terraform.tfstate`. `<prefix>` is `scaleway.state.prefix`, by default `workloads/<workload>/`, so the default key is unchanged. The stub's own `remote_state` reads `workload_state_key` and `scaleway_state_config` from this template.
+  - Existing state for those leaves isn't moved. Destroy them first, or copy their keys across.
+- **New refusals:**
+  - `scaleway.bucket.state`;
+  - a `scaleway.state.prefix` that starts with `/` or doesn't end with one;
+  - `scaleway.state.enable_versioning: false`;
+  - a `scaleway.deployer.project_permission_sets` without `ObjectStorageFullAccess`;
+  - a workload-state stub with no `remote_state`, which is what an older `resolve-workloads.sh` writes.
+
+LIB-0028 gains an amendment recording these three build findings: the reserved `state` key, `state.schema.json`, and the old-stub guard.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#142](https://github.com/noisypigeon/library/pull/142)
+
 ## [4.5.0] - 2026-10-21
 
 ### Add a workload secrets.yaml in SOPS YAML (LIB-0025)
