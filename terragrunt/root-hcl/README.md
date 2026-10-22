@@ -380,6 +380,28 @@ deployer's key instead. The stub passes it as `scaleway_access_key` and
 time and defers those whose dependencies are new or changing, so a new
 workload lands in a few staged applies.
 
+Since v5.0.0 (LIB-0028), with `workflows/v4.9.0` or later, every workload has a
+project, a deployer and a versioned state bucket, whatever `values.yaml`
+declares. `scaleway.project`, `scaleway.deployer` and `scaleway.state` only
+override their module's inputs. The state bucket is
+`workloads/<workload>/scaleway/bucket/state`, a `scaleway/bucket` named
+`<prefix>-<code>-terraform-state`, with versioning on, which can't be turned
+off. `state` is therefore no longer a valid `scaleway.bucket` key.
+
+- **The project, deployer and state bucket keep their state in the spoke's
+  bucket.** They create the workload's.
+- **Every other workload leaf keeps its state in the workload's bucket.** The
+  key is `<prefix><provider>/<module>/<instance>/terraform.tfstate`, where
+  `<prefix>` is `scaleway.state.prefix`, by default `workloads/<workload>/`.
+  So by default the key is the same one the spoke's bucket would hold.
+- **Its stub declares that `remote_state` itself**, signed in with the
+  deployer's key, since only the stub has the dependencies the bucket name
+  and key come from. This template refuses a workload-state leaf whose stub
+  has none, which is what an older `resolve-workloads.sh` generates.
+- **A deployer override must keep `ObjectStorageFullAccess`.**
+- **A new workload lands in four stages:** project, then deployer, then state
+  bucket, then the rest.
+
 A workload may also have a `workloads/<workload>/secrets.yaml` (v4.5.0,
 LIB-0025), encrypted with sops as YAML. Its rule in the spoke's `.sops.yaml` is
 `^workloads/[^/]+/secrets\.yaml$`. It holds secret inputs under the same kind
