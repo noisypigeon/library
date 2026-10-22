@@ -417,6 +417,7 @@ locals {
         name_prefix       = local.workload_prefix
         name_suffix       = "terraform-state"
         enable_versioning = true
+        storage_class     = "standard"
         force_destroy     = false
       }
       sensitive   = false
@@ -515,6 +516,7 @@ locals {
   guard_workload_reserved = local.is_workload_leaf && contains(try(keys(local.workload_buckets), []), "state") ? file("${local.workload_file}: scaleway.bucket.state is reserved for the workload's state bucket; configure it as scaleway.state (LIB-0028)") : true
   guard_workload_prefix   = local.is_workload_leaf && !can(regex("^[^/].*/$", local.workload_state_prefix)) ? file("${local.workload_file}: scaleway.state.prefix \"${local.workload_state_prefix}\" must not start with / and must end with one (LIB-0028 §3)") : true
   guard_workload_versions = local.is_workload_leaf && try(local.workload_scaleway.state.enable_versioning, true) == false ? file("${local.workload_file}: scaleway.state.enable_versioning can't be false; versioning is the state's only protection (LIB-0028 §2)") : true
+  guard_workload_glacier  = local.is_workload_leaf && try(local.workload_scaleway.state.storage_class, "standard") == "glacier" ? file("${local.workload_file}: scaleway.state.storage_class can't be glacier; state moved to GLACIER after 90 days can't be read without a restore (LIB-0028 §2)") : true
   guard_workload_deployer = local.is_workload_leaf && can(local.workload_scaleway.deployer.project_permission_sets) && !contains(try(tolist(local.workload_scaleway.deployer.project_permission_sets), []), "ObjectStorageFullAccess") ? file("${local.workload_file}: scaleway.deployer.project_permission_sets must keep ObjectStorageFullAccess; the deployer's key signs in to the workload's state bucket (LIB-0028 §5)") : true
   guard_workload_backend  = !local.workload_stub_backend ? file("${path_relative_to_include()} keeps its state in the workload's bucket but its stub declares no remote_state; regenerate it with a resolve-workloads.sh from workflows v4.9.0 or later (LIB-0028 §5)") : true
 

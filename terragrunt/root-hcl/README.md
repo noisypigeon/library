@@ -385,8 +385,9 @@ project, a deployer and a versioned state bucket, whatever `values.yaml`
 declares. `scaleway.project`, `scaleway.deployer` and `scaleway.state` only
 override their module's inputs. The state bucket is
 `workloads/<workload>/scaleway/bucket/state`, a `scaleway/bucket` named
-`<prefix>-<code>-terraform-state`, with versioning on, which can't be turned
-off. `state` is therefore no longer a valid `scaleway.bucket` key.
+`<prefix>-<code>-terraform-state`, with versioning on and storage class
+`standard` (v5.0.1), neither of which can be changed: state moved to `GLACIER`
+can't be read without a restore. `state` is therefore no longer a valid `scaleway.bucket` key.
 
 - **The project, deployer and state bucket keep their state in the spoke's
   bucket.** They create the workload's.
