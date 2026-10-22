@@ -6,6 +6,11 @@
 #
 # A stub holds structure only: it includes root.hcl, declares the dependency
 # blocks its kind implies (§4's wiring), and passes their IDs on as inputs.
+# Every workload has a project, a deployer and a state bucket, whatever its
+# values.yaml declares (LIB-0028 §1). A stub whose state lives in that bucket
+# (LIB-0028 §4) also declares its own remote_state, which replaces root.hcl's:
+# the bucket comes from its state dependency, and it signs in with the
+# workload deployer's key (LIB-0028 §5).
 # Values, defaults and the module version are root.hcl's, at plan time: it
 # writes them into the leaf's generated module block as literals, since a
 # `type = any` variable set through TF_VAR_ arrives as a string.
@@ -75,21 +80,26 @@ for tool in yq jq; do
   fi
 done
 
-# YAML path | module | shape | dependencies | credentials. The twin of
-# root.hcl's workload_kinds; see the header.
+# YAML path | module | shape | dependencies | credentials | state. The twin
+# of root.hcl's workload_kinds; see the header.
 #
-# - shape: a singleton's instance is `main`, a map's is each key, and the
-#   implicit deployer (LIB-0024 §1) exists whenever the workload declares a
-#   project, with or without a `scaleway.deployer` entry.
+# - shape: a singleton's instance is `main`, a map's is each key, an
+#   implicit kind's is `main` in every workload, with or without an entry
+#   (LIB-0024 §1, LIB-0028 §1), and `state` is the workload's state bucket,
+#   whose instance is `state` (LIB-0028 §2).
 # - credentials (LIB-0024 §2): `spoke` kinds sign in with the spoke's key;
 #   `workload` kinds with the workload deployer's, which they then also depend
 #   on.
+# - state (LIB-0028 §4): `spoke` kinds keep state in the spoke's bucket;
+#   `workload` kinds in the workload's, so they also depend on the state
+#   bucket and on the deployer whose key signs in to it.
 KINDS=(
-  "scaleway.project|scaleway/project|singleton||spoke"
-  "scaleway.iam.application|scaleway/iam-application|singleton||spoke"
-  "scaleway.deployer|scaleway/terraform-deployer-iam|implicit|project|spoke"
-  "scaleway.bucket|scaleway/bucket|map|project|workload"
-  "scaleway.iam.apiKey|scaleway/iam-api-key|singleton|project application|spoke"
+  "scaleway.project|scaleway/project|implicit||spoke|spoke"
+  "scaleway.deployer|scaleway/terraform-deployer-iam|implicit|project|spoke|spoke"
+  "scaleway.state|scaleway/bucket|state|project|workload|spoke"
+  "scaleway.iam.application|scaleway/iam-application|singleton||spoke|workload"
+  "scaleway.bucket|scaleway/bucket|map|project|workload|workload"
+  "scaleway.iam.apiKey|scaleway/iam-api-key|singleton|project application|spoke|workload"
 )
 
 # A dependency's stub, relative to its provider directory.
@@ -98,12 +108,16 @@ dep_dir() {
     project) echo "project/main" ;;
     application) echo "iam-application/main" ;;
     deployer) echo "terraform-deployer-iam/main" ;;
+    state) echo "bucket/state" ;;
   esac
 }
 
 # The inputs a dependency fills (LIB-0023 §4, LIB-0024 §§1-2), one
-# "<input>|<expression>" per line. scaleway_access_key and scaleway_secret_key
-# aren't module inputs: root.hcl signs the leaf's provider in with them.
+# "<input>|<expression>" per line, for a kind with the given credentials.
+# scaleway_access_key and scaleway_secret_key aren't module inputs: root.hcl
+# signs the leaf's provider in with them. A spoke-credentials kind can depend
+# on the deployer too, for its backend alone (LIB-0028 §5), and the state
+# dependency fills no input: both feed the stub's remote_state instead.
 wiring_lines() {
   case "$1:$2" in
     scaleway/bucket:project) echo "project_id|dependency.project.outputs.module.id" ;;
@@ -114,17 +128,18 @@ wiring_lines() {
       echo "default_project_id|dependency.project.outputs.module.id"
       ;;
     *:deployer)
-      echo "scaleway_access_key|dependency.deployer.outputs.module.access_key"
-      echo "scaleway_secret_key|dependency.deployer.outputs.module.secret_key"
+      if [ "$3" = workload ]; then
+        echo "scaleway_access_key|dependency.deployer.outputs.module.access_key"
+        echo "scaleway_secret_key|dependency.deployer.outputs.module.secret_key"
+      fi
       ;;
   esac
 }
 
-# Whether this workload has a dependency: its YAML key for the declared kinds,
-# and the project for the implicit deployer.
+# Whether this workload has a dependency: its YAML key for a declared kind,
+# or nothing for an implicit one, which every workload has.
 dep_yaml_path() {
   case "$1" in
-    project | deployer) echo "scaleway.project" ;;
     application) echo "scaleway.iam.application" ;;
   esac
 }
@@ -133,37 +148,71 @@ KEBAB='^[a-z0-9]+(-[a-z0-9]+)*$'
 errors=0
 fail() { echo "::error::$*" >&2; errors=$((errors + 1)); }
 
-# stub_content <module> <declared dependencies...>
+# stub_content <module> <credentials> <state> <declared dependencies...>
 stub_content() {
-  local module="$1"; shift
+  local module="$1" credentials="$2" state="$3"; shift 3
   local deps=("$@")
   printf '%s\n' "$HEADER"
-  cat <<'EOF'
+  if [ "$state" = workload ]; then
+    cat <<'EOF'
+include "root" {
+  path   = find_in_parent_folders("root.hcl")
+  expose = true
+}
+EOF
+  else
+    cat <<'EOF'
 include "root" {
   path = find_in_parent_folders("root.hcl")
 }
+EOF
+  fi
+  cat <<'EOF'
 
 terraform {
   source = get_terragrunt_dir()
 }
 EOF
-  [ ${#deps[@]} -eq 0 ] && return 0
   local dep lines="" width=0 input expr
-  for dep in "${deps[@]}"; do
+  for dep in ${deps[@]+"${deps[@]}"}; do
     printf '\ndependency "%s" {\n  config_path = "../../%s"\n}\n' "$dep" "$(dep_dir "$dep")"
-    lines="$lines$(wiring_lines "$module" "$dep")"$'\n'
+    lines="$lines$(wiring_lines "$module" "$dep" "$credentials")"$'\n'
   done
   # Aligned on `=`, as terragrunt hcl format would leave it.
   while IFS='|' read -r input expr; do
     [ -z "$input" ] && continue
     if [ "${#input}" -gt "$width" ]; then width=${#input}; fi
   done <<<"$lines"
-  printf '\ninputs = {\n'
-  while IFS='|' read -r input expr; do
-    [ -z "$input" ] && continue
-    printf '  %-*s = %s\n' "$width" "$input" "$expr"
-  done <<<"$lines"
-  printf '}\n'
+  if [ "$width" -gt 0 ]; then
+    printf '\ninputs = {\n'
+    while IFS='|' read -r input expr; do
+      [ -z "$input" ] && continue
+      printf '  %-*s = %s\n' "$width" "$input" "$expr"
+    done <<<"$lines"
+    printf '}\n'
+  fi
+  [ "$state" = workload ] || return 0
+  cat <<'EOF'
+
+# State in the workload's own bucket, signed in with its deployer's key
+# (LIB-0028 §5). Replaces root.hcl's remote_state, whose other settings it
+# keeps.
+remote_state {
+  backend = "s3"
+
+  config = merge(include.root.locals.scaleway_state_config, {
+    bucket     = dependency.state.outputs.module.name
+    key        = include.root.locals.workload_state_key
+    access_key = dependency.deployer.outputs.module.access_key
+    secret_key = dependency.deployer.outputs.module.secret_key
+  })
+
+  generate = {
+    path      = "backend.tf"
+    if_exists = "overwrite"
+  }
+}
+EOF
 }
 
 # Lookups are cached in files, not associative arrays: macOS's bash 3.2 runs
@@ -209,7 +258,7 @@ mkdir -p "$EXPECTED_DIR/.cache"
 
 # Each workload, validated and rendered into $EXPECTED_DIR at the path its
 # stubs have in the spoke.
-instances=()   # "<workload>|<module>|<instance>|<jq path>|<declared dependencies>"
+instances=()   # "<workload>|<module>|<instance>|<jq path>|<declared dependencies>|<credentials>"
 shopt -s nullglob
 for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
   workload_dir="$(dirname "$values")"
@@ -233,10 +282,18 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
       (if (.prefix | type) != "string" or .prefix == "" then "prefix must be a non-empty string" else empty end),
       (if (.suffix | type) != "string" or .suffix == "" then "suffix must be a non-empty string" else empty end),
       (.scaleway // {} | if type != "object" then "scaleway must be a mapping" else
-        keys_in("scaleway"; ["project", "deployer", "bucket", "iam"]),
+        keys_in("scaleway"; ["project", "deployer", "state", "bucket", "iam"]),
         (.project | entry_ok("scaleway.project")),
         (.deployer | entry_ok("scaleway.deployer")),
-        (if has("deployer") and (has("project") | not) then "scaleway.deployer configures the workload deployer, which exists only with a scaleway.project (LIB-0024)" else empty end),
+        (.state | entry_ok("scaleway.state")),
+        # The workload state bucket (LIB-0028 §§2-3, §5).
+        (.state // {} | objects |
+          (if has("prefix") and ((.prefix | type) != "string" or (.prefix | test("^[^/].*/$") | not))
+           then "scaleway.state.prefix must not start with / and must end with one (LIB-0028 §3)" else empty end),
+          (if .enable_versioning == false then "scaleway.state.enable_versioning can'"'"'t be false: versioning is the state'"'"'s only protection (LIB-0028 §2)" else empty end)),
+        (.deployer // {} | objects | select(.project_permission_sets | type == "array")
+          | if (.project_permission_sets | index("ObjectStorageFullAccess")) == null
+            then "scaleway.deployer.project_permission_sets must keep ObjectStorageFullAccess: the deployer'"'"'s key signs in to the workload'"'"'s state bucket (LIB-0028 §5)" else empty end),
         (.iam // {} | if type != "object" then "scaleway.iam must be a mapping" else
           keys_in("scaleway.iam"; ["application", "apiKey"]),
           (.application | entry_ok("scaleway.iam.application")),
@@ -245,10 +302,11 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
         (.bucket // {} | if type != "object" then "scaleway.bucket must be a mapping of bucket names" else
           to_entries[] |
             (if (.key | test($kebab)) then empty else "scaleway.bucket.\(.key): bucket name must be kebab-case" end),
+            (if .key == "state" then "scaleway.bucket.state: `state` is the workload state bucket'"'"'s instance; configure it as scaleway.state (LIB-0028)" else empty end),
             (.value | entry_ok("scaleway.bucket.\(.key)"))
         end)
       end),
-      ([.scaleway.project, .scaleway.deployer, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?)]
+      ([.scaleway.project, .scaleway.deployer, .scaleway.state, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?)]
         | .[] | objects | select(has("version")) | .version
         | if type == "string" and test("^[0-9]+(\\.[0-9]+){0,2}$") then empty
           else "version \(tojson) must be a quoted X, X.Y or X.Y.Z" end)
@@ -260,13 +318,17 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
   fi
 
   for kind in "${KINDS[@]}"; do
-    IFS='|' read -r yaml_path module shape deps credentials <<<"$kind"
+    IFS='|' read -r yaml_path module shape deps credentials state <<<"$kind"
     jq_path=".${yaml_path}"
     [ "$credentials" = workload ] && deps="$deps deployer"
+    [ "$state" = workload ] && deps="$deps deployer state"
+    deps=$(tr ' ' '\n' <<<"$deps" | awk 'NF && !seen[$0]++' | tr '\n' ' ')
     if [ "$shape" = map ]; then
       names=$(jq -r "$jq_path // {} | keys[]" <<<"$json")
     elif [ "$shape" = implicit ]; then
-      names=$(jq -r 'if (.scaleway // {}) | has("project") then "main" else empty end' <<<"$json")
+      names=main
+    elif [ "$shape" = state ]; then
+      names=state
     else
       names=$(jq -r "if ($jq_path | type) == \"null\" and ((${jq_path%.*} // {}) | has(\"${yaml_path##*.}\") | not) then empty else \"main\" end" <<<"$json")
     fi
@@ -275,7 +337,7 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
     declared=()
     for dep in $deps; do
       dpath=$(dep_yaml_path "$dep")
-      if jq -e "(.${dpath%.*} // {}) | has(\"${dpath##*.}\")" <<<"$json" >/dev/null; then
+      if [ -z "$dpath" ] || jq -e "(.${dpath%.*} // {}) | has(\"${dpath##*.}\")" <<<"$json" >/dev/null; then
         declared+=("$dep")
       fi
     done
@@ -283,11 +345,11 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
     while IFS= read -r name; do
       stub="workloads/$workload/$module/$name"
       mkdir -p "$EXPECTED_DIR/$stub"
-      stub_content "$module" ${declared[@]+"${declared[@]}"} >"$EXPECTED_DIR/$stub/terragrunt.hcl"
+      stub_content "$module" "$credentials" "$state" ${declared[@]+"${declared[@]}"} >"$EXPECTED_DIR/$stub/terragrunt.hcl"
       if [ "$shape" = map ]; then
-        instances+=("$workload|$module|$name|${jq_path}[\"$name\"]|${declared[*]-}")
+        instances+=("$workload|$module|$name|${jq_path}[\"$name\"]|${declared[*]-}|$credentials")
       else
-        instances+=("$workload|$module|$name|$jq_path|${declared[*]-}")
+        instances+=("$workload|$module|$name|$jq_path|${declared[*]-}|$credentials")
       fi
     done <<<"$names"
   done
@@ -347,15 +409,15 @@ if [ "$CHECK" = true ]; then
         ((keys - ["sops", "env", "scaleway"])[] | "unknown key \(.); known: env, scaleway"),
         (.env // {} | to_entries[] | select((.value | type) != "string") | "env.\(.key) must be one value, not a list or a map"),
         (.scaleway // {} | to_entries[] as $k |
-          if $k.key == "project" or $k.key == "deployer" then
-            (if ($v.scaleway // {} | has("project")) then empty else "scaleway.\($k.key): values.yaml declares no scaleway.project" end)
+          if $k.key == "project" or $k.key == "deployer" or $k.key == "state" then
+            empty
           elif $k.key == "bucket" then
             ($k.value // {} | keys[] as $b | select($v.scaleway.bucket // {} | has($b) | not) | "scaleway.bucket.\($b): values.yaml declares no such bucket")
           elif $k.key == "iam" then
             ($k.value // {} | keys[] | select(. != "application" and . != "apiKey") | "unknown key scaleway.iam.\(.)"),
             ($k.value // {} | keys[] as $i | select($v.scaleway.iam // {} | has($i) | not) | "scaleway.iam.\($i): values.yaml declares no such entry")
           else "unknown key scaleway.\($k.key)" end),
-        ([.scaleway.project, .scaleway.deployer, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?)]
+        ([.scaleway.project, .scaleway.deployer, .scaleway.state, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?)]
           | .[] | objects | to_entries[] | select((.value | type) == "object" or (.value | type) == "array")
           | "\(.key) must be one value, not a list or a map")
       end
@@ -366,10 +428,13 @@ if [ "$CHECK" = true ]; then
   done
 
   for inst in ${instances[@]+"${instances[@]}"}; do
-    IFS='|' read -r workload module name jq_path declared_deps <<<"$inst"
+    IFS='|' read -r workload module name jq_path declared_deps credentials <<<"$inst"
     values="$SPOKE_DIR/workloads/$workload/values.yaml"
     secrets="$SPOKE_DIR/workloads/$workload/secrets.yaml"
     entry=$(yq -o=json '.' "$values" | jq -c "$jq_path // {}")
+    # scaleway.state.prefix is the stub's state key, not a module input
+    # (LIB-0028 §3).
+    if [ "$jq_path" = .scaleway.state ]; then entry=$(jq -c 'del(.prefix)' <<<"$entry"); fi
     sentry='{}'
     env_names='[]'
     if [ -f "$secrets" ]; then
@@ -406,7 +471,7 @@ if [ "$CHECK" = true ]; then
            ! jq -e --arg i "$input" 'index($i) != null' <<<"$props" >/dev/null; then
           missing_wiring="${missing_wiring:+$missing_wiring, }$input"
         fi
-      done < <(wiring_lines "$module" "$dep")
+      done < <(wiring_lines "$module" "$dep" "$credentials")
     done
     if [ -n "$unknown" ]; then
       fail "$where: $module v$version has no input(s) $unknown"
