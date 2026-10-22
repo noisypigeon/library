@@ -245,3 +245,19 @@ The stub's `remote_state` reads dependency outputs, as §5 hoped. `terragrunt
 find --dag` orders a workload's stubs project, deployer, state bucket, then
 the rest, without fetching any outputs, so `terragrunt-run.yml`'s staged
 planning needs no change.
+
+### 2026-10-22: the state bucket's storage class is `standard`
+
+§2's defaults left `storage_class` to the module. The module's default is
+`glacier`, which adds a lifecycle rule moving every object to `GLACIER` after
+90 days. runway's `poc` state bucket was created that way
+([runway#54](https://github.com/noisypigeon/runway/pull/54)). A leaf whose
+state went unwritten for 90 days would then fail at `init`, since state in
+`GLACIER` can't be read without a restore.
+
+- **§2 gains a default:** `storage_class` = `standard`.
+- **`glacier` is refused** for `scaleway.state`, by `resolve-workloads.sh` and
+  root.hcl, as `enable_versioning: false` already is.
+- **It ships as patches**, `terragrunt/root-hcl` v5.0.1 and `workflows/`
+  v4.9.1. For an existing state bucket the change is in place: the lifecycle
+  rule goes, and nothing is replaced.

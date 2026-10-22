@@ -290,7 +290,8 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
         (.state // {} | objects |
           (if has("prefix") and ((.prefix | type) != "string" or (.prefix | test("^[^/].*/$") | not))
            then "scaleway.state.prefix must not start with / and must end with one (LIB-0028 §3)" else empty end),
-          (if .enable_versioning == false then "scaleway.state.enable_versioning can'"'"'t be false: versioning is the state'"'"'s only protection (LIB-0028 §2)" else empty end)),
+          (if .enable_versioning == false then "scaleway.state.enable_versioning can'"'"'t be false: versioning is the state'"'"'s only protection (LIB-0028 §2)" else empty end),
+          (if .storage_class == "glacier" then "scaleway.state.storage_class can'"'"'t be glacier: state moved to GLACIER after 90 days can'"'"'t be read without a restore (LIB-0028 §2)" else empty end)),
         (.deployer // {} | objects | select(.project_permission_sets | type == "array")
           | if (.project_permission_sets | index("ObjectStorageFullAccess")) == null
             then "scaleway.deployer.project_permission_sets must keep ObjectStorageFullAccess: the deployer'"'"'s key signs in to the workload'"'"'s state bucket (LIB-0028 §5)" else empty end),
