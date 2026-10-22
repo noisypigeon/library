@@ -4,6 +4,23 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.6.0] - 2026-10-22
+
+### Count unchanged leaves instead of listing them in Terragrunt comments
+
+Terragrunt plan and apply comments no longer show leaves with no changes (LIB-0026's 2026-10-22 amendment).
+
+- **The summary opens with a count:** `<sha>: 1 with changes, 26 with no changes, 0 failed to plan` (or `failed to apply`). `, N deferred` is added only when there is one.
+- **The table and the detail comments list only leaves that change, fail or are deferred.** The collapsed table of unchanged leaves and their `No changes` sections are gone.
+- **A run with nothing to change posts its summary alone,** saying `_Nothing changes._`.
+- **Terragrunt's own output (the Run section) appears only when something failed.**
+
+Proved on noisypigeon/runway#46, a plan-only draft pinned to this branch: one changed leaf among 27 showed as one row and one section, and a run with no changes posted only its summary.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#129](https://github.com/noisypigeon/library/pull/129)
+
 ## [4.5.0] - 2026-10-22
 
 ### Segment Terragrunt plan and apply comments by leaf, never truncated (LIB-0026)
