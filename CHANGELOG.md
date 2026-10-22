@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-22
 
+- [adr] Accept LIB-0027, and record LIB-0024's rotation check ([#135](https://github.com/noisypigeon/library/pull/135))
 - [workflows] Fix the apply's merge-gate step crashing on getOctokit ([#134](https://github.com/noisypigeon/library/pull/134))
 - [workflows] Re-plan staged applies automatically, and merge with the bot token (LIB-0027) ([#133](https://github.com/noisypigeon/library/pull/133))
 - [adr] Propose LIB-0027, automatic re-plan and bot-token merge ([#132](https://github.com/noisypigeon/library/pull/132))
