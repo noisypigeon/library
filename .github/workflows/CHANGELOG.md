@@ -4,6 +4,22 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.8.0] - 2026-10-22
+
+### Merge a settled automatic re-plan without a last apply (LIB-0027)
+
+When the `replan` job's automatic plan finds nothing left to apply, the PR now closes itself, without one more `terragrunt apply` (LIB-0027's amendment). On runway#48, that last apply did nothing.
+
+- **A plan settles** when the run succeeded and every leaf is unchanged, with nothing deferred, failed or without a result. Such a plan sets `terragrunt/apply` to `success` and merges with `BOT_GITHUB_TOKEN`, as a final apply does. Its summary ends "Nothing left to apply: merging."
+- **Only the replan job's plan qualifies,** since its run was started by a person's `terragrunt apply`. A plan from a push or a `terragrunt plan` comment never merges by itself.
+- **Output changes now count as changes,** read from the JSON plan's `output_changes`, so an output-only plan, which an apply would still write to state, never settles.
+
+Callers change nothing.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#136](https://github.com/noisypigeon/library/pull/136)
+
 ## [4.7.1] - 2026-10-22
 
 ### Fix the apply's merge-gate step crashing on getOctokit
