@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-22.
-- **Status**: Proposed; amended 2026-10-22 (see `## Amendments`). Amends LIB-0023, whose §1 state, §2 kind table and §4
+- **Status**: Accepted; amended twice on 2026-10-22 (see `## Amendments`). Amends LIB-0023, whose §1 state, §2 kind table and §4
   defaults change, and LIB-0024, whose §1 deployer becomes unconditional and
   whose §3 stages grow from three to four.
 
@@ -203,22 +203,64 @@ hand.
 
 ## Verification
 
+Recorded 2026-10-22, against runway's `workloads/poc` and a scratch spoke.
+Items 3 and 4 remain open, and so does part of item 2.
+
 1. **A workload needs no keys.** A `values.yaml` with only `prefix` and
    `suffix` generates the project, deployer and state stubs, and lands in
    stages 1 to 3.
+   - **Passed locally:** on a scratch spoke, such a file generated exactly
+     those three stubs. `terragrunt find --dag` ordered them project, deployer,
+     state bucket, without fetching any outputs.
+   - **Landed in runway from an existing project:**
+     [runway#54](https://github.com/noisypigeon/runway/pull/54) created the
+     state bucket as its own stage, with everything that depends on it
+     deferred. A workload with no project yet is the same path, plus two
+     earlier stages.
 2. **State lands in the workload's bucket.** After stage 4, the workload's
    leaves' keys are under `workloads/<workload>/` in its own bucket, and no
    new key under that path appears in the spoke's bucket. This also decides
    §5's mechanism.
+   - **§5 is decided: dependency outputs in the stub's `remote_state` work.**
+     On runway#54, the stage after the state bucket's apply initialised the
+     bucket, the IAM application and the API key against the workload's
+     bucket, signed in with the deployer's key, and applied them. The
+     `-backend-config` fallback isn't needed.
+   - **Open:** the keys haven't been listed, in either bucket. runway's bucket
+     also still holds those three leaves' keys from before
+     [runway#52](https://github.com/noisypigeon/runway/pull/52) destroyed
+     them, which §8 says to delete by hand.
 3. **The bucket is versioned.** Its versioning reads `Enabled`, and a second
    apply leaves a noncurrent version of a state object.
+   - **Half passed:** runway#54's plan created the bucket with versioning
+     `enabled = true`.
+   - **Open:** no workload-bucket leaf has been applied twice yet, so no
+     noncurrent version exists to check.
 4. **A prefix override moves keys.** Setting `scaleway.state.prefix` plans
    from the new keys.
+   - **Passed locally, not in runway:** on a scratch spoke, an override of
+     `custom/<workload>/` gave `custom/<workload>/scaleway/<module>/<instance>/terraform.tfstate`.
+     No runway workload overrides it.
 5. **The guards hold.** `enable_versioning: false` on `scaleway.state`, and a
    deployer override without `ObjectStorageFullAccess`, each fail before any
    plan runs.
+   - **Passed locally:** `resolve-workloads.sh` and root.hcl each refused all
+     of these, by name, before anything planned:
+     - versioning off;
+     - `glacier` (the second amendment);
+     - a deployer without `ObjectStorageFullAccess`;
+     - a prefix starting with `/`;
+     - a `scaleway.bucket.state` entry (only `resolve-workloads.sh` was
+       tested on this one);
+     - a stub without `remote_state` (root.hcl only).
+
+     A hand-written leaf rendered identically under v4.5.0 and v5.0.0.
 6. **`poc` converges.** After §8, a re-plan of every `poc` leaf shows
    `No changes.`, and every hand-written leaf in runway does too.
+   - **Passed:** §8 ran as runway#52, #53 and #54, and the storage-class fix
+     as [runway#55](https://github.com/noisypigeon/runway/pull/55). The
+     automatic re-plan after #55's apply showed `No changes.` on all 28
+     leaves, and the PR merged itself.
 
 ## Amendments
 

@@ -4,8 +4,8 @@
 - **Date**: 2026-10-20.
 - **Status**: Accepted. Amends LIB-0023, which gains a kind and a credentials
   column, and LIB-0022, whose merge gate now waits for every stage.
-  LIB-0028 (proposed) would make §1's deployer unconditional and add a fourth
-  stage to §3.
+  LIB-0028 makes §1's deployer unconditional and adds a fourth stage to
+  §3.
 
 ## Context
 
