@@ -9,6 +9,8 @@
 - **Amended 2026-10-22**: LIB-0026 replaces the single, truncated plan or apply
   comment with a summary of one row per leaf, and detail comments of one
   section per leaf, never truncated.
+- **Amended 2026-10-22**: LIB-0027 merges the PR after its final apply with
+  the spoke's bot token, and plans a staged apply's next stage by itself.
 
 ## Context
 
