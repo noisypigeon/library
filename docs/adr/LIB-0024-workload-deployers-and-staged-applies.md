@@ -174,8 +174,8 @@ alike.
 
 ## Verification
 
-Recorded 2026-10-21, against runway's `workloads/poc`. Item 3's apply half
-remains open.
+Recorded 2026-10-21 and 2026-10-22, against runway's `workloads/poc`. Every
+item passed.
 
 1. **A new workload bootstraps in one PR.** A fresh `values.yaml` with a
    project, an application, an API key and a bucket plans in three stages,
@@ -193,10 +193,11 @@ remains open.
 3. **Rotation defers.** With rotation forced, the deployer's plan replaces
    the key, and the bucket is deferred. After the apply, the re-plan shows the
    bucket `No changes.`, signed in with the new key.
-   - **Plan half passed:** on [runway#42](https://github.com/noisypigeon/runway/pull/42), forcing rotation
+   - **Passed:** on [runway#42](https://github.com/noisypigeon/runway/pull/42), forcing rotation
      (`scaleway.deployer.rotation_days: 1`) planned the API key "must be
-     replaced", and deferred the bucket. Applying it, and the re-plan after,
-     are open.
+     replaced", and deferred the bucket. On [runway#48](https://github.com/noisypigeon/runway/pull/48), the
+     rotation was applied, and the re-plan after it showed the bucket
+     `No changes`, signed in with the new key.
 4. **Adoption selects nothing first.** runway's workflows-only PR plans no
    units.
    - **Passed:** [runway#37](https://github.com/noisypigeon/runway/pull/37) and [#40](https://github.com/noisypigeon/runway/pull/40)
