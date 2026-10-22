@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-22.
-- **Status**: Accepted. Amends LIB-0022's PR comment.
+- **Status**: Accepted; amended 2026-10-22 (see `## Amendments`). Amends LIB-0022's PR comment.
 
 ## Context
 
@@ -175,3 +175,27 @@ Recorded 2026-10-22. Item 4 remains open, until the next real apply.
    - **Open:** the apply fixture renders that way in the tests. A real apply
      on a spoke at `workflows/v4.5.0` (garden#63, runway#45 and blog#49)
      will show it.
+
+## Amendments
+
+### 2026-10-22: unchanged leaves are counted, not listed
+
+§1 listed every leaf, folding unchanged ones into a collapsed table, and §2
+gave each a section. On runway, that was 26 sections of `No changes` around
+the one that mattered.
+
+- **An unchanged leaf has no row and no section.** The summary counts it
+  instead, in one line:
+
+  > `<sha>`: 1 with changes, 26 with no changes, 0 failed to plan.
+
+  "Failed to `<plan|apply>`" also counts a leaf with no result. `, N
+  deferred` is appended only when there is one.
+- **The table and the detail comments hold only the leaves that change, fail
+  or are deferred.** A plan with nothing to change posts its summary alone,
+  saying `_Nothing changes._`.
+- **Terragrunt's own output, the Run section, appears only when something
+  failed.** Otherwise a clean run would post a detail comment holding nothing
+  else.
+
+This ships as `workflows/v4.6.0`.

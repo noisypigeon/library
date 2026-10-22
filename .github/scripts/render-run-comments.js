@@ -189,8 +189,13 @@ function render(input) {
     if (cur) details.push(cur);
     cur = '';
   };
-  const sections = rows.map((row) => [row, ctx.leaves.get(row.unit) || []]);
-  if (parsed.run.length) sections.push([{ unit: 'Run', label: 'Terragrunt', open: false, kind: 'run' }, parsed.run]);
+  // An unchanged leaf has no section, only a count in the summary; nor has
+  // Terragrunt's own output, unless something went wrong.
+  const shown = rows.filter((r) => r.kind !== 'unchanged');
+  const quiet = rows.filter((r) => r.kind === 'unchanged');
+  const troubled = !input.success || rows.some((r) => r.kind === 'failed' || r.kind === 'unknown');
+  const sections = shown.map((row) => [row, ctx.leaves.get(row.unit) || []]);
+  if (troubled && parsed.run.length) sections.push([{ unit: 'Run', label: 'Terragrunt', open: false, kind: 'run' }, parsed.run]);
   for (const [row, lines] of sections) {
     const pieces = splitBody(lines.length ? lines : ['(no output)'], room);
     pieces.forEach((piece, i) => {
@@ -203,29 +208,27 @@ function render(input) {
   flush();
   const bodies = details.map((d, i) => d.replace(/^/, header(`${i + 1} of ${details.length}`)));
 
-  // The summary: a row per leaf, unchanged leaves folded away, and a link
-  // placeholder per row that linkSummary() fills in.
+  // The summary: a count line, then a row for each leaf that changes, failed
+  // or is deferred, with a link placeholder that linkSummary() fills in.
+  // Unchanged leaves are counted, not listed.
   const link = (unit) => `{{detail:${where[unit]}}}`;
-  const shown = rows.filter((r) => r.kind !== 'unchanged');
-  const quiet = rows.filter((r) => r.kind === 'unchanged');
+  const deferred = rows.filter((r) => r.kind === 'deferred').length;
   const tally = [
     `${rows.filter((r) => r.kind === 'changed').length} with changes`,
-    `${rows.filter((r) => r.kind === 'failed').length} failed`,
-    ...(rows.some((r) => r.kind === 'unknown') ? [`${rows.filter((r) => r.kind === 'unknown').length} with no result`] : []),
-    `${rows.filter((r) => r.kind === 'deferred').length} deferred`,
-    `${quiet.length} unchanged`,
+    `${quiet.length} with no changes`,
+    `${rows.filter((r) => r.kind === 'failed' || r.kind === 'unknown').length} failed to ${input.command}`,
+    ...(deferred ? [`${deferred} deferred`] : []),
   ].join(', ');
   const table = (rs) => ['| Leaf | Result | Detail |', '| --- | --- | --- |', ...rs.map((r) => `| \`${r.unit}\` | ${r.label} | ${link(r.unit)} |`)].join('\n');
   const summary = [
     input.marker,
     `### ${input.success ? '✅' : '❌'} Terragrunt ${input.command}`,
     '',
-    `\`${input.sha}\`: ${rows.length} leaves; ${tally}. [Full log](${input.runUrl}).`,
+    `\`${input.sha}\`: ${tally}. [Full log](${input.runUrl}).`,
     '',
     shown.length ? table(shown) : '_Nothing changes._',
     '',
-    quiet.length ? `<details><summary>${quiet.length} leaves with no changes</summary>\n\n${table(quiet)}\n\n</details>\n` : '',
-    parsed.run.length ? `Terragrunt's own output is in the Run section of ${link('Run')}.\n` : '',
+    where.Run !== undefined ? `Terragrunt's own output is in the Run section of ${link('Run')}.\n` : '',
     input.footer || '',
   ].join('\n');
 
