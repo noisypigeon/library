@@ -70,6 +70,14 @@
 # a values.yaml input reaches as { secretRef: NAME }. Secrets reach the module
 # as sensitive variables, through this file's inputs, and are never written
 # into a generated file.
+#
+# Since v5.0.0 (LIB-0028) every workload has a project, a deployer and a
+# versioned state bucket, scaleway/bucket/state, with or without an entry in
+# values.yaml. The three keep their state in the spoke's bucket. Every other
+# workload leaf keeps its state in the workload's bucket, at
+# workload_state_key, through a remote_state its stub declares and signs in
+# to with the workload deployer's key; this file only supplies the key and
+# the backend's other settings.
 
 locals {
   # The spoke's instance values. Missing spoke.hcl is a hard error, which is
@@ -125,16 +133,16 @@ locals {
   # Misconfigurations fail the run rather than silently dropping a provider.
   # Terragrunt has no assert, so each guard reads a file whose name is the
   # message when its condition fails.
-  guard_legacy_flags = anytrue([for k in ["backblaze", "grafana"] : contains(keys(local.spoke.locals), k)]) ? file("spoke.hcl sets backblaze/grafana: root.hcl v2 reads providers only (LIB-0005); move them into the providers map and delete any *_config.hcl") : true
-  guard_unknown      = length(local.unknown_providers) > 0 ? file("spoke.hcl providers has unknown keys ${join(", ", local.unknown_providers)}; known: ${join(", ", local.known_providers)}") : true
-  guard_prefixes     = alltrue([for p in local.provider_prefixes : endswith(p, "/")]) ? true : file("spoke.hcl providers: every leaves prefix must end in a slash, or it matches sibling paths too")
-  guard_backend      = contains(local.known_state_backend, local.state_backend) ? true : file("spoke.hcl state_backend is ${local.state_backend}; known: ${join(", ", local.known_state_backend)}")
-  guard_grafana      = local.grafana_enabled && !local.scaleway_enabled ? file("providers.grafana is on for ${path_relative_to_include()} but providers.scaleway is not; its data source needs the Scaleway provider") : true
-  guard_bucket_key   = contains(keys(local.spoke.locals), "state_bucket_secret") ? file("spoke.hcl sets state_bucket_secret: root.hcl v3 reads the state bucket from TERRAFORM_STATE_BUCKET_NAME (LIB-0010) in terraform/secrets/terraform.enc; delete state_bucket_secret") : true
-  guard_r2_account   = local.state_backend == "cloudflare" && !contains(keys(local.providers), "cloudflare") ? file("spoke.hcl state_backend is cloudflare but providers has no cloudflare; the R2 endpoint is built from CLOUDFLARE_PROVIDER_ACCOUNT_ID in terraform/secrets/cloudflare.enc (LIB-0010, LIB-0012)") : true
+  guard_legacy_flags      = anytrue([for k in ["backblaze", "grafana"] : contains(keys(local.spoke.locals), k)]) ? file("spoke.hcl sets backblaze/grafana: root.hcl v2 reads providers only (LIB-0005); move them into the providers map and delete any *_config.hcl") : true
+  guard_unknown           = length(local.unknown_providers) > 0 ? file("spoke.hcl providers has unknown keys ${join(", ", local.unknown_providers)}; known: ${join(", ", local.known_providers)}") : true
+  guard_prefixes          = alltrue([for p in local.provider_prefixes : endswith(p, "/")]) ? true : file("spoke.hcl providers: every leaves prefix must end in a slash, or it matches sibling paths too")
+  guard_backend           = contains(local.known_state_backend, local.state_backend) ? true : file("spoke.hcl state_backend is ${local.state_backend}; known: ${join(", ", local.known_state_backend)}")
+  guard_grafana           = local.grafana_enabled && !local.scaleway_enabled ? file("providers.grafana is on for ${path_relative_to_include()} but providers.scaleway is not; its data source needs the Scaleway provider") : true
+  guard_bucket_key        = contains(keys(local.spoke.locals), "state_bucket_secret") ? file("spoke.hcl sets state_bucket_secret: root.hcl v3 reads the state bucket from TERRAFORM_STATE_BUCKET_NAME (LIB-0010) in terraform/secrets/terraform.enc; delete state_bucket_secret") : true
+  guard_r2_account        = local.state_backend == "cloudflare" && !contains(keys(local.providers), "cloudflare") ? file("spoke.hcl state_backend is cloudflare but providers has no cloudflare; the R2 endpoint is built from CLOUDFLARE_PROVIDER_ACCOUNT_ID in terraform/secrets/cloudflare.enc (LIB-0010, LIB-0012)") : true
   guard_breakglass_leaves = alltrue([for name in local.breakglass_providers : length(try(local.providers[name].breakglass.leaves, [])) > 0]) ? true : file("spoke.hcl providers sets breakglass without leaves for ${join(", ", [for name in local.breakglass_providers : name if length(try(local.providers[name].breakglass.leaves, [])) == 0])}; breakglass must list the leaves allowed to use it (LIB-0014)")
   guard_breakglass_file   = alltrue([for name in local.breakglass_providers : contains(keys(local.secret_files), "${name}_breakglass")]) ? true : file("spoke.hcl providers sets breakglass for ${join(", ", [for name in local.breakglass_providers : name if !contains(keys(local.secret_files), "${name}_breakglass")])}, which has no <provider>_breakglass file in secrets-schema.json (LIB-0014)")
-  guard_r2_backup    = local.state_backend == "cloudflare" && local.state_backup != true ? file("spoke.hcl state_backend is cloudflare but state_backup is not true; R2 can't version objects, so its state must be backed up to B2 (LIB-0007, LIB-0012)") : true
+  guard_r2_backup         = local.state_backend == "cloudflare" && local.state_backup != true ? file("spoke.hcl state_backend is cloudflare but state_backup is not true; R2 can't version objects, so its state must be backed up to B2 (LIB-0007, LIB-0012)") : true
 
   # extra_required_providers: { <name> = { source = "...", version = "..." } },
   # appended to the one required_providers block (LIB-0003 v1.1.0). A
@@ -357,15 +365,21 @@ locals {
   workload_scaleway = try(local.workload_values.scaleway, null)
   workload_iam      = try(local.workload_scaleway.iam, null)
   workload_buckets  = try(local.workload_scaleway.bucket, null)
+  # Each kind also says where its state lives (LIB-0028 §4): `spoke` in the
+  # spoke's bucket, through this file's remote_state; `workload` in the
+  # workload's bucket, through the remote_state its stub declares. The project,
+  # deployer and state bucket are implicit (LIB-0028 §1): every workload has
+  # them, and an entry only overrides their inputs.
   workload_kinds = {
     "scaleway/project" = {
-      declared    = local.workload_instance == "main" && contains(try(keys(local.workload_scaleway), []), "project")
+      declared    = local.workload_instance == "main"
       entry       = try(local.workload_scaleway.project, null)
       secrets     = try(local.workload_secrets_scaleway.project, null)
       wiring      = {}
       defaults    = { name = "${local.workload_prefix}-${local.workload_suffix}" }
       sensitive   = false
       credentials = "spoke"
+      state       = "spoke"
     }
     "scaleway/iam-application" = {
       declared    = local.workload_instance == "main" && contains(try(keys(local.workload_iam), []), "application")
@@ -375,11 +389,10 @@ locals {
       defaults    = { name = "${local.workload_prefix}-${local.workload_suffix}" }
       sensitive   = false
       credentials = "spoke"
+      state       = "workload"
     }
-    # Implicit (LIB-0024 §1): every workload with a project has one, and a
-    # scaleway.deployer entry only overrides its inputs.
     "scaleway/terraform-deployer-iam" = {
-      declared = local.workload_instance == "main" && contains(try(keys(local.workload_scaleway), []), "project")
+      declared = local.workload_instance == "main"
       entry    = try(local.workload_scaleway.deployer, null)
       secrets  = try(local.workload_secrets_scaleway.deployer, null)
       wiring   = { project_ids = "list(string)", default_project_id = "string" }
@@ -390,15 +403,35 @@ locals {
       }
       sensitive   = true
       credentials = "spoke"
+      state       = "spoke"
+    }
+    # The workload's state bucket (LIB-0028 §2): scaleway/bucket's instance
+    # `state`. Its `prefix` is this file's, for workload_state_key, not the
+    # module's.
+    "scaleway/bucket#state" = {
+      declared = local.workload_instance == "state"
+      entry    = try({ for k, v in local.workload_scaleway.state : k => v if k != "prefix" }, null)
+      secrets  = try(local.workload_secrets_scaleway.state, null)
+      wiring   = { project_id = "string" }
+      defaults = {
+        name_prefix       = local.workload_prefix
+        name_suffix       = "terraform-state"
+        enable_versioning = true
+        force_destroy     = false
+      }
+      sensitive   = false
+      credentials = "workload"
+      state       = "spoke"
     }
     "scaleway/bucket" = {
-      declared    = contains(try(keys(local.workload_buckets), []), local.workload_instance)
+      declared    = local.workload_instance != "state" && contains(try(keys(local.workload_buckets), []), local.workload_instance)
       entry       = try(local.workload_buckets[local.workload_instance], null)
       secrets     = try(local.workload_secrets_scaleway.bucket[local.workload_instance], null)
       wiring      = { project_id = "string" }
       defaults    = { name_prefix = "${local.workload_prefix}-${local.workload_instance}", name_suffix = local.workload_suffix }
       sensitive   = false
       credentials = "workload"
+      state       = "workload"
     }
     "scaleway/iam-api-key" = {
       declared    = local.workload_instance == "main" && contains(try(keys(local.workload_iam), []), "apiKey")
@@ -408,10 +441,12 @@ locals {
       defaults    = {}
       sensitive   = true
       credentials = "spoke"
+      state       = "workload"
     }
   }
-  workload_kind  = try(local.workload_kinds[local.workload_module], null)
-  workload_entry = merge({}, try(local.workload_kind.entry, null))
+  workload_kind_key = local.workload_module == "scaleway/bucket" && local.workload_instance == "state" ? "scaleway/bucket#state" : local.workload_module
+  workload_kind     = try(local.workload_kinds[local.workload_kind_key], null)
+  workload_entry    = merge({}, try(local.workload_kind.entry, null))
 
   # Secret inputs (LIB-0025 §3): this leaf's slice of secrets.yaml, and every
   # values.yaml input written as { secretRef: NAME }, resolved from `env`.
@@ -437,6 +472,18 @@ locals {
   # A `workload` kind signs its provider in with the workload deployer's key
   # (LIB-0024 §2), which the stub passes from its deployer dependency.
   workload_credentials = local.is_workload_leaf && try(local.workload_kind.credentials, "spoke") == "workload"
+
+  # Where a `workload`-state leaf's state sits in its workload's bucket
+  # (LIB-0028 §3): under scaleway.state.prefix, by default workloads/<workload>/,
+  # which makes the key exactly what path_relative_to_include() gives. Read by
+  # the stub's remote_state, which this file can't declare for it: only the stub
+  # has the dependencies the bucket name and the deployer's key come from.
+  workload_state        = try(local.workload_kind.state, "spoke")
+  workload_state_prefix = try(tostring(local.workload_scaleway.state.prefix), "workloads/${local.workload}/")
+  workload_state_key    = "${local.workload_state_prefix}${local.workload_module}/${local.workload_instance}/terraform.tfstate"
+  # A stub from a resolve-workloads.sh older than LIB-0028 has no remote_state,
+  # and would keep a workload-state leaf's state in the spoke's bucket.
+  workload_stub_backend = local.is_workload_leaf && local.workload_state == "workload" ? length(regexall("(?m)^remote_state \\{", file("${get_terragrunt_dir()}/terragrunt.hcl"))) > 0 : true
 
   # The version (LIB-0023 §3): X.Y.Z exactly, X.Y or X as the newest release
   # within it, or the newest release when unset, by git's own version sort.
@@ -465,6 +512,11 @@ locals {
   guard_workload_refs     = local.is_workload_leaf && !alltrue([for k, name in local.workload_refs : contains(keys(local.workload_env), name)]) ? file("${path_relative_to_include()}: a secretRef in ${local.workload_file} names something ${local.workload_secrets_file}'s env doesn't have (LIB-0025)") : true
   guard_workload_scalars  = local.is_workload_leaf && !alltrue(concat([for k, v in local.workload_sensitive : v != null], [for k, v in try(local.workload_secrets.env, {}) : can(tostring(v))])) ? file("${path_relative_to_include()}: every value in ${local.workload_secrets_file} must be one value, not a list or a map (LIB-0025)") : true
   guard_workload_version  = local.is_workload_leaf && local.workload_version == "" ? file("${path_relative_to_include()}: no terraform/${local.workload_module} tag matches version \"${local.workload_pin}\" (LIB-0023 §3)") : true
+  guard_workload_reserved = local.is_workload_leaf && contains(try(keys(local.workload_buckets), []), "state") ? file("${local.workload_file}: scaleway.bucket.state is reserved for the workload's state bucket; configure it as scaleway.state (LIB-0028)") : true
+  guard_workload_prefix   = local.is_workload_leaf && !can(regex("^[^/].*/$", local.workload_state_prefix)) ? file("${local.workload_file}: scaleway.state.prefix \"${local.workload_state_prefix}\" must not start with / and must end with one (LIB-0028 §3)") : true
+  guard_workload_versions = local.is_workload_leaf && try(local.workload_scaleway.state.enable_versioning, true) == false ? file("${local.workload_file}: scaleway.state.enable_versioning can't be false; versioning is the state's only protection (LIB-0028 §2)") : true
+  guard_workload_deployer = local.is_workload_leaf && can(local.workload_scaleway.deployer.project_permission_sets) && !contains(try(tolist(local.workload_scaleway.deployer.project_permission_sets), []), "ObjectStorageFullAccess") ? file("${local.workload_file}: scaleway.deployer.project_permission_sets must keep ObjectStorageFullAccess; the deployer's key signs in to the workload's state bucket (LIB-0028 §5)") : true
+  guard_workload_backend  = !local.workload_stub_backend ? file("${path_relative_to_include()} keeps its state in the workload's bucket but its stub declares no remote_state; regenerate it with a resolve-workloads.sh from workflows v4.9.0 or later (LIB-0028 §5)") : true
 
   # The leaf's module call. Inputs are written as literals -- JSON is HCL
   # expression syntax -- with template sequences escaped, since a `type = any`

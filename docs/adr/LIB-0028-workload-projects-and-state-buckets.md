@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-22.
-- **Status**: Proposed. Amends LIB-0023, whose §1 state, §2 kind table and §4
+- **Status**: Proposed; amended 2026-10-22 (see `## Amendments`). Amends LIB-0023, whose §1 state, §2 kind table and §4
   defaults change, and LIB-0024, whose §1 deployer becomes unconditional and
   whose §3 stages grow from three to four.
 
@@ -219,3 +219,29 @@ hand.
    plan runs.
 6. **`poc` converges.** After §8, a re-plan of every `poc` leaf shows
    `No changes.`, and every hand-written leaf in runway does too.
+
+## Amendments
+
+### 2026-10-22: what building it changed
+
+Building §§1–5 ([#141](https://github.com/noisypigeon/library/pull/141) for the
+scripts, and the `terragrunt/root-hcl` v5.0.0 PR for the template) found three
+things the record didn't say.
+
+1. **`state` is a reserved `scaleway.bucket` key.** The state bucket's stub is
+   `workloads/<workload>/scaleway/bucket/state`, the path a bucket entry named
+   `state` would also take. `resolve-workloads.sh`, the template and the
+   schema all refuse one.
+2. **`scaleway.state` has a schema file of its own.** Each module's
+   `inputs.schema.json` sets `additionalProperties: false`, and a `$ref` can't
+   relax that to admit `prefix`. So every `scaleway/bucket` version also
+   publishes `state.schema.json`: its inputs plus `prefix`.
+3. **The template refuses an old stub.** A workload-state leaf whose stub
+   declares no `remote_state`, as a `resolve-workloads.sh` older than
+   `workflows/v4.9.0` generates, would keep its state in the spoke's bucket
+   without a word. root.hcl fails it instead.
+
+The stub's `remote_state` reads dependency outputs, as §5 hoped. `terragrunt
+find --dag` orders a workload's stubs project, deployer, state bucket, then
+the rest, without fetching any outputs, so `terragrunt-run.yml`'s staged
+planning needs no change.
