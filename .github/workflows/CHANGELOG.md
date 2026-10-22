@@ -4,6 +4,21 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.7.0] - 2026-10-22
+
+### Re-plan staged applies automatically, and merge with the bot token (LIB-0027)
+
+Two changes to `terragrunt-run.yml` (LIB-0027).
+
+- **It reports what a run did.** `workflow_call` gains the outputs `deferred` (`'true'` when an apply left workload leaves deferred) and `exit_code`. A spoke's apply caller can then run a `replan` job, which plans the next stage without a `terragrunt plan` comment. That plan's summary says it was planned automatically. Each stage still needs its own `terragrunt apply`.
+- **The final apply merges with `BOT_GITHUB_TOKEN`** when the caller has it (it's an optional secret here; `secrets: inherit` passes it). This fixes the auto-merge that failed on every runway PR with "Resource not accessible by integration". A bot-token merge also starts the workflows that follow a merge, such as the root changelog, which a `GITHUB_TOKEN` merge would not. If the merge fails, the comment names the token and the access it needs.
+
+To take it, a spoke moves to this version and adds a `replan` job to its `terragrunt-apply.yml`. Without that job, a staged apply asks for a `terragrunt plan` comment, as before. Selection is unchanged.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#133](https://github.com/noisypigeon/library/pull/133)
+
 ## [4.6.0] - 2026-10-22
 
 ### Count unchanged leaves instead of listing them in Terragrunt comments
