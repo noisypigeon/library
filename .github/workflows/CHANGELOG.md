@@ -4,6 +4,27 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.5.0] - 2026-10-22
+
+### Segment Terragrunt plan and apply comments by leaf, never truncated (LIB-0026)
+
+`terragrunt-run.yml` now reports a plan or an apply as a summary comment, then detail comments, and never truncates (LIB-0026).
+
+- **The summary** has one row per leaf: `No changes`, `+a ~c -d`, `destroy (removed from values.yaml)`, `deferred until …`, `applied` or `failed`, with a link to the leaf's section. Changes and failures come first. Unchanged leaves are folded into a collapsed table.
+- **Detail comments** hold one collapsible section per leaf: that leaf's Terraform output, without Terragrunt's init narration. Terragrunt's own summary goes in a closing Run section.
+- **Nothing is truncated.** Sections are packed into comments of up to 60,000 characters, and a leaf too large for one comment is split across several, with balanced code fences. The old 55,000-character tail cut is gone.
+- **Counts come from Terraform's JSON plans,** written with `--json-out-dir`, and fall back to the plan's own summary line.
+- **Masked values are replaced with `***`** in comments too, since comments are built from a file GitHub never masks.
+- **A new run minimizes every comment of the previous one.**
+
+Rendering lives in a tested library script, `.github/scripts/render-run-comments.js`, with `node --test` tests and fixtures from runway's runs. A new `scripts-test.yml` runs them on this repo's pull requests. Callers change nothing, and unit selection is unchanged, so a spoke takes this in one PR.
+
+Proved on noisypigeon/runway#44, a plan-only draft pinned to this branch.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#127](https://github.com/noisypigeon/library/pull/127)
+
 ## [4.4.0] - 2026-10-21
 
 ### Add a workload secrets.yaml in SOPS YAML (LIB-0025)
