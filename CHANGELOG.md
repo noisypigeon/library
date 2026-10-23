@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-22
 
+- [adr] docs(adr): LIB-0030 to LIB-0032, moving the blog into runway ([#151](https://github.com/noisypigeon/library/pull/151))
 - [workflows] Comment-triggered runs check out the PR's head commit from the API ([#146](https://github.com/noisypigeon/library/pull/146))
 - [workflows] Workloads can declare Backblaze buckets and API keys (LIB-0029) ([#145](https://github.com/noisypigeon/library/pull/145))
 - [terragrunt/root-hcl] Workloads can declare Backblaze buckets and API keys (LIB-0029) ([#145](https://github.com/noisypigeon/library/pull/145))
