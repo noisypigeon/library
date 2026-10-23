@@ -180,7 +180,7 @@ Run against LIB-0032's migration of the blog.
 
 1. **The spoke's dispatch is a reusable workflow, `site-dispatch.yml`.** §4
    had the spoke dispatch the shim itself, but spokes hold no CI logic
-   (LIB-0001 invariant 2). So the spoke's caller holds only its `on:` paths,
+   (LIB-0001 invariant 1). So the spoke's caller holds only its `on:` paths,
    and calls `site-dispatch.yml` with `site_repo` and `workflow`. That fails
    loudly when `BOT_GITHUB_TOKEN` can't reach the shim.
 2. **§3's narrower pattern reaches only callers that use the default.**
