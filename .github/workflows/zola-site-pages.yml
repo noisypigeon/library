@@ -18,6 +18,11 @@
 # workflow has to live in the repo whose Pages site it means to deploy --
 # there is no cross-repo equivalent of zola-site-deploy.yml's bucket target.
 #
+# A Pages shim repo (LIB-0031) builds a site that lives in another repo -- a
+# spoke workload's Zola tree -- by passing `repository` and `ref`. The other
+# paths (src_dir, fetch_script, theme_script) are then paths in that checkout,
+# and the deploy still lands on the shim's own Pages site.
+#
 # Two jobs, not one: actions/deploy-pages requires its own job bound to the
 # github-pages environment, separate from the job that builds the artifact.
 name: Zola site pages
@@ -26,9 +31,19 @@ on:
   workflow_call:
     inputs:
       src_dir:
-        description: "Path (in the caller's checkout) to the site's src/."
+        description: "Path (in the checkout) to the site's src/."
         type: string
         required: true
+      repository:
+        description: "owner/name of the repo to build the site from. Empty (the default) means the caller's own; a Pages shim repo names the spoke whose workload holds the site (LIB-0031 §4)."
+        type: string
+        required: false
+        default: ""
+      ref:
+        description: "Ref of `repository` to build. Empty (the default) means the event's ref for the caller's own repo, or the default branch's head for another repo."
+        type: string
+        required: false
+        default: ""
       build_cmd:
         description: "Command to run (in src_dir) to build the site."
         type: string
@@ -69,6 +84,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          repository: ${{ inputs.repository || github.repository }}
+          ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 

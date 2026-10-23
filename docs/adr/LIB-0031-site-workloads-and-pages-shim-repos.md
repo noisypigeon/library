@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-23.
-- **Status**: Proposed. Amends LIB-0001, whose spokes gain a second shape, the
+- **Status**: Proposed; amended 2026-10-23 (see `## Amendments`). Amends LIB-0001, whose spokes gain a second shape, the
   shim repo, and LIB-0023, whose second amendment's gitignore narrows. Second
   of three records, with LIB-0030 and LIB-0032, that move the blog into
   runway.
@@ -171,3 +171,19 @@ Run against LIB-0032's migration of the blog.
    site's files committed, and fails on a tracked stub.
 4. **Existing callers don't change.** garden's site still deploys from its own
    repo with `zola-site-pages.yml` called as before.
+
+## Amendments
+
+### 2026-10-23: what building it changed
+
+§§2–7 shipped in `workflows/v4.12.0`. Building them settled two things.
+
+1. **The spoke's dispatch is a reusable workflow, `site-dispatch.yml`.** §4
+   had the spoke dispatch the shim itself, but spokes hold no CI logic
+   (LIB-0001 invariant 1). So the spoke's caller holds only its `on:` paths,
+   and calls `site-dispatch.yml` with `site_repo` and `workflow`. That fails
+   loudly when `BOT_GITHUB_TOKEN` can't reach the shim.
+2. **§3's narrower pattern reaches only callers that use the default.**
+   runway passes its own `leaf_pattern`, `^workloads/` among it, so runway's
+   caller narrows the same way in LIB-0032's PRs.
+
