@@ -78,6 +78,12 @@
 # workload_state_key, through a remote_state its stub declares and signs in
 # to with the workload deployer's key; this file only supplies the key and
 # the backend's other settings.
+#
+# Since v5.1.0 (LIB-0029) a workload may also declare Backblaze buckets and
+# API keys. They sign in with the spoke's Backblaze key, keep their state in
+# the workload's bucket, and an API key reaches only the buckets its `buckets`
+# list names. A workload leaf gets exactly the provider its path names, when
+# spoke.hcl's providers map has it; `leaves` scopes hand-written leaves only.
 
 locals {
   # The spoke's instance values. Missing spoke.hcl is a hard error, which is
@@ -104,10 +110,15 @@ locals {
   provider_prefixes = flatten([for name, cfg in local.providers : concat(try(cfg.leaves, []), try(cfg.breakglass.leaves, []))])
 
   leaf = "${path_relative_to_include()}/"
+  # A workload leaf gets exactly the provider its path names (LIB-0029 §4):
+  # `leaves` can't name workloads/*/<provider>/, and shouldn't turn a
+  # provider on for every workload.
   provider_on = {
     for name in local.known_providers : name => contains(keys(local.providers), name) && (
-      length(try(local.providers[name].leaves, [])) == 0 ||
-      anytrue([for prefix in try(local.providers[name].leaves, []) : startswith(local.leaf, prefix)])
+      local.is_workload_leaf ? name == try(local.path_segments[2], "") : (
+        length(try(local.providers[name].leaves, [])) == 0 ||
+        anytrue([for prefix in try(local.providers[name].leaves, []) : startswith(local.leaf, prefix)])
+      )
     )
   }
 
@@ -365,6 +376,11 @@ locals {
   workload_scaleway = try(local.workload_values.scaleway, null)
   workload_iam      = try(local.workload_scaleway.iam, null)
   workload_buckets  = try(local.workload_scaleway.bucket, null)
+  # Backblaze kinds (LIB-0029).
+  workload_backblaze    = try(local.workload_values.backblaze, null)
+  workload_b2_buckets   = try(local.workload_backblaze.bucket, null)
+  workload_b2_keys      = try(local.workload_backblaze.apiKey, null)
+  workload_b2_key_entry = try(local.workload_b2_keys[local.workload_instance], null)
   # Each kind also says where its state lives (LIB-0028 §4): `spoke` in the
   # spoke's bucket, through this file's remote_state; `workload` in the
   # workload's bucket, through the remote_state its stub declares. The project,
@@ -444,6 +460,29 @@ locals {
       credentials = "spoke"
       state       = "workload"
     }
+    # Backblaze (LIB-0029): the spoke's account-wide key, the workload's state.
+    "backblaze/bucket" = {
+      declared    = contains(try(keys(local.workload_b2_buckets), []), local.workload_instance)
+      entry       = try(local.workload_b2_buckets[local.workload_instance], null)
+      secrets     = try(local.workload_secrets.backblaze.bucket[local.workload_instance], null)
+      wiring      = {}
+      defaults    = { name_prefix = "${local.workload_prefix}-${local.workload_instance}", name_suffix = local.workload_suffix }
+      sensitive   = false
+      credentials = "spoke"
+      state       = "workload"
+    }
+    # `buckets` names the stub's dependencies, which wire bucket_ids; it isn't
+    # an input of the module's.
+    "backblaze/api-key" = {
+      declared    = contains(try(keys(local.workload_b2_keys), []), local.workload_instance)
+      entry       = try({ for k, v in local.workload_b2_key_entry : k => v if k != "buckets" }, null)
+      secrets     = try(local.workload_secrets.backblaze.apiKey[local.workload_instance], null)
+      wiring      = { bucket_ids = "list(string)" }
+      defaults    = { key_name = "${local.workload_prefix}-${local.workload_instance}-${local.workload_suffix}" }
+      sensitive   = true
+      credentials = "spoke"
+      state       = "workload"
+    }
   }
   workload_kind_key = local.workload_module == "scaleway/bucket" && local.workload_instance == "state" ? "scaleway/bucket#state" : local.workload_module
   workload_kind     = try(local.workload_kinds[local.workload_kind_key], null)
@@ -519,6 +558,10 @@ locals {
   guard_workload_glacier  = local.is_workload_leaf && try(local.workload_scaleway.state.storage_class, "standard") == "glacier" ? file("${local.workload_file}: scaleway.state.storage_class can't be glacier; state moved to GLACIER after 90 days can't be read without a restore (LIB-0028 §2)") : true
   guard_workload_deployer = local.is_workload_leaf && can(local.workload_scaleway.deployer.project_permission_sets) && !contains(try(tolist(local.workload_scaleway.deployer.project_permission_sets), []), "ObjectStorageFullAccess") ? file("${local.workload_file}: scaleway.deployer.project_permission_sets must keep ObjectStorageFullAccess; the deployer's key signs in to the workload's state bucket (LIB-0028 §5)") : true
   guard_workload_backend  = !local.workload_stub_backend ? file("${path_relative_to_include()} keeps its state in the workload's bucket but its stub declares no remote_state; regenerate it with a resolve-workloads.sh from workflows v4.9.0 or later (LIB-0028 §5)") : true
+  guard_workload_b2_on    = local.is_workload_leaf && try(local.path_segments[2], "") == "backblaze" && !contains(keys(local.providers), "backblaze") ? file("${path_relative_to_include()} is a Backblaze workload leaf, but spoke.hcl's providers map has no backblaze (LIB-0029 §4)") : true
+  guard_workload_b2_list  = local.is_workload_leaf && local.workload_module == "backblaze/api-key" && length(try(tolist(local.workload_b2_key_entry.buckets), [])) == 0 ? file("${local.workload_file}: backblaze.apiKey.${local.workload_instance}.buckets must list at least one of this workload's backblaze.bucket keys (LIB-0029 §3)") : true
+  guard_workload_b2_known = local.is_workload_leaf && local.workload_module == "backblaze/api-key" && length(setsubtract(try(tolist(local.workload_b2_key_entry.buckets), []), try(keys(local.workload_b2_buckets), []))) > 0 ? file("${local.workload_file}: backblaze.apiKey.${local.workload_instance}.buckets names a bucket this workload's backblaze.bucket doesn't have (LIB-0029 §3)") : true
+  guard_workload_b2_ids   = local.is_workload_leaf && local.workload_module == "backblaze/api-key" && (can(local.workload_b2_key_entry.bucket_ids) || can(local.workload_secrets.backblaze.apiKey[local.workload_instance].bucket_ids)) ? file("${local.workload_file}: backblaze.apiKey.${local.workload_instance}.bucket_ids can't be set; list the buckets in buckets instead (LIB-0029 §3)") : true
 
   # The leaf's module call. Inputs are written as literals -- JSON is HCL
   # expression syntax -- with template sequences escaped, since a `type = any`
