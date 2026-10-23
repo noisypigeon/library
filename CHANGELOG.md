@@ -44,6 +44,12 @@ ADR-0154 and ADR-0084 each made before it.
 
 <!-- entries below; newest first -->
 
+## 2026-10-23
+
+- [workflows] Workloads can own Cloudflare zones, records, rulesets and redirects (LIB-0030) ([#152](https://github.com/noisypigeon/library/pull/152))
+- [terragrunt/root-hcl] Workloads can own Cloudflare zones, records, rulesets and redirects (LIB-0030) ([#152](https://github.com/noisypigeon/library/pull/152))
+- [cloudflare/ruleset] Workloads can own Cloudflare zones, records, rulesets and redirects (LIB-0030) ([#152](https://github.com/noisypigeon/library/pull/152))
+
 ## 2026-10-22
 
 - [adr] docs(adr): LIB-0030 to LIB-0032, moving the blog into runway ([#151](https://github.com/noisypigeon/library/pull/151))
