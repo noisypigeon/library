@@ -403,6 +403,31 @@ can't be read without a restore. `state` is therefore no longer a valid `scalewa
 - **A new workload lands in four stages:** project, then deployer, then state
   bucket, then the rest.
 
+Since v5.1.0 (LIB-0029), with `workflows/v4.10.0` or later, a workload may also
+declare Backblaze buckets and API keys:
+
+```yaml
+backblaze:
+  bucket:
+    archive: {}
+  apiKey:
+    archive-reader:
+      buckets: [archive]
+      capabilities: [listBuckets, listFiles, readFiles]
+```
+
+- **They sign in with the spoke's Backblaze key**, from `backblaze.enc`, and
+  keep their state in the workload's bucket.
+- **An API key reaches only the buckets its `buckets` list names.** Each is
+  one of the workload's `backblaze.bucket` keys, and its stub wires their IDs
+  as `bucket_ids`. `bucket_ids` itself can't be set, and `capabilities` has
+  no default.
+- **A bucket's name** defaults like a Scaleway bucket's. A name longer than
+  B2's 50 characters is refused before planning.
+- **A workload leaf gets exactly the provider its path names**, when
+  `spoke.hcl`'s `providers` map has it. `leaves` scopes hand-written leaves
+  only, so a spoke adds nothing for workloads.
+
 A workload may also have a `workloads/<workload>/secrets.yaml` (v4.5.0,
 LIB-0025), encrypted with sops as YAML. Its rule in the spoke's `.sops.yaml` is
 `^workloads/[^/]+/secrets\.yaml$`. It holds secret inputs under the same kind

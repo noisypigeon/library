@@ -231,18 +231,20 @@ echo "Generated ${overview_count} module overview page(s) under ${CONTENT_DIR#"$
 # The workload state bucket, scaleway.state (LIB-0028), is a scaleway/bucket
 # with one input of its own, `prefix`. Each inputs schema refuses properties it
 # doesn't list, which a $ref can't relax, so every scaleway/bucket version also
-# gets a state.schema.json: its inputs schema plus `prefix`.
+# gets a state.schema.json: its inputs schema plus `prefix`. Likewise each
+# backblaze/api-key version gets a workload.schema.json (LIB-0029 §6): its
+# inputs without bucket_ids, which a workload never writes, plus `buckets`.
 if [ -n "$STATIC_ROOT" ]; then
   if [ ! -d "$STATIC_ROOT" ]; then
     echo "::error::--static-root $STATIC_ROOT is not a directory" >&2
     exit 2
   fi
-  find "$STATIC_ROOT/terraform" \( -name inputs.schema.json -o -name state.schema.json \) -type f -delete 2>/dev/null || true
+  find "$STATIC_ROOT/terraform" \( -name inputs.schema.json -o -name state.schema.json -o -name workload.schema.json \) -type f -delete 2>/dev/null || true
   rm -f "$STATIC_ROOT/schemas/workload/v1.json"
 
   kinds_json='{}'
   schema_count=0
-  for wmodule in scaleway/project scaleway/iam-application scaleway/terraform-deployer-iam scaleway/bucket scaleway/iam-api-key; do
+  for wmodule in scaleway/project scaleway/iam-application scaleway/terraform-deployer-iam scaleway/bucket scaleway/iam-api-key backblaze/bucket backblaze/api-key; do
     wversions="$(templates_tags "terraform/${wmodule}/v*" \
       | sed -nE 's#.*/v([0-9]+\.[0-9]+\.[0-9]+)$#\1#p' \
       | sort -t. -k1,1n -k2,2n -k3,3n -u)"
@@ -267,6 +269,20 @@ if [ -n "$STATIC_ROOT" ]; then
         ' "$out/inputs.schema.json" >"$out/state.schema.json"
         schema_count=$((schema_count + 1))
       fi
+      if [ "$wmodule" = backblaze/api-key ]; then
+        jq --arg id "${SCHEMA_BASE_URL}/terraform/${wmodule}/v${v}/workload.schema.json" '
+          ."$id" = $id
+          | del(.properties.bucket_ids)
+          | .properties.buckets = {
+              type: "array",
+              minItems: 1,
+              items: {type: "string", pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"},
+              description: "The workload'"'"'s backblaze.bucket keys this key may reach (LIB-0029 §3)"
+            }
+          | .required = ["buckets", "capabilities"]
+        ' "$out/inputs.schema.json" >"$out/workload.schema.json"
+        schema_count=$((schema_count + 1))
+      fi
     done <<<"$wversions"
 
     # A kind: null (declared with no inputs), or a mapping whose `version`,
@@ -274,6 +290,7 @@ if [ -n "$STATIC_ROOT" ]; then
     # the newest version that pin matches. $vs is oldest first.
     kinds=("$wmodule|inputs")
     if [ "$wmodule" = scaleway/bucket ]; then kinds+=("$wmodule#state|state"); fi
+    if [ "$wmodule" = backblaze/api-key ]; then kinds=("$wmodule#workload|workload"); fi
     for wkind in "${kinds[@]}"; do
       kinds_json="$(jq --arg m "$wmodule" --arg key "${wkind%|*}" --arg file "${wkind#*|}" --arg versions "$wversions" --arg base "$SCHEMA_BASE_URL" '
         ($versions | split("\n") | map(select(. != ""))) as $vs
@@ -301,7 +318,7 @@ if [ -n "$STATIC_ROOT" ]; then
   jq --arg base "$SCHEMA_BASE_URL" '. as $k | {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "$id": "\($base)/schemas/workload/v1.json",
-    title: "Workload values.yaml (LIB-0023, LIB-0028)",
+    title: "Workload values.yaml (LIB-0023, LIB-0028, LIB-0029)",
     type: "object",
     additionalProperties: false,
     required: ["prefix", "suffix"],
@@ -327,6 +344,22 @@ if [ -n "$STATIC_ROOT" ]; then
               application: ($k["scaleway/iam-application"] // {}),
               apiKey: ($k["scaleway/iam-api-key"] // {})
             }
+          }
+        }
+      },
+      backblaze: {
+        type: ["object", "null"],
+        additionalProperties: false,
+        properties: {
+          bucket: {
+            type: ["object", "null"],
+            propertyNames: {pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"},
+            additionalProperties: ($k["backblaze/bucket"] // {})
+          },
+          apiKey: {
+            type: ["object", "null"],
+            propertyNames: {pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"},
+            additionalProperties: ($k["backblaze/api-key#workload"] // {})
           }
         }
       }

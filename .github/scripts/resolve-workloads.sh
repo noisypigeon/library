@@ -11,6 +11,9 @@
 # (LIB-0028 §4) also declares its own remote_state, which replaces root.hcl's:
 # the bucket comes from its state dependency, and it signs in with the
 # workload deployer's key (LIB-0028 §5).
+# Backblaze kinds (LIB-0029) sign in with the spoke's Backblaze key and keep
+# their state in that same workload bucket. An API key depends on each
+# bucket its `buckets` list names, and gets their IDs as bucket_ids.
 # Values, defaults and the module version are root.hcl's, at plan time: it
 # writes them into the leaf's generated module block as literals, since a
 # `type = any` variable set through TF_VAR_ arrives as a string.
@@ -93,6 +96,8 @@ done
 # - state (LIB-0028 §4): `spoke` kinds keep state in the spoke's bucket;
 #   `workload` kinds in the workload's, so they also depend on the state
 #   bucket and on the deployer whose key signs in to it.
+# - `buckets` (LIB-0029 §3) stands for one bucket_<key> dependency per entry
+#   in the instance's own `buckets` list, resolved per instance.
 KINDS=(
   "scaleway.project|scaleway/project|implicit||spoke|spoke"
   "scaleway.deployer|scaleway/terraform-deployer-iam|implicit|project|spoke|spoke"
@@ -100,15 +105,20 @@ KINDS=(
   "scaleway.iam.application|scaleway/iam-application|singleton||spoke|workload"
   "scaleway.bucket|scaleway/bucket|map|project|workload|workload"
   "scaleway.iam.apiKey|scaleway/iam-api-key|singleton|project application|spoke|workload"
+  "backblaze.bucket|backblaze/bucket|map||spoke|workload"
+  "backblaze.apiKey|backblaze/api-key|map|buckets|spoke|workload"
 )
 
-# A dependency's stub, relative to its provider directory.
+# A dependency's stub, relative to its workload directory, so a Backblaze
+# stub reaches the Scaleway state bucket too (LIB-0029). bucket_<key> is a
+# Backblaze bucket, its key's dashes written as underscores.
 dep_dir() {
   case "$1" in
-    project) echo "project/main" ;;
-    application) echo "iam-application/main" ;;
-    deployer) echo "terraform-deployer-iam/main" ;;
-    state) echo "bucket/state" ;;
+    project) echo "scaleway/project/main" ;;
+    application) echo "scaleway/iam-application/main" ;;
+    deployer) echo "scaleway/terraform-deployer-iam/main" ;;
+    state) echo "scaleway/bucket/state" ;;
+    bucket_*) echo "backblaze/bucket/$(echo "${1#bucket_}" | tr _ -)" ;;
   esac
 }
 
@@ -175,9 +185,15 @@ terraform {
 EOF
   local dep lines="" width=0 input expr
   for dep in ${deps[@]+"${deps[@]}"}; do
-    printf '\ndependency "%s" {\n  config_path = "../../%s"\n}\n' "$dep" "$(dep_dir "$dep")"
+    printf '\ndependency "%s" {\n  config_path = "../../../%s"\n}\n' "$dep" "$(dep_dir "$dep")"
     lines="$lines$(wiring_lines "$module" "$dep" "$credentials")"$'\n'
   done
+  # A Backblaze key's buckets become one list (LIB-0029 §3).
+  local ids=""
+  for dep in ${deps[@]+"${deps[@]}"}; do
+    case "$dep" in bucket_*) ids="${ids:+$ids, }dependency.$dep.outputs.module.bucket_id" ;; esac
+  done
+  if [ -n "$ids" ]; then lines="${lines}bucket_ids|[$ids]"$'\n'; fi
   # Aligned on `=`, as terragrunt hcl format would leave it.
   while IFS='|' read -r input expr; do
     [ -z "$input" ] && continue
@@ -278,7 +294,7 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
     def keys_in($where; $allowed): (keys - $allowed)[] | "unknown key \($where).\(.); known: \($allowed | join(", "))";
     if type != "object" then "the file must be a mapping"
     else
-      keys_in(""; ["prefix", "suffix", "scaleway"]),
+      keys_in(""; ["prefix", "suffix", "scaleway", "backblaze"]),
       (if (.prefix | type) != "string" or .prefix == "" then "prefix must be a non-empty string" else empty end),
       (if (.suffix | type) != "string" or .suffix == "" then "suffix must be a non-empty string" else empty end),
       (.scaleway // {} | if type != "object" then "scaleway must be a mapping" else
@@ -307,7 +323,33 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
             (.value | entry_ok("scaleway.bucket.\(.key)"))
         end)
       end),
-      ([.scaleway.project, .scaleway.deployer, .scaleway.state, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?)]
+      # Backblaze kinds (LIB-0029 §§1-5).
+      (. as $file | .backblaze // {} | if type != "object" then "backblaze must be a mapping" else
+        keys_in("backblaze"; ["bucket", "apiKey"]),
+        (.bucket // {} | if type != "object" then "backblaze.bucket must be a mapping of bucket names" else
+          to_entries[] |
+            (if (.key | test($kebab)) then empty else "backblaze.bucket.\(.key): bucket name must be kebab-case" end),
+            (.value | entry_ok("backblaze.bucket.\(.key)")),
+            (.key as $k | .value // {} | objects | select(has("exact_name") | not)
+              | ((.name_prefix // "\($file.prefix)-\($k)") + "-xxxxxx-" + (.name_suffix // $file.suffix)) as $n
+              | if ($n | length) > 50 then "backblaze.bucket.\($k): its name, \($n | length) characters with the random code, is longer than B2'"'"'s 50; shorten the key or set exact_name (LIB-0029 §5)" else empty end)
+        end),
+        (.bucket // {} | objects | keys) as $buckets |
+        (.apiKey // {} | if type != "object" then "backblaze.apiKey must be a mapping of key names" else
+          to_entries[] | .key as $k |
+            (if ($k | test($kebab)) then empty else "backblaze.apiKey.\($k): key name must be kebab-case" end),
+            (.value | entry_ok("backblaze.apiKey.\($k)")),
+            (.value // {} | objects |
+              (if (.buckets | type) != "array" or (.buckets | length) == 0
+               then "backblaze.apiKey.\($k).buckets must list at least one of this workload'"'"'s backblaze.bucket keys (LIB-0029 §3)"
+               else (.buckets[] | select(type != "string" or (. as $b | $buckets | index($b) | not))
+                 | "backblaze.apiKey.\($k).buckets: \(tojson) is not one of this workload'"'"'s backblaze.bucket keys (LIB-0029 §3)") end),
+              (if has("bucket_ids") then "backblaze.apiKey.\($k).bucket_ids can'"'"'t be set; list the buckets in buckets instead (LIB-0029 §3)" else empty end),
+              (if (.capabilities | type) != "array" or (.capabilities | length) == 0 then "backblaze.apiKey.\($k).capabilities must list what the key may do (LIB-0029 §2)" else empty end)),
+            (if .value == null then "backblaze.apiKey.\($k) needs buckets and capabilities (LIB-0029 §§2-3)" else empty end)
+        end)
+      end),
+      ([.scaleway.project, .scaleway.deployer, .scaleway.state, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?), (.backblaze.bucket // {} | .[]?), (.backblaze.apiKey // {} | .[]?)]
         | .[] | objects | select(has("version")) | .version
         | if type == "string" and test("^[0-9]+(\\.[0-9]+){0,2}$") then empty
           else "version \(tojson) must be a quoted X, X.Y or X.Y.Z" end)
@@ -345,12 +387,23 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
 
     while IFS= read -r name; do
       stub="workloads/$workload/$module/$name"
+      # `buckets` becomes this instance's own bucket_<key> dependencies.
+      instance_deps=()
+      for dep in ${declared[@]+"${declared[@]}"}; do
+        if [ "$dep" = buckets ]; then
+          while IFS= read -r b; do
+            [ -n "$b" ] && instance_deps+=("bucket_$(tr - _ <<<"$b")")
+          done < <(jq -r --arg n "$name" "${jq_path}[\$n].buckets[]?" <<<"$json")
+        else
+          instance_deps+=("$dep")
+        fi
+      done
       mkdir -p "$EXPECTED_DIR/$stub"
-      stub_content "$module" "$credentials" "$state" ${declared[@]+"${declared[@]}"} >"$EXPECTED_DIR/$stub/terragrunt.hcl"
+      stub_content "$module" "$credentials" "$state" ${instance_deps[@]+"${instance_deps[@]}"} >"$EXPECTED_DIR/$stub/terragrunt.hcl"
       if [ "$shape" = map ]; then
-        instances+=("$workload|$module|$name|${jq_path}[\"$name\"]|${declared[*]-}|$credentials")
+        instances+=("$workload|$module|$name|${jq_path}[\"$name\"]|${instance_deps[*]-}|$credentials")
       else
-        instances+=("$workload|$module|$name|$jq_path|${declared[*]-}|$credentials")
+        instances+=("$workload|$module|$name|$jq_path|${instance_deps[*]-}|$credentials")
       fi
     done <<<"$names"
   done
@@ -407,7 +460,7 @@ if [ "$CHECK" = true ]; then
       else
         (del(.sops) | leaves | select((.value | type) != "string" or (.value | test("^ENC\\[") | not))
           | "\(.path | map(tostring) | join(".")) is not encrypted"),
-        ((keys - ["sops", "env", "scaleway"])[] | "unknown key \(.); known: env, scaleway"),
+        ((keys - ["sops", "env", "scaleway", "backblaze"])[] | "unknown key \(.); known: env, scaleway, backblaze"),
         (.env // {} | to_entries[] | select((.value | type) != "string") | "env.\(.key) must be one value, not a list or a map"),
         (.scaleway // {} | to_entries[] as $k |
           if $k.key == "project" or $k.key == "deployer" or $k.key == "state" then
@@ -418,7 +471,12 @@ if [ "$CHECK" = true ]; then
             ($k.value // {} | keys[] | select(. != "application" and . != "apiKey") | "unknown key scaleway.iam.\(.)"),
             ($k.value // {} | keys[] as $i | select($v.scaleway.iam // {} | has($i) | not) | "scaleway.iam.\($i): values.yaml declares no such entry")
           else "unknown key scaleway.\($k.key)" end),
-        ([.scaleway.project, .scaleway.deployer, .scaleway.state, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?)]
+        (.backblaze // {} | to_entries[] as $k |
+          if $k.key == "bucket" or $k.key == "apiKey" then
+            ($k.value // {} | keys[] as $i | select($v.backblaze[$k.key] // {} | has($i) | not) | "backblaze.\($k.key).\($i): values.yaml declares no such entry"),
+            (if $k.key == "apiKey" then ($k.value // {} | to_entries[] | select(.value | objects | has("bucket_ids")) | "backblaze.apiKey.\(.key).bucket_ids can'"'"'t be set (LIB-0029 §3)") else empty end)
+          else "unknown key backblaze.\($k.key)" end),
+        ([.scaleway.project, .scaleway.deployer, .scaleway.state, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?), (.backblaze.bucket // {} | .[]?), (.backblaze.apiKey // {} | .[]?)]
           | .[] | objects | to_entries[] | select((.value | type) == "object" or (.value | type) == "array")
           | "\(.key) must be one value, not a list or a map")
       end
@@ -436,6 +494,9 @@ if [ "$CHECK" = true ]; then
     # scaleway.state.prefix is the stub's state key, not a module input
     # (LIB-0028 §3).
     if [ "$jq_path" = .scaleway.state ]; then entry=$(jq -c 'del(.prefix)' <<<"$entry"); fi
+    # backblaze.apiKey.<key>.buckets is the stub's dependencies, not a module
+    # input (LIB-0029 §3).
+    if [ "$module" = backblaze/api-key ]; then entry=$(jq -c 'del(.buckets)' <<<"$entry"); fi
     sentry='{}'
     env_names='[]'
     if [ -f "$secrets" ]; then
@@ -474,6 +535,9 @@ if [ "$CHECK" = true ]; then
         fi
       done < <(wiring_lines "$module" "$dep" "$credentials")
     done
+    if [[ " $declared_deps " == *" bucket_"* ]] && ! jq -e 'index("bucket_ids") != null' <<<"$props" >/dev/null; then
+      missing_wiring="${missing_wiring:+$missing_wiring, }bucket_ids"
+    fi
     if [ -n "$unknown" ]; then
       fail "$where: $module v$version has no input(s) $unknown"
     elif [ -n "$missing_wiring" ]; then
