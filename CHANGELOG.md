@@ -46,6 +46,9 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-23
 
+- [workflows] Workloads sign in to Cloudflare with their own token; bootstrap keys only mint (LIB-0033) ([#159](https://github.com/noisypigeon/library/pull/159))
+- [terragrunt/root-hcl] Workloads sign in to Cloudflare with their own token; bootstrap keys only mint (LIB-0033) ([#159](https://github.com/noisypigeon/library/pull/159))
+- [cloudflare/api-token] Workloads sign in to Cloudflare with their own token; bootstrap keys only mint (LIB-0033) ([#159](https://github.com/noisypigeon/library/pull/159))
 - [adr] docs(adr): LIB-0033, self-bootstrapped Cloudflare and Backblaze keys ([#158](https://github.com/noisypigeon/library/pull/158))
 - [workflows] Site workloads deploy through a Pages shim repo (LIB-0031) ([#153](https://github.com/noisypigeon/library/pull/153))
 - [workflows] Workloads can own Cloudflare zones, records, rulesets and redirects (LIB-0030) ([#152](https://github.com/noisypigeon/library/pull/152))
