@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-13.
-- **Status**: Accepted; amended 2026-10-15, 2026-10-17, 2026-10-19 and 2026-10-20 (see `## Amendments`). Invariant 5 is reversed for garden, blog and runway by LIB-0017.
+- **Status**: Accepted; amended 2026-10-15, 2026-10-17, 2026-10-19 and 2026-10-20 (see `## Amendments`). Invariant 5 is reversed for garden, blog and runway by LIB-0017. LIB-0031 (proposed) would add a second shape beside the spoke: a shim repo that only deploys a spoke workload's site to Pages.
 
 ## Context
 
