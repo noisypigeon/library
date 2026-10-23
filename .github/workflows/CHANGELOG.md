@@ -4,6 +4,23 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.12.0] - 2026-10-23
+
+### Site workloads deploy through a Pages shim repo (LIB-0031)
+
+Builds [LIB-0031](https://github.com/noisypigeon/library/blob/main/docs/adr/LIB-0031-site-workloads-and-pages-shim-repos.md) (#148): a spoke workload can carry a Zola site, deployed by a shim repo that holds only a README and its Pages deploy workflow.
+
+- **`zola-site-pages.yml`** gains `repository` and `ref`. A shim repo passes the spoke and `main`, and `src_dir: workloads/<w>`, to build the spoke's site and deploy it to its own Pages domain. Both default to empty, so existing callers build their own repo as before.
+- **`site-dispatch.yml`** (new, reusable) is called by the spoke when its site changes. It dispatches the shim's deploy workflow with `BOT_GITHUB_TOKEN`, which needs `actions: write` on the shim, and fails loudly if it can't.
+- **`blog-changelog.yml`** gains `deploy_repo`, so a site's daily changelog digest dispatches the shim instead of the caller. Empty keeps today's behaviour.
+- **`terragrunt-detect.yml`**'s default pattern narrows `^workloads/` to a workload's `values.yaml` and `secrets.yaml`, so a post doesn't start a plan. A caller that overrides `leaf_pattern`, as runway does, narrows its own.
+
+LIB-0031 gains an amendment recording `site-dispatch.yml` and the override.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#153](https://github.com/noisypigeon/library/pull/153)
+
 ## [4.11.0] - 2026-10-23
 
 ### Workloads can own Cloudflare zones, records, rulesets and redirects (LIB-0030)
