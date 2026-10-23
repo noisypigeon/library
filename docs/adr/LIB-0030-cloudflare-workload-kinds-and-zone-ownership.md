@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-23.
-- **Status**: Proposed. Amends LIB-0023, whose §2 kind table gains Cloudflare
+- **Status**: Proposed; amended 2026-10-23 (see `## Amendments`). Amends LIB-0023, whose §2 kind table gains Cloudflare
   rows and whose §4 gains their defaults, and LIB-0028, whose §4 table gains
   the same rows. First of three records, with LIB-0031 and LIB-0032, that
   move the blog into runway.
@@ -212,3 +212,31 @@ Run against LIB-0032's migration of the blog.
    runway's hand-written leaves, render identically.
 5. **It converges.** After the migration, a re-plan of every leaf in runway
    shows `No changes.`
+
+## Amendments
+
+### 2026-10-23: what building it changed
+
+§§1–8 shipped in `terraform/cloudflare/ruleset` v0.2.0,
+`terragrunt/root-hcl` v5.2.0 and `workflows/v4.11.0`. Building them settled
+four things the record left open.
+
+1. **An apex redirect holds two records, and only some names clash with
+   them.** `cloudflare/apex-redirect` creates a proxied placeholder `A` at `@`
+   and, unless `include_www: false`, a `CNAME` at `www`. §6's checks refuse a
+   `dnsRecord` of type `A`, `AAAA` or `CNAME` at `@` in such a zone, and any
+   record at `www`. Mail and verification records at the apex, such as
+   `pigeon.dev`'s, are allowed.
+2. **A zone kind's version must take `zone`.** Every zone kind gets `zone`,
+   from its entry or `cloudflare.zone`. `resolve-workloads.sh --check` refuses
+   a version without that input, which means pinning `cloudflare/ruleset`
+   below 0.2.0.
+3. **`zones.yaml` re-plans exactly the leaves that read it.**
+   - root.hcl reads it for workload and zone leaves only, through
+     `mark_as_read`, so Terragrunt's git filter selects the zone leaves.
+   - `terragrunt-run.yml` selects every workload, as for a `root.hcl` change.
+   - `terragrunt-detect.yml`'s default pattern gains `^zones\.yaml$`. A
+     spoke that overrides `leaf_pattern`, as runway does, adds it there.
+4. **`cloudflare/ruleset` refuses `zone` and `zone_id` together**, through a
+   variable validation, so a hand-written leaf can't set both.
+

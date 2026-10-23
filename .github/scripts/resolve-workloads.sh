@@ -14,6 +14,9 @@
 # Backblaze kinds (LIB-0029) sign in with the spoke's Backblaze key and keep
 # their state in that same workload bucket. An API key depends on each
 # bucket its `buckets` list names, and gets their IDs as bucket_ids.
+# Cloudflare kinds (LIB-0030) do the same with the spoke's Cloudflare token.
+# A zone kind may act only on a zone the spoke's zones.yaml registers to its
+# workload, and a zone's entrypoints and records are checked for clashes.
 # Values, defaults and the module version are root.hcl's, at plan time: it
 # writes them into the leaf's generated module block as literals, since a
 # `type = any` variable set through TF_VAR_ arrives as a string.
@@ -107,6 +110,10 @@ KINDS=(
   "scaleway.iam.apiKey|scaleway/iam-api-key|singleton|project application|spoke|workload"
   "backblaze.bucket|backblaze/bucket|map||spoke|workload"
   "backblaze.apiKey|backblaze/api-key|map|buckets|spoke|workload"
+  "cloudflare.bucket|cloudflare/bucket|map||spoke|workload"
+  "cloudflare.dnsRecord|cloudflare/dns-record|map||spoke|workload"
+  "cloudflare.ruleset|cloudflare/ruleset|map||spoke|workload"
+  "cloudflare.apexRedirect|cloudflare/apex-redirect|map||spoke|workload"
 )
 
 # A dependency's stub, relative to its workload directory, so a Backblaze
@@ -272,6 +279,29 @@ EXPECTED_DIR="$(mktemp -d)"
 trap 'rm -rf "$EXPECTED_DIR"' EXIT
 mkdir -p "$EXPECTED_DIR/.cache"
 
+# zones.yaml (LIB-0030 §2): each zone's apex and its one owner, a workload or
+# `terraform`. Without the file no workload may use a zone.
+ZONES='{}'
+if [ -f "$SPOKE_DIR/zones.yaml" ]; then
+  if ! ZONES=$(yq -o=json '. // {}' "$SPOKE_DIR/zones.yaml"); then
+    fail "zones.yaml: not valid YAML"
+    ZONES='{}'
+  fi
+  zone_problems=$(jq -r --arg kebab "$KEBAB" '
+    if type != "object" then "zones.yaml must be a mapping of zones"
+    else to_entries[] |
+      (if (.key | test("^[a-z0-9-]+(\\.[a-z0-9-]+)+$")) then empty else "zones.yaml: \(.key) is not a zone apex domain" end),
+      (if (.value | type) == "object" and (.value.workload | type) == "string" and (.value.workload == "terraform" or (.value.workload | test($kebab)))
+       then empty else "zones.yaml: \(.key) needs a workload, a workload name or terraform" end)
+    end
+  ' <<<"$ZONES")
+  while IFS= read -r msg; do [ -n "$msg" ] && fail "$msg"; done <<<"$zone_problems"
+  while IFS= read -r owner; do
+    [ -z "$owner" ] && continue
+    [ -f "$SPOKE_DIR/workloads/$owner/values.yaml" ] || fail "zones.yaml: workload $owner has no workloads/$owner/values.yaml"
+  done < <(jq -r 'objects | .[] | .workload? // empty | select(. != "terraform")' <<<"$ZONES" | sort -u)
+fi
+
 # Each workload, validated and rendered into $EXPECTED_DIR at the path its
 # stubs have in the spoke.
 instances=()   # "<workload>|<module>|<instance>|<jq path>|<declared dependencies>|<credentials>"
@@ -289,12 +319,12 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
     continue
   fi
 
-  structural=$(jq -r --arg kebab "$KEBAB" '
+  structural=$(jq -r --arg kebab "$KEBAB" --arg workload "$workload" --argjson zones "$ZONES" '
     def entry_ok($where): if . == null or type == "object" then empty else "\($where) must be a mapping of module inputs" end;
     def keys_in($where; $allowed): (keys - $allowed)[] | "unknown key \($where).\(.); known: \($allowed | join(", "))";
     if type != "object" then "the file must be a mapping"
     else
-      keys_in(""; ["prefix", "suffix", "scaleway", "backblaze"]),
+      keys_in(""; ["prefix", "suffix", "scaleway", "backblaze", "cloudflare"]),
       (if (.prefix | type) != "string" or .prefix == "" then "prefix must be a non-empty string" else empty end),
       (if (.suffix | type) != "string" or .suffix == "" then "suffix must be a non-empty string" else empty end),
       (.scaleway // {} | if type != "object" then "scaleway must be a mapping" else
@@ -349,7 +379,47 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
             (if .value == null then "backblaze.apiKey.\($k) needs buckets and capabilities (LIB-0029 §§2-3)" else empty end)
         end)
       end),
-      ([.scaleway.project, .scaleway.deployer, .scaleway.state, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?), (.backblaze.bucket // {} | .[]?), (.backblaze.apiKey // {} | .[]?)]
+      # Cloudflare kinds (LIB-0030 §§1-6).
+      (. as $file | .cloudflare // {} | if type != "object" then "cloudflare must be a mapping" else
+        keys_in("cloudflare"; ["zone", "bucket", "dnsRecord", "ruleset", "apexRedirect"]),
+        (if has("zone") and ((.zone | type) != "string" or (.zone | test("\\.") | not)) then "cloudflare.zone must be a zone apex domain (LIB-0030 §3)"
+         elif has("zone") and ($zones[.zone].workload // "") != $workload then "cloudflare.zone: \(.zone) is not registered to workload \($workload) in zones.yaml (LIB-0030 §2)"
+         else empty end),
+        (.zone // "") as $dz |
+        (("bucket", "dnsRecord", "ruleset", "apexRedirect") as $m | .[$m] // {} |
+          if type != "object" then "cloudflare.\($m) must be a mapping of names" else
+          to_entries[] | .key as $k | (.value // {}) as $e |
+            (if ($k | test($kebab)) then empty else "cloudflare.\($m).\($k): name must be kebab-case" end),
+            (.value | entry_ok("cloudflare.\($m).\($k)")),
+            ($e | objects | select(has("account_id") or has("zone_id")) | "cloudflare.\($m).\($k) cannot set account_id or zone_id; the account is the spoke one, and a zone is named (LIB-0030 §§4-5)"),
+            (if $m == "bucket" then
+               ($e | objects | select(has("exact_name") | not)
+                 | ((.name_prefix // "\($file.prefix)-\($k)") + "-xxxxxx-" + (.name_suffix // $file.suffix)) as $n
+                 | if ($n | length) > 63 then "cloudflare.bucket.\($k): its name, \($n | length) characters with the random code, is longer than the 63 R2 allows; shorten the key or set exact_name (LIB-0030 §4)" else empty end)
+             else
+               (($e | objects | .zone) // $dz) as $z |
+               if $z == "" then "cloudflare.\($m).\($k) has no zone, and cloudflare.zone is not set (LIB-0030 §3)"
+               elif ($zones[$z].workload // "") != $workload then "cloudflare.\($m).\($k): zone \($z) is not registered to workload \($workload) in zones.yaml (LIB-0030 §2)"
+               else empty end
+             end),
+            ({dnsRecord: ["type", "content"], ruleset: ["kind", "phase", "rules"], apexRedirect: ["target_url"]}[$m] // [] | .[] as $r
+              | select(($e | objects | has($r)) | not) | "cloudflare.\($m).\($k) needs \($r) (LIB-0030 §4)")
+          end),
+        # One entrypoint per zone and phase, one record per name and type (§6).
+        ([.ruleset // {} | to_entries[] | {k: .key, z: ((.value | objects | .zone) // $dz), p: (.value | objects | .phase)}]) as $rs |
+        ([.apexRedirect // {} | to_entries[] | {k: .key, z: ((.value | objects | .zone) // $dz), www: ((.value | objects | .include_www) // true)}]) as $ar |
+        ([.dnsRecord // {} | to_entries[] | {k: .key, z: ((.value | objects | .zone) // $dz), n: ((.value | objects | .name) // .key), t: ((.value | objects | .type) // "" | tostring | ascii_upcase), c: (.value | objects | .content)}]) as $dr |
+        ($rs | group_by([.z, .p])[] | select(length > 1) | "cloudflare.ruleset: \(map(.k) | join(", ")) share zone \(.[0].z) and phase \(.[0].p); a zone has one entrypoint per phase (LIB-0030 §6)"),
+        ($ar | group_by(.z)[] | select(length > 1) | "cloudflare.apexRedirect: \(map(.k) | join(", ")) share zone \(.[0].z) (LIB-0030 §6)"),
+        ($rs[] | select(.p == "http_request_dynamic_redirect") | . as $r | select($ar | any(.z == $r.z)) | "cloudflare.ruleset.\(.k): the http_request_dynamic_redirect entrypoint of \(.z) belongs to its apexRedirect (LIB-0030 §6)"),
+        ($dr | group_by([.z, .n, .t])[] | select(length > 1) | select(([.[0].t] | inside(["MX", "TXT", "CAA", "SRV", "NS"]) | not) or ((map(.c) | unique | length) < length))
+          | "cloudflare.dnsRecord: \(map(.k) | join(", ")) are one record, \(.[0].n) \(.[0].t) in \(.[0].z) (LIB-0030 §6)"),
+        # An apexRedirect holds a placeholder A at @, which an A, AAAA or CNAME
+        # there would clash with, and a CNAME at www, which nothing may share.
+        ($dr[] as $d | $ar[] | select(.z == $d.z and (($d.n == "@" and ([$d.t] | inside(["A", "AAAA", "CNAME"]))) or ($d.n == "www" and .www)))
+          | "cloudflare.dnsRecord.\($d.k): the apexRedirect \(.k) already holds a placeholder \(if $d.n == "@" then "A" else "CNAME" end) record at \($d.n) in \($d.z) (LIB-0030 §6)")
+      end),
+      ([.scaleway.project, .scaleway.deployer, .scaleway.state, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?), (.backblaze.bucket // {} | .[]?), (.backblaze.apiKey // {} | .[]?), (.cloudflare // {} | (.bucket, .dnsRecord, .ruleset, .apexRedirect) // {} | .[]?)]
         | .[] | objects | select(has("version")) | .version
         | if type == "string" and test("^[0-9]+(\\.[0-9]+){0,2}$") then empty
           else "version \(tojson) must be a quoted X, X.Y or X.Y.Z" end)
@@ -460,7 +530,7 @@ if [ "$CHECK" = true ]; then
       else
         (del(.sops) | leaves | select((.value | type) != "string" or (.value | test("^ENC\\[") | not))
           | "\(.path | map(tostring) | join(".")) is not encrypted"),
-        ((keys - ["sops", "env", "scaleway", "backblaze"])[] | "unknown key \(.); known: env, scaleway, backblaze"),
+        ((keys - ["sops", "env", "scaleway", "backblaze", "cloudflare"])[] | "unknown key \(.); known: env, scaleway, backblaze, cloudflare"),
         (.env // {} | to_entries[] | select((.value | type) != "string") | "env.\(.key) must be one value, not a list or a map"),
         (.scaleway // {} | to_entries[] as $k |
           if $k.key == "project" or $k.key == "deployer" or $k.key == "state" then
@@ -476,7 +546,12 @@ if [ "$CHECK" = true ]; then
             ($k.value // {} | keys[] as $i | select($v.backblaze[$k.key] // {} | has($i) | not) | "backblaze.\($k.key).\($i): values.yaml declares no such entry"),
             (if $k.key == "apiKey" then ($k.value // {} | to_entries[] | select(.value | objects | has("bucket_ids")) | "backblaze.apiKey.\(.key).bucket_ids can'"'"'t be set (LIB-0029 §3)") else empty end)
           else "unknown key backblaze.\($k.key)" end),
-        ([.scaleway.project, .scaleway.deployer, .scaleway.state, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?), (.backblaze.bucket // {} | .[]?), (.backblaze.apiKey // {} | .[]?)]
+        (.cloudflare // {} | to_entries[] as $k |
+          if ($k.key | IN("bucket", "dnsRecord", "ruleset", "apexRedirect")) then
+            ($k.value // {} | keys[] as $i | select($v.cloudflare[$k.key] // {} | has($i) | not) | "cloudflare.\($k.key).\($i): values.yaml declares no such entry"),
+            ($k.value // {} | to_entries[] | select(.value | objects | has("account_id") or has("zone_id")) | "cloudflare.\($k.key).\(.key) cannot set account_id or zone_id (LIB-0030 §§4-5)")
+          else "unknown key cloudflare.\($k.key)" end),
+        ([.scaleway.project, .scaleway.deployer, .scaleway.state, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?), (.backblaze.bucket // {} | .[]?), (.backblaze.apiKey // {} | .[]?), (.cloudflare // {} | (.bucket, .dnsRecord, .ruleset, .apexRedirect) // {} | .[]?)]
           | .[] | objects | to_entries[] | select((.value | type) == "object" or (.value | type) == "array")
           | "\(.key) must be one value, not a list or a map")
       end
@@ -538,6 +613,16 @@ if [ "$CHECK" = true ]; then
     if [[ " $declared_deps " == *" bucket_"* ]] && ! jq -e 'index("bucket_ids") != null' <<<"$props" >/dev/null; then
       missing_wiring="${missing_wiring:+$missing_wiring, }bucket_ids"
     fi
+    # A Cloudflare zone kind always gets `zone`, from the entry or the
+    # workload default (LIB-0030 §3), so its version must take it:
+    # cloudflare/ruleset does from v0.2.0.
+    case "$module" in
+      cloudflare/dns-record | cloudflare/ruleset | cloudflare/apex-redirect)
+        if ! jq -e 'index("zone") != null' <<<"$props" >/dev/null; then
+          missing_wiring="${missing_wiring:+$missing_wiring, }zone"
+        fi
+        ;;
+    esac
     if [ -n "$unknown" ]; then
       fail "$where: $module v$version has no input(s) $unknown"
     elif [ -n "$missing_wiring" ]; then

@@ -282,7 +282,7 @@ jobs:
             resolver="$GITHUB_WORKSPACE/$SCRIPTS_DIR/resolve-workloads.sh"
             "$resolver"
             changed=$(git diff --name-only "$base" HEAD)
-            if grep -qE '^(root\.hcl|spoke\.hcl|terraform/secrets/)' <<<"$changed"; then
+            if grep -qE '^(root\.hcl|spoke\.hcl|zones\.yaml|terraform/secrets/)' <<<"$changed"; then
               names=$(find workloads -mindepth 2 -maxdepth 2 -name values.yaml | cut -d/ -f2)
             else
               names=$(grep -E '^workloads/[^/]+/(values|secrets)\.yaml$' <<<"$changed" | cut -d/ -f2 | sort -u || true)

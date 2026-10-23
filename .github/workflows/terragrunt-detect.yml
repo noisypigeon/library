@@ -19,7 +19,7 @@ on:
         description: "ERE matching paths that require a terragrunt run."
         type: string
         required: false
-        default: '^[^/]+/terraform/|^terraform/secrets/|^workloads/|^\.env\.enc$|^\.sops\.yaml$'
+        default: '^[^/]+/terraform/|^terraform/secrets/|^workloads/|^zones\.yaml$|^\.env\.enc$|^\.sops\.yaml$'
     outputs:
       affects-leaves:
         description: "Whether the PR touches a terraform leaf ('true'/'false')."
