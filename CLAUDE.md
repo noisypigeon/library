@@ -68,6 +68,11 @@ nothing that is deployed:
   publishes to crates.io (LIB-0001's 2026-10-19 amendment). Every
   crate-specific value (`--crate`, `--bin`, `--codesign-id`, the target
   matrix) is an input.
+- `.github/workflows/site-dispatch.yml` — a spoke whose workload holds a Zola
+  site calls it to dispatch the site's deploy in its Pages shim repo, a repo
+  holding only a README and that deploy workflow (LIB-0031). The shim calls
+  `zola-site-pages.yml` with `repository` and `ref` to build the spoke's
+  `main`, since Pages deploys only the repo it runs in (DEV-0156).
 - `.github/workflows/container-image-release.yml` — builds a caller's
   Dockerfile natively per platform, runs the caller's smoke test inside each
   image before anything is pushed, then publishes one multi-arch,

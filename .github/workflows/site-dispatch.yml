@@ -1,0 +1,42 @@
+# Reusable: dispatches a site workload's deploy in its Pages shim repo
+# (LIB-0031 §4). actions/deploy-pages only deploys the repo it runs in
+# (DEV-0156), so a spoke whose workload holds a site can't deploy it itself:
+# this asks the shim repo's deploy workflow to build the spoke's current main
+# and deploy that. The spoke's caller says when, by its own `on:` paths.
+#
+# Needs BOT_GITHUB_TOKEN with actions: write on site_repo. Without it this
+# fails loudly -- the symptom otherwise is a merged post that never deploys.
+name: Site dispatch
+on:
+  workflow_call:
+    inputs:
+      site_repo:
+        description: "owner/name of the Pages shim repo that deploys the site."
+        type: string
+        required: true
+      workflow:
+        description: "Deploy workflow filename in site_repo."
+        type: string
+        required: true
+    secrets:
+      BOT_GITHUB_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch the shim's deploy
+        env:
+          GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+          SITE_REPO: ${{ inputs.site_repo }}
+          WORKFLOW: ${{ inputs.workflow }}
+        run: |
+          if ! gh workflow run "$WORKFLOW" -R "$SITE_REPO" --ref main; then
+            echo "::error::could not dispatch $WORKFLOW in $SITE_REPO; BOT_GITHUB_TOKEN needs actions: write there (LIB-0031 §4)"
+            exit 1
+          fi
+          echo "Dispatched $WORKFLOW in $SITE_REPO."
