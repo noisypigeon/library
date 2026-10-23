@@ -17,6 +17,9 @@
 # Cloudflare kinds (LIB-0030) do the same with the spoke's Cloudflare token.
 # A zone kind may act only on a zone the spoke's zones.yaml registers to its
 # workload, and a zone's entrypoints and records are checked for clashes.
+# A workload that owns a zone, or declares an R2 bucket, also gets its own
+# Cloudflare token, cloudflare/api-token/deployer, which its Cloudflare leaves
+# sign in with (LIB-0033 §4).
 # Values, defaults and the module version are root.hcl's, at plan time: it
 # writes them into the leaf's generated module block as literals, since a
 # `type = any` variable set through TF_VAR_ arrives as a string.
@@ -92,10 +95,14 @@ done
 # - shape: a singleton's instance is `main`, a map's is each key, an
 #   implicit kind's is `main` in every workload, with or without an entry
 #   (LIB-0024 §1, LIB-0028 §1), and `state` is the workload's state bucket,
-#   whose instance is `state` (LIB-0028 §2).
+#   whose instance is `state` (LIB-0028 §2), and `cfimplicit` is the
+#   workload's Cloudflare token, whose instance is `deployer`, present when
+#   zones.yaml gives the workload a zone or it declares an R2 bucket
+#   (LIB-0033 §4).
 # - credentials (LIB-0024 §2): `spoke` kinds sign in with the spoke's key;
-#   `workload` kinds with the workload deployer's, which they then also depend
-#   on.
+#   `workload` kinds with their provider's workload credential, which they
+#   then also depend on: a Scaleway kind the deployer's key, a Cloudflare kind
+#   the workload's token, cf_token (LIB-0033 §4).
 # - state (LIB-0028 §4): `spoke` kinds keep state in the spoke's bucket;
 #   `workload` kinds in the workload's, so they also depend on the state
 #   bucket and on the deployer whose key signs in to it.
@@ -110,10 +117,11 @@ KINDS=(
   "scaleway.iam.apiKey|scaleway/iam-api-key|singleton|project application|spoke|workload"
   "backblaze.bucket|backblaze/bucket|map||spoke|workload"
   "backblaze.apiKey|backblaze/api-key|map|buckets|spoke|workload"
-  "cloudflare.bucket|cloudflare/bucket|map||spoke|workload"
-  "cloudflare.dnsRecord|cloudflare/dns-record|map||spoke|workload"
-  "cloudflare.ruleset|cloudflare/ruleset|map||spoke|workload"
-  "cloudflare.apexRedirect|cloudflare/apex-redirect|map||spoke|workload"
+  "cloudflare.deployer|cloudflare/api-token|cfimplicit||spoke|workload"
+  "cloudflare.bucket|cloudflare/bucket|map||workload|workload"
+  "cloudflare.dnsRecord|cloudflare/dns-record|map||workload|workload"
+  "cloudflare.ruleset|cloudflare/ruleset|map||workload|workload"
+  "cloudflare.apexRedirect|cloudflare/apex-redirect|map||workload|workload"
 )
 
 # A dependency's stub, relative to its workload directory, so a Backblaze
@@ -125,6 +133,7 @@ dep_dir() {
     application) echo "scaleway/iam-application/main" ;;
     deployer) echo "scaleway/terraform-deployer-iam/main" ;;
     state) echo "scaleway/bucket/state" ;;
+    cf_token) echo "cloudflare/api-token/deployer" ;;
     bucket_*) echo "backblaze/bucket/$(echo "${1#bucket_}" | tr _ -)" ;;
   esac
 }
@@ -144,7 +153,8 @@ wiring_lines() {
       echo "project_ids|[dependency.project.outputs.module.id]"
       echo "default_project_id|dependency.project.outputs.module.id"
       ;;
-    *:deployer)
+    cloudflare/*:cf_token) echo "cloudflare_api_token|dependency.cf_token.outputs.module.token" ;;
+    scaleway/*:deployer)
       if [ "$3" = workload ]; then
         echo "scaleway_access_key|dependency.deployer.outputs.module.access_key"
         echo "scaleway_secret_key|dependency.deployer.outputs.module.secret_key"
@@ -381,7 +391,9 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
       end),
       # Cloudflare kinds (LIB-0030 §§1-6).
       (. as $file | .cloudflare // {} | if type != "object" then "cloudflare must be a mapping" else
-        keys_in("cloudflare"; ["zone", "bucket", "dnsRecord", "ruleset", "apexRedirect"]),
+        keys_in("cloudflare"; ["zone", "deployer", "bucket", "dnsRecord", "ruleset", "apexRedirect"]),
+        (.deployer | entry_ok("cloudflare.deployer")),
+        (.deployer // {} | objects | select(has("account_id")) | "cloudflare.deployer cannot set account_id; the account is the spoke one (LIB-0033 §4)"),
         (if has("zone") and ((.zone | type) != "string" or (.zone | test("\\.") | not)) then "cloudflare.zone must be a zone apex domain (LIB-0030 §3)"
          elif has("zone") and ($zones[.zone].workload // "") != $workload then "cloudflare.zone: \(.zone) is not registered to workload \($workload) in zones.yaml (LIB-0030 §2)"
          else empty end),
@@ -419,7 +431,7 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
         ($dr[] as $d | $ar[] | select(.z == $d.z and (($d.n == "@" and ([$d.t] | inside(["A", "AAAA", "CNAME"]))) or ($d.n == "www" and .www)))
           | "cloudflare.dnsRecord.\($d.k): the apexRedirect \(.k) already holds a placeholder \(if $d.n == "@" then "A" else "CNAME" end) record at \($d.n) in \($d.z) (LIB-0030 §6)")
       end),
-      ([.scaleway.project, .scaleway.deployer, .scaleway.state, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?), (.backblaze.bucket // {} | .[]?), (.backblaze.apiKey // {} | .[]?), (.cloudflare // {} | (.bucket, .dnsRecord, .ruleset, .apexRedirect) // {} | .[]?)]
+      ([.scaleway.project, .scaleway.deployer, .scaleway.state, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?), (.backblaze.bucket // {} | .[]?), (.backblaze.apiKey // {} | .[]?), (.cloudflare.deployer), (.cloudflare // {} | (.bucket, .dnsRecord, .ruleset, .apexRedirect) // {} | .[]?)]
         | .[] | objects | select(has("version")) | .version
         | if type == "string" and test("^[0-9]+(\\.[0-9]+){0,2}$") then empty
           else "version \(tojson) must be a quoted X, X.Y or X.Y.Z" end)
@@ -433,13 +445,22 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
   for kind in "${KINDS[@]}"; do
     IFS='|' read -r yaml_path module shape deps credentials state <<<"$kind"
     jq_path=".${yaml_path}"
-    [ "$credentials" = workload ] && deps="$deps deployer"
+    if [ "$credentials" = workload ]; then
+      case "$module" in
+        cloudflare/*) deps="$deps cf_token" ;;
+        *) deps="$deps deployer" ;;
+      esac
+    fi
     [ "$state" = workload ] && deps="$deps deployer state"
     deps=$(tr ' ' '\n' <<<"$deps" | awk 'NF && !seen[$0]++' | tr '\n' ' ')
     if [ "$shape" = map ]; then
       names=$(jq -r "$jq_path // {} | keys[]" <<<"$json")
     elif [ "$shape" = implicit ]; then
       names=main
+    elif [ "$shape" = cfimplicit ]; then
+      names=$(jq -r --arg w "$workload" --argjson zones "$ZONES" '
+        if ([$zones | to_entries[] | select(.value.workload? == $w)] | length) > 0
+           or ((.cloudflare.bucket // {}) | length) > 0 then "deployer" else empty end' <<<"$json")
     elif [ "$shape" = state ]; then
       names=state
     else
@@ -547,7 +568,9 @@ if [ "$CHECK" = true ]; then
             (if $k.key == "apiKey" then ($k.value // {} | to_entries[] | select(.value | objects | has("bucket_ids")) | "backblaze.apiKey.\(.key).bucket_ids can'"'"'t be set (LIB-0029 §3)") else empty end)
           else "unknown key backblaze.\($k.key)" end),
         (.cloudflare // {} | to_entries[] as $k |
-          if ($k.key | IN("bucket", "dnsRecord", "ruleset", "apexRedirect")) then
+          if $k.key == "deployer" then
+            ($k.value // {} | objects | select(has("account_id")) | "cloudflare.deployer cannot set account_id (LIB-0033 §4)")
+          elif ($k.key | IN("bucket", "dnsRecord", "ruleset", "apexRedirect")) then
             ($k.value // {} | keys[] as $i | select($v.cloudflare[$k.key] // {} | has($i) | not) | "cloudflare.\($k.key).\($i): values.yaml declares no such entry"),
             ($k.value // {} | to_entries[] | select(.value | objects | has("account_id") or has("zone_id")) | "cloudflare.\($k.key).\(.key) cannot set account_id or zone_id (LIB-0030 §§4-5)")
           else "unknown key cloudflare.\($k.key)" end),

@@ -236,6 +236,7 @@ echo "Generated ${overview_count} module overview page(s) under ${CONTENT_DIR#"$
 # inputs without bucket_ids, which a workload never writes, plus `buckets`.
 # cloudflare/bucket and cloudflare/ruleset get one too (LIB-0030 §7): without
 # account_id, which is the spoke's, and zone_id, since a workload names zones.
+# So does cloudflare/api-token, a workload's own token (LIB-0033 §4).
 if [ -n "$STATIC_ROOT" ]; then
   if [ ! -d "$STATIC_ROOT" ]; then
     echo "::error::--static-root $STATIC_ROOT is not a directory" >&2
@@ -246,7 +247,7 @@ if [ -n "$STATIC_ROOT" ]; then
 
   kinds_json='{}'
   schema_count=0
-  for wmodule in scaleway/project scaleway/iam-application scaleway/terraform-deployer-iam scaleway/bucket scaleway/iam-api-key backblaze/bucket backblaze/api-key cloudflare/bucket cloudflare/dns-record cloudflare/ruleset cloudflare/apex-redirect; do
+  for wmodule in scaleway/project scaleway/iam-application scaleway/terraform-deployer-iam scaleway/bucket scaleway/iam-api-key backblaze/bucket backblaze/api-key cloudflare/bucket cloudflare/dns-record cloudflare/ruleset cloudflare/apex-redirect cloudflare/api-token; do
     wversions="$(templates_tags "terraform/${wmodule}/v*" \
       | sed -nE 's#.*/v([0-9]+\.[0-9]+\.[0-9]+)$#\1#p' \
       | sort -t. -k1,1n -k2,2n -k3,3n -u)"
@@ -285,7 +286,7 @@ if [ -n "$STATIC_ROOT" ]; then
         ' "$out/inputs.schema.json" >"$out/workload.schema.json"
         schema_count=$((schema_count + 1))
       fi
-      if [ "$wmodule" = cloudflare/bucket ] || [ "$wmodule" = cloudflare/ruleset ]; then
+      if [ "$wmodule" = cloudflare/bucket ] || [ "$wmodule" = cloudflare/ruleset ] || [ "$wmodule" = cloudflare/api-token ]; then
         jq --arg id "${SCHEMA_BASE_URL}/terraform/${wmodule}/v${v}/workload.schema.json" '
           ."$id" = $id | del(.properties.account_id, .properties.zone_id)
         ' "$out/inputs.schema.json" >"$out/workload.schema.json"
@@ -299,7 +300,7 @@ if [ -n "$STATIC_ROOT" ]; then
     kinds=("$wmodule|inputs")
     if [ "$wmodule" = scaleway/bucket ]; then kinds+=("$wmodule#state|state"); fi
     case "$wmodule" in
-      backblaze/api-key | cloudflare/bucket | cloudflare/ruleset) kinds=("$wmodule#workload|workload") ;;
+      backblaze/api-key | cloudflare/bucket | cloudflare/ruleset | cloudflare/api-token) kinds=("$wmodule#workload|workload") ;;
     esac
     for wkind in "${kinds[@]}"; do
       kinds_json="$(jq --arg m "$wmodule" --arg key "${wkind%|*}" --arg file "${wkind#*|}" --arg versions "$wversions" --arg base "$SCHEMA_BASE_URL" '
@@ -328,7 +329,7 @@ if [ -n "$STATIC_ROOT" ]; then
   jq --arg base "$SCHEMA_BASE_URL" '. as $k | {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "$id": "\($base)/schemas/workload/v1.json",
-    title: "Workload values.yaml (LIB-0023, LIB-0028, LIB-0029, LIB-0030)",
+    title: "Workload values.yaml (LIB-0023, LIB-0028, LIB-0029, LIB-0030, LIB-0033)",
     type: "object",
     additionalProperties: false,
     required: ["prefix", "suffix"],
@@ -377,6 +378,7 @@ if [ -n "$STATIC_ROOT" ]; then
         type: ["object", "null"],
         additionalProperties: false,
         properties: {
+          deployer: ($k["cloudflare/api-token#workload"] // {}),
           zone: {type: "string", pattern: "^[a-z0-9-]+(\\.[a-z0-9-]+)+$", description: "The zone apex every zone entry uses unless it sets its own (LIB-0030 §3)"},
           bucket: {
             type: ["object", "null"],

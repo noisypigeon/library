@@ -467,6 +467,21 @@ cloudflare:
   - a zone gets one entrypoint ruleset per phase and one record per name and
     type, checked before planning.
 
+Since v5.3.0 (LIB-0033), with `workflows/v4.13.0` or later, those Cloudflare
+leaves sign in with the workload's own token, not the spoke's:
+
+- **A workload that owns a zone, or declares an R2 bucket,** gets
+  `workloads/<w>/cloudflare/api-token/deployer`, minted with the spoke's
+  token. By default it has *Zone Read*, *DNS Write* and *Dynamic URL
+  Redirects Write* on exactly the zones `zones.yaml` gives it, plus *Workers
+  R2 Storage Write* on the account if it has buckets. It rotates every 30
+  days. `cloudflare.deployer` overrides its inputs, `policies` included.
+- **The spoke's own keys are minted too.** `cloudflare_breakglass.enc` and
+  `backblaze_breakglass.enc` hold hand-made keys that can only mint keys, read
+  only by the deployer leaves `spoke.hcl` allowlists under `breakglass`
+  (LIB-0014 §2). Their outputs are copied by hand into `cloudflare.enc` and
+  `backblaze.enc`.
+
 A workload may also have a `workloads/<workload>/secrets.yaml` (v4.5.0,
 LIB-0025), encrypted with sops as YAML. Its rule in the spoke's `.sops.yaml` is
 `^workloads/[^/]+/secrets\.yaml$`. It holds secret inputs under the same kind

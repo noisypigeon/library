@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-23.
-- **Status**: Proposed. Amends:
+- **Status**: Proposed; amended 2026-10-23 (see `## Amendments`). Amends:
   - LIB-0014, which gains two breakglass providers;
   - LIB-0024, whose deployers reach Cloudflare;
   - LIB-0030, whose Cloudflare kinds move to workload credentials, behind a
@@ -230,3 +230,34 @@ Run in runway, during LIB-0032.
 
    If either refuses, the bootstrap key's grants widen to the smallest set
    that works. That's an amendment, not a silent change.
+
+## Amendments
+
+### 2026-10-23: what building it changed
+
+§§1–4 and §7 shipped in `terraform/cloudflare/api-token` v0.1.0,
+`terragrunt/root-hcl` v5.3.0 and `workflows/v4.13.0`. Building them settled
+four things.
+
+1. **A workload's token is keyed on what it owns, not on its entries.** §4
+   created it when the workload declared a Cloudflare kind. But LIB-0032's
+   import runs before any Cloudflare entry is committed, signed in with that
+   token. So the token exists whenever `zones.yaml` registers a zone to the
+   workload, or the workload declares a `cloudflare.bucket`.
+2. **The first `cloudflare.enc` holds the bootstrap token.** `cloudflare.enc`
+   is required wherever Cloudflare is on, and the deployer leaf is such a
+   place, but its token is that leaf's output. So at bootstrap the owner
+   writes the account ID and, as a placeholder, the bootstrap token. The
+   hand-copy (§2) replaces it. No template change is needed.
+3. **The module checks what the minter may grant.** The provider's
+   permission-groups list marks each group `is_selectable` for the caller.
+   `cloudflare/api-token` fails a plan that asks for a group that isn't, by
+   name. That's §Verification 6's first question, answered at plan time.
+4. **Two names are confirmed only by the first real plan.**
+   - The token's secret is the provider's `value`, exposed as `token`.
+   - Cloudflare's docs list the API-token permission groups at user scope,
+     while the provider's docs name *Account API Tokens Read/Write*. The
+     module resolves account policies at account scope. If the first plan
+     finds no such group there, the spoke deployer's policy names change in
+     another amendment.
+
