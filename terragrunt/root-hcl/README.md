@@ -428,6 +428,45 @@ backblaze:
   `spoke.hcl`'s `providers` map has it. `leaves` scopes hand-written leaves
   only, so a spoke adds nothing for workloads.
 
+Since v5.2.0 (LIB-0030), with `workflows/v4.11.0` or later, a workload may also
+declare Cloudflare resources, in zones a root `zones.yaml` gives it:
+
+```yaml
+# zones.yaml
+example.org:
+  workload: site
+example.net:
+  workload: terraform   # hand-written terraform/cloudflare/example.net/ leaves
+```
+
+```yaml
+# workloads/site/values.yaml
+cloudflare:
+  zone: example.org
+  dnsRecord:
+    www:
+      type: CNAME
+      content: example.github.io
+  apexRedirect:
+    to-www:
+      target_url: https://www.example.org
+```
+
+- **Four kinds:** `bucket` (R2), `dnsRecord`, `ruleset` and `apexRedirect`.
+  They sign in with the spoke's Cloudflare token and keep their state in the
+  workload's bucket.
+- **A zone has one owner.** A workload may act only on zones `zones.yaml`
+  registers to it. A hand-written zone leaf may not use a zone a workload
+  owns.
+- **`cloudflare.zone`** fills `zone` for every entry that doesn't set its own.
+- **Defaults and refusals:**
+  - a record's `name` defaults to its key, and its `comment` to
+    `workloads/<w>`;
+  - `account_id` comes from `cloudflare.enc`, as a sensitive variable;
+  - `account_id` and `zone_id` can't be written;
+  - a zone gets one entrypoint ruleset per phase and one record per name and
+    type, checked before planning.
+
 A workload may also have a `workloads/<workload>/secrets.yaml` (v4.5.0,
 LIB-0025), encrypted with sops as YAML. Its rule in the spoke's `.sops.yaml` is
 `^workloads/[^/]+/secrets\.yaml$`. It holds secret inputs under the same kind
