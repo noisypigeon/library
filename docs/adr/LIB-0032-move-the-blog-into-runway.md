@@ -4,7 +4,8 @@
 - **Date**: 2026-10-23.
 - **Status**: Proposed. Applies LIB-0030 and LIB-0031 to `noisypigeon/blog`.
   Amends LIB-0017, whose spoke list loses blog. Last of three records, with
-  LIB-0030 and LIB-0031.
+  LIB-0030 and LIB-0031. LIB-0033 (proposed) would replace §1's hand-made
+  Cloudflare token with a minting key and a Terraform-made deployer.
 
 ## Context
 

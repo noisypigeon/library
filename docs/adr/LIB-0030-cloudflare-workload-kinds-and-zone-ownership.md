@@ -2,7 +2,8 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-23.
-- **Status**: Proposed; amended 2026-10-23 (see `## Amendments`). Amends LIB-0023, whose §2 kind table gains Cloudflare
+- **Status**: Proposed; amended 2026-10-23 (see `## Amendments`). LIB-0033
+  (proposed) would move §1's credentials from spoke to workload. Amends LIB-0023, whose §2 kind table gains Cloudflare
   rows and whose §4 gains their defaults, and LIB-0028, whose §4 table gains
   the same rows. First of three records, with LIB-0031 and LIB-0032, that
   move the blog into runway.
