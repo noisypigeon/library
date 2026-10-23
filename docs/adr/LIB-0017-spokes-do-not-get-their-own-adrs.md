@@ -5,6 +5,7 @@
 - **Status**: Accepted. Amends LIB-0001 (invariant 5, §2, and its 2026-10-15
   amendment's item 1), and DEV-0031's filing target (§6). Amended
   2026-10-19 (see `## Amendments`): §5's boundary is lifted for CLI-0161.
+  LIB-0032 (proposed) would make blog a shim repo, not a spoke.
   Amended 2026-10-20 by LIB-0021: §1 no longer asks for a list of records.
 
 ## Context
