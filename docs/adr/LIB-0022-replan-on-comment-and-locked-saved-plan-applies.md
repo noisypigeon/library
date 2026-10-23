@@ -6,6 +6,8 @@
   state-locking item that LIB-0007 and LIB-0016 left out of scope.
 - **Amended 2026-10-20**: LIB-0024 keeps `terragrunt/apply` pending after an
   apply whose plan deferred workload leaves, until a re-plan defers nothing.
+- **Amended 2026-10-23** (see `## Amendments`): a comment-triggered run checks
+  out the PR's head commit as the API reports it, not `refs/pull/<n>/head`.
 - **Amended 2026-10-22**: LIB-0026 replaces the single, truncated plan or apply
   comment with a summary of one row per leaf, and detail comments of one
   section per leaf, never truncated.
@@ -185,3 +187,25 @@ To be completed when §§1–5 ship.
    plans `No changes.`
 6. **Backup ignores locks.** A `.tflock` left in R2 is not copied to B2, and
    the post-copy check still passes.
+
+## Amendments
+
+### 2026-10-23: a comment-triggered run checks out the head commit
+
+§1 named `refs/pull/<n>/head`, and every spoke's apply caller passed it as
+`checkout_ref`. GitHub sometimes never creates that ref. On
+[runway#56](https://github.com/noisypigeon/runway/pull/56) it was missing
+while `refs/pull/56/merge` existed, so `terragrunt apply` failed at checkout,
+before anything ran, until a new push made GitHub write it.
+
+- **`terragrunt-run.yml` asks the API instead.** On `issue_comment`, with no
+  `checkout_ref`, it reads the PR's `head.sha` and checks that commit out. A
+  `pull_request` run still uses the event's own SHA.
+- **The spokes' apply callers drop `checkout_ref`.** Plan callers never set
+  it, so a `terragrunt plan` comment gets the same lookup with no caller
+  change.
+- **§3's binding is unchanged.** Apply still downloads the artifact for the
+  commit it checked out. A push between plan and apply moves the head, finds
+  no artifact for it, and refuses, as before.
+- **It ships in `workflows/` v4.10.1.**
+

@@ -69,7 +69,7 @@ on:
         type: string
         required: true
       checkout_ref:
-        description: "git ref to check out before running. Empty (the default) means the PR's head."
+        description: "git ref to check out before running. Empty (the default) means the PR's head commit: the event's own SHA on pull_request, or the SHA the API reports for the PR on issue_comment."
         type: string
         required: false
         default: ""
@@ -134,9 +134,25 @@ jobs:
               content: 'eyes',
             });
 
+      # A comment event carries no head commit, so ask the API for it. Not
+      # refs/pull/<n>/head: GitHub sometimes never creates that ref, and the
+      # checkout then fails before anything runs (runway#56).
+      - name: Resolve the PR's head commit
+        id: pr_head
+        if: inputs.checkout_ref == '' && github.event_name == 'issue_comment'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            core.setOutput('sha', pr.head.sha);
+
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || format('refs/pull/{0}/head', github.event.issue.number) }}
+          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || steps.pr_head.outputs.sha }}
           fetch-depth: 0
 
       - name: Ensure a local main ref exists
