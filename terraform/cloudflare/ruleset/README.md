@@ -64,11 +64,13 @@ moved {
 | <a name="input_name"></a> [name](#input\_name) | Ruleset name | `string` | n/a | yes |
 | <a name="input_phase"></a> [phase](#input\_phase) | Ruleset phase, e.g. "http\_request\_dynamic\_redirect" | `string` | n/a | yes |
 | <a name="input_rules"></a> [rules](#input\_rules) | The ruleset's rules, passed to the provider exactly as given (the cloudflare\_ruleset rules schema) | `any` | n/a | yes |
-| <a name="input_zone_id"></a> [zone\_id](#input\_zone\_id) | Cloudflare zone ID the ruleset belongs to | `string` | n/a | yes |
+| <a name="input_zone"></a> [zone](#input\_zone) | Apex domain of the zone the ruleset belongs to, looked up by name (LIB-0011, LIB-0030). Set this or zone\_id, not both | `string` | `null` | no |
+| <a name="input_zone_id"></a> [zone\_id](#input\_zone\_id) | Cloudflare zone ID the ruleset belongs to. Set this or zone, not both | `string` | `null` | no |
 
 ## Outputs
 
 | Name | Description |
 |------|-------------|
 | <a name="output_id"></a> [id](#output\_id) | Ruleset ID |
+| <a name="output_zone_id"></a> [zone\_id](#output\_zone\_id) | ID of the zone the ruleset belongs to |
 <!-- END_TF_DOCS -->
