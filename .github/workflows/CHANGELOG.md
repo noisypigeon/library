@@ -4,6 +4,22 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.10.1] - 2026-10-22
+
+### Comment-triggered runs check out the PR's head commit from the API
+
+Fixes a `terragrunt apply` that fails at checkout, before anything runs. Every spoke's apply caller passed `checkout_ref: refs/pull/<n>/head`, and GitHub sometimes never creates that ref. On [runway#56](https://github.com/noisypigeon/runway/pull/56) it was missing while `refs/pull/56/merge` existed, and the apply only worked after a new push made GitHub write it.
+
+- **`terragrunt-run.yml`:** on `issue_comment` with no `checkout_ref`, a new first step reads the PR's `head.sha` from the API and checks that commit out. `pull_request` runs still use the event's own SHA, and an explicit `checkout_ref` still wins.
+- **Callers:** a spoke's `terragrunt-apply.yml` should drop its two `checkout_ref: refs/pull/${{ github.event.issue.number }}/head` lines, on `apply` and `replan`. Until it does, it keeps the old behaviour. `terragrunt plan` comments never set `checkout_ref`, so they get the lookup with no caller change.
+- **Saved plans are bound as before.** Apply downloads the plan artifact for the commit it checked out, so a push between plan and apply still refuses (LIB-0022 §3).
+
+LIB-0022 gains an amendment recording it.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#146](https://github.com/noisypigeon/library/pull/146)
+
 ## [4.10.0] - 2026-10-22
 
 ### Workloads can declare Backblaze buckets and API keys (LIB-0029)

@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-22
 
+- [workflows] Comment-triggered runs check out the PR's head commit from the API ([#146](https://github.com/noisypigeon/library/pull/146))
 - [workflows] Workloads can declare Backblaze buckets and API keys (LIB-0029) ([#145](https://github.com/noisypigeon/library/pull/145))
 - [terragrunt/root-hcl] Workloads can declare Backblaze buckets and API keys (LIB-0029) ([#145](https://github.com/noisypigeon/library/pull/145))
 - [adr] docs(adr): record LIB-0028's verification and accept it ([#144](https://github.com/noisypigeon/library/pull/144))
