@@ -46,6 +46,8 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-22
 
+- [workflows] Workloads can declare Backblaze buckets and API keys (LIB-0029) ([#145](https://github.com/noisypigeon/library/pull/145))
+- [terragrunt/root-hcl] Workloads can declare Backblaze buckets and API keys (LIB-0029) ([#145](https://github.com/noisypigeon/library/pull/145))
 - [adr] docs(adr): record LIB-0028's verification and accept it ([#144](https://github.com/noisypigeon/library/pull/144))
 - [workflows] A workload's state bucket uses the standard storage class (LIB-0028) ([#143](https://github.com/noisypigeon/library/pull/143))
 - [terragrunt/root-hcl] A workload's state bucket uses the standard storage class (LIB-0028) ([#143](https://github.com/noisypigeon/library/pull/143))

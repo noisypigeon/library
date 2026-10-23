@@ -4,6 +4,42 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.10.0] - 2026-10-22
+
+### Workloads can declare Backblaze buckets and API keys (LIB-0029)
+
+Records and builds [LIB-0029](https://github.com/noisypigeon/library/blob/feat/lib-0029-backblaze-workload-kinds/docs/adr/LIB-0029-backblaze-workload-kinds.md) (Proposed). A workload's `values.yaml` can now declare Backblaze resources beside its Scaleway ones:
+
+```yaml
+backblaze:
+  bucket:
+    archive: {}
+  apiKey:
+    archive-reader:
+      buckets: [archive]
+      capabilities: [listBuckets, listFiles, readFiles]
+```
+
+- **`backblaze.bucket.<key>` and `backblaze.apiKey.<key>`** sign in with the spoke's Backblaze key, from `backblaze.enc`. They keep their state in the workload's own Scaleway state bucket (LIB-0028), so even a workload with only Backblaze kinds gets its project, deployer and state bucket.
+- **An API key reaches only the buckets its `buckets` list names.** Its stub depends on each one and wires their IDs as `bucket_ids`.
+  - `bucket_ids` itself can't be set, so a workload can't create an account-wide key.
+  - `capabilities` has no default.
+- **Names:** a bucket's defaults to `<prefix>-<key>-<code>-<suffix>`, as a Scaleway bucket's does. A key's defaults to `<prefix>-<key>-<suffix>`. A bucket name longer than B2's 50 characters is refused before planning.
+- **A workload leaf gets exactly the provider its path names**, when `spoke.hcl`'s `providers` map has it. `leaves` scopes hand-written leaves only. In runway this leaves every existing leaf's render identical. In a spoke where another provider has no `leaves`, Scaleway workload leaves lose that provider block, but no resource changes.
+- **`terragrunt/root-hcl`** gains the kinds, the provider rule, and guards for:
+  - a spoke without `backblaze`;
+  - an empty or unknown `buckets`;
+  - `bucket_ids` set directly.
+- **`workflows/`:**
+  - `resolve-workloads.sh` generates the stubs, with dependency paths now relative to the workload, and checks the same things before planning.
+  - `generate-module-redirects.sh` publishes both modules' schemas, plus a `workload.schema.json` per `backblaze/api-key` version: its inputs without `bucket_ids`, with `buckets`.
+
+Take both in one spoke PR; selection doesn't change. A spoke can declare Backblaze kinds only after garden builds with this `workflows/` release, because `--check` fetches the schemas from there.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#145](https://github.com/noisypigeon/library/pull/145)
+
 ## [4.9.1] - 2026-10-22
 
 ### A workload's state bucket uses the standard storage class (LIB-0028)
