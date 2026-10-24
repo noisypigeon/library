@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-24
 
+- [workflows] Read each site's Pages shim from values.yaml and write the blog changelog one line per PR ([#167](https://github.com/noisypigeon/library/pull/167))
 - [workflows] A site workload's features.githubPages implies its Pages CNAMEs (LIB-0034) ([#168](https://github.com/noisypigeon/library/pull/168))
 - [terragrunt/root-hcl] A site workload's features.githubPages implies its Pages CNAMEs (LIB-0034) ([#168](https://github.com/noisypigeon/library/pull/168))
 - [adr] docs(adr): LIB-0034, a site workload declares its Pages shim ([#166](https://github.com/noisypigeon/library/pull/166))

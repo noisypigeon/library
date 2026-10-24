@@ -4,6 +4,25 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [5.0.0] - 2026-10-24
+
+### Read each site's Pages shim from values.yaml and write the blog changelog one line per PR
+
+Implements the workflow half of [LIB-0034](https://github.com/noisypigeon/library/blob/main/docs/adr/LIB-0034-site-workloads-declare-their-pages-shim.md) (§3 and §5).
+
+**`site-dispatch.yml` can find the sites itself.** `site_repo` and `workflow` are now optional. A caller that still passes them dispatches exactly as before. A caller that passes neither names no workload: on a push, the workflow diffs the push and keeps every `workloads/<w>/` that has a change outside `values.yaml` and `secrets.yaml` and holds a `config.toml`. On `workflow_dispatch`, or a push with no usable `before` (a new branch or a force-push), it takes every site workload. For each one it reads `features.githubPages.pagesShim` from the workload's `values.yaml` and dispatches `pages.yml` on `main` in that shim. A site with no `pagesShim` fails the run, citing LIB-0034 §1, once the other sites have been dispatched. A failed dispatch fails it too, with the same `BOT_GITHUB_TOKEN` error as before. A push that changes no site logs that and succeeds. So one spoke caller covers every site, and a second site needs no new workflow.
+
+**`blog-changelog.yml` writes the blog's `CHANGELOG.md` one line per PR.** Each merged PR now adds `- [blog] <title> ([#N](<url>))` under its `## YYYY-MM-DD` heading, newest first, the same format as every root changelog. It no longer adds a heading, the PR body and a link. The line is written by `root-changelog.sh`, which the workflow fetches with the caller's `fetch-lib.sh`, as `spoke-root-changelog.yml` already does. There are three new inputs: `changelog_tag` (default `blog`), `fetch_script` (default `fetch-lib.sh`) and `changelog_script` (default `.lib-src/.github/scripts/root-changelog.sh`). The optional root rollup and the daily digest post are unchanged. When there is no blog changelog yet, the script creates one with the marker.
+
+**Breaking:** `root-changelog.sh` places the line below the `<!-- entries below; newest first -->` marker and refuses a file that lacks it. A caller whose blog `CHANGELOG.md` is still in the old Keep-a-Changelog shape must convert it, marker included, in the same change that takes this version. The caller also needs a `fetch-lib.sh` at its root, or must pass `fetch_script`.
+
+`root-changelog.sh` drops its note that `blog-changelog.yml` can't use it, which is no longer true. A changelog it creates now opens with "One line per PR, sectioned by date, newest first.", since it no longer always covers a whole repo.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#167](https://github.com/noisypigeon/library/pull/167)
+
 ## [4.14.0] - 2026-10-24
 
 ### A site workload's features.githubPages implies its Pages CNAMEs (LIB-0034)
