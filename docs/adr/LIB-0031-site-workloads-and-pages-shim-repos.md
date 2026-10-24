@@ -2,7 +2,8 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-23.
-- **Status**: Proposed; amended 2026-10-23 (see `## Amendments`). Amends LIB-0001, whose spokes gain a second shape, the
+- **Status**: Accepted; amended 2026-10-23 (see `## Amendments`), with
+  Verification item 1 open. Amends LIB-0001, whose spokes gain a second shape, the
   shim repo, and LIB-0023, whose second amendment's gitignore narrows. Second
   of three records, with LIB-0030 and LIB-0032, that move the blog into
   runway.
@@ -160,17 +161,39 @@ Existing callers don't change.
 
 ## Verification
 
+Recorded 2026-10-24, from LIB-0032's migration. Item 1 remains open.
+
 Run against LIB-0032's migration of the blog.
 
 1. **A post deploys.** A PR adding a post under `workloads/blog/content/`
    runs no Terragrunt plan. Merging it dispatches the shim, which deploys the
    post to the public URL.
+   - **Open, in part:** [runway#64](https://github.com/noisypigeon/runway/pull/64),
+     which moved the site, ran no Terragrunt plan, and its merge dispatched
+     the shim. Once the shim was in place, noisypigeon.com served commit
+     `dbe097d`, built from runway's `main`. A post-only PR hasn't been merged
+     yet.
+
 2. **A dispatch alone deploys.** A `zola-site` release's dispatch, with no
    runway commit, rebuilds and redeploys the site from runway's `main`.
+   - **Passed, by hand:** a bare dispatch of noisypigeon/blog's
+     `blog-pages.yml`, with no runway commit, checked out
+     `noisypigeon/runway` at `main`, built `workloads/blog/` (68 pages) and
+     deployed. A theme release dispatches the same workflow by name, but
+     hasn't happened since.
+
 3. **Stubs stay untracked.** `resolve-workloads.sh --check` passes with the
    site's files committed, and fails on a tracked stub.
+   - **Passed:** `--check` passes with the site's 177 files committed
+     (runway#64), and the stubs, the fetched theme and `public/` stay
+     ignored.
+
 4. **Existing callers don't change.** garden's site still deploys from its own
    repo with `zola-site-pages.yml` called as before.
+   - **Passed:** garden's site deployed from its own repo after it took
+     `workflows/v4.12.0` and `v4.13.0`
+     ([garden#70](https://github.com/noisypigeon/garden/pull/70),
+     [#71](https://github.com/noisypigeon/garden/pull/71)).
 
 ## Amendments
 

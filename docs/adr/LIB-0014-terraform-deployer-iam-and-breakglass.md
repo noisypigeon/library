@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-17.
-- **Status**: Accepted. LIB-0033 (proposed) would add `cloudflare_breakglass` and
+- **Status**: Accepted. LIB-0033 adds `cloudflare_breakglass` and
   `backblaze_breakglass` beside §2's Scaleway file.
 - **Amended 2026-10-17**: runway doesn't enable breakglass. Its own Scaleway
   key is not the one the deployer leaf mints, so the leaf doesn't sign in with

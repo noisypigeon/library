@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-20.
-- **Status**: Accepted; amended twice on 2026-10-20 (see `## Amendments`), by LIB-0024, which adds the implicit `scaleway.deployer` kind and a `credentials` column to §2's table, and by LIB-0025, which adds a sops-encrypted `secrets.yaml` beside `values.yaml` and `secretRef` within it. LIB-0028 makes the project implicit and moves each workload's state into its own bucket (§1, §2, §4). LIB-0029 (proposed) would add Backblaze kinds to §2 and §4, and LIB-0030 (proposed) Cloudflare kinds. LIB-0031 (proposed) would narrow the second amendment's gitignore. Adds a second home for leaves, `workloads/`, beside
+- **Status**: Accepted; amended twice on 2026-10-20 (see `## Amendments`), by LIB-0024, which adds the implicit `scaleway.deployer` kind and a `credentials` column to §2's table, and by LIB-0025, which adds a sops-encrypted `secrets.yaml` beside `values.yaml` and `secretRef` within it. LIB-0028 makes the project implicit and moves each workload's state into its own bucket (§1, §2, §4). LIB-0029 (proposed) would add Backblaze kinds to §2 and §4, and LIB-0030 Cloudflare kinds. LIB-0031 narrows the second amendment's gitignore. Adds a second home for leaves, `workloads/`, beside
   `terraform/`. Makes bounded exceptions to LIB-0001 invariants 2 and 4 for
   those leaves only. LIB-0004's layout does not govern them.
 

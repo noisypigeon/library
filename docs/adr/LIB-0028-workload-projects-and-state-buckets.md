@@ -5,7 +5,7 @@
 - **Status**: Accepted; amended twice on 2026-10-22 (see `## Amendments`). Amends LIB-0023, whose §1 state, §2 kind table and §4
   defaults change, and LIB-0024, whose §1 deployer becomes unconditional and
   whose §3 stages grow from three to four. LIB-0029 (proposed) would add
-  Backblaze rows to §4's table, and LIB-0030 (proposed) Cloudflare rows.
+  Backblaze rows to §4's table, and LIB-0030 Cloudflare rows.
 
 ## Context
 

@@ -2,7 +2,8 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-23.
-- **Status**: Proposed; amended three times on 2026-10-23 (see `## Amendments`). Amends:
+- **Status**: Accepted; amended three times on 2026-10-23 (see `## Amendments`),
+  with Verification items open. Amends:
   - LIB-0014, which gains two breakglass providers;
   - LIB-0024, whose deployers reach Cloudflare;
   - LIB-0030, whose Cloudflare kinds move to workload credentials, behind a
@@ -206,6 +207,8 @@ This is a permanent boundary of B2's key model, not a deferral.
 
 ## Verification
 
+Recorded 2026-10-24, in runway, during LIB-0032. Item 3 remains open, and item 1 in part.
+
 Run in runway, during LIB-0032.
 
 1. **The bootstrap keys only mint.**
@@ -213,14 +216,33 @@ Run in runway, during LIB-0032.
      a DNS read.
    - The B2 breakglass key creates the spoke key, and is refused a bucket
      listing.
+   - **Open, in part:** the Cloudflare bootstrap token minted the spoke's
+     token ([runway#59](https://github.com/noisypigeon/runway/pull/59)) and
+     blog's (runway#61), and the B2 bootstrap key minted the spoke's key
+     (runway#59). Neither was tried against a refused call. The Cloudflare
+     token also holds *Zone Read* since the third amendment.
+
 2. **A workload token is confined.** `blog`'s token edits records in its own
    zones, and is refused on a zone it doesn't own.
+   - **Passed:** blog's token sees exactly `noisypigeon.com`, `pigeon.dev`
+     and `willowgraysen.com`. It read `noisypigeon.com`'s 14 records, and was
+     refused on `noisypigeon.garden` (code 10000, "Authentication error").
+
 3. **Rotation defers.** Forcing rotation replaces `blog`'s token, defers its
    Cloudflare entries, and their re-plan signs in with the new token,
    as LIB-0024's Verification 3 does.
+   - **Open:** rotation hasn't been forced yet.
+
 4. **The B2 spoke key works.** It runs `poc`'s Backblaze bucket, and mints
    its `apiKey`.
+   - **Passed:** with the minted key, all seven of runway's hand-written
+     Backblaze leaves planned `No changes.` locally, and `poc`'s two
+     Backblaze leaves did in [runway#60](https://github.com/noisypigeon/runway/pull/60).
+
 5. **Nothing else changes.** Every other leaf in runway plans `No changes.`
+   - **Passed:** runway#59 planned only the two mints, with 30 leaves
+     `No changes.`, and runway#60 planned `No changes.`
+
 6. **The providers' minting rules are recorded.** Two things are untested
    until the first real apply:
    - whether a minted Cloudflare token may carry permissions its minter
@@ -230,6 +252,12 @@ Run in runway, during LIB-0032.
 
    If either refuses, the bootstrap key's grants widen to the smallest set
    that works. That's an amendment, not a silent change.
+   - **Passed:**
+     - Cloudflare won't let a token grant *Account API Tokens Write*, but
+       does let it grant zone groups it lacks itself (the second amendment).
+     - B2 doesn't limit a minted key to its creator's capabilities: the
+       bootstrap key, with only `listKeys`, `writeKeys` and `deleteKeys`,
+       minted a key with bucket and file capabilities.
 
 ## Amendments
 
