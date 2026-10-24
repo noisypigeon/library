@@ -6,7 +6,8 @@
   Verification item 1 open. Amends LIB-0001, whose spokes gain a second shape, the
   shim repo, and LIB-0023, whose second amendment's gitignore narrows. Second
   of three records, with LIB-0030 and LIB-0032, that move the blog into
-  runway.
+  runway. LIB-0034 has §4's dispatch read its target from `values.yaml`, and
+  §6's site changelog take one line per PR.
 
 ## Context
 

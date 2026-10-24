@@ -5,7 +5,9 @@
 - **Status**: Accepted, with Verification items 4 and 5 open. Applies LIB-0030 and LIB-0031 to `noisypigeon/blog`.
   Amends LIB-0017, whose spoke list loses blog. Last of three records, with
   LIB-0030 and LIB-0031. LIB-0033 replaces §1's hand-made Cloudflare
-  token with a minting key and a Terraform-made deployer.
+  token with a minting key and a Terraform-made deployer. LIB-0034 renames
+  `noisypigeon/blog`, which this record left out of scope, to
+  `noisypigeon/noisypigeon.com`.
 
 ## Context
 
