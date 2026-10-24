@@ -329,13 +329,29 @@ if [ -n "$STATIC_ROOT" ]; then
   jq --arg base "$SCHEMA_BASE_URL" '. as $k | {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "$id": "\($base)/schemas/workload/v1.json",
-    title: "Workload values.yaml (LIB-0023, LIB-0028, LIB-0029, LIB-0030, LIB-0033)",
+    title: "Workload values.yaml (LIB-0023, LIB-0028, LIB-0029, LIB-0030, LIB-0033, LIB-0034)",
     type: "object",
     additionalProperties: false,
     required: ["prefix", "suffix"],
     properties: {
       prefix: {type: "string", minLength: 1},
       suffix: {type: "string", minLength: 1},
+      features: {
+        type: ["object", "null"],
+        additionalProperties: false,
+        properties: {
+          githubPages: {
+            type: "object",
+            additionalProperties: false,
+            required: ["pagesShim", "pagesBaseUrl"],
+            description: "The Pages shim that deploys this site, and the host its custom domain points at. Implies cloudflare.dnsRecord.github-pages-root-cname and github-pages-www-cname, which an entry of the same key overrides field by field (LIB-0034 §§1-2)",
+            properties: {
+              pagesShim: {type: "string", pattern: "^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$", description: "The shim repo, as owner/name"},
+              pagesBaseUrl: {type: "string", pattern: "^[a-z0-9-]+(\\.[a-z0-9-]+)+$", description: "The Pages host, e.g. owner.github.io"}
+            }
+          }
+        }
+      },
       scaleway: {
         type: ["object", "null"],
         additionalProperties: false,

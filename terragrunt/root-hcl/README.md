@@ -484,6 +484,26 @@ leaves sign in with the workload's own token, not the spoke's:
   deployers' outputs are copied by hand into `cloudflare.enc` and
   `backblaze.enc`.
 
+Since v5.5.0 (LIB-0034), with `workflows/v4.14.0` or later, a site workload
+says which GitHub Pages shim deploys it, and gets its Pages DNS from that:
+
+```yaml
+# workloads/site/values.yaml
+features:
+  githubPages:
+    pagesShim: example/example.org   # the shim repo, owner/name
+    pagesBaseUrl: example.github.io  # the Pages host
+cloudflare:
+  zone: example.org
+```
+
+- **Two records are implied:** `cloudflare.dnsRecord.github-pages-root-cname`
+  (`@`) and `github-pages-www-cname` (`www`), each a CNAME to `pagesBaseUrl`,
+  `ttl: 1`, not proxied. They land in `cloudflare.zone`, which `githubPages`
+  requires.
+- **An entry under either key overrides its default field by field,** so
+  `github-pages-www-cname: { comment: … }` changes only the comment.
+
 A workload may also have a `workloads/<workload>/secrets.yaml` (v4.5.0,
 LIB-0025), encrypted with sops as YAML. Its rule in the spoke's `.sops.yaml` is
 `^workloads/[^/]+/secrets\.yaml$`. It holds secret inputs under the same kind
