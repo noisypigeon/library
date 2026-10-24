@@ -14,9 +14,6 @@
 # never matches on an empty changelog and silently appends the first-ever entry
 # to the *bottom* of the header -- the defect DEV-0160 fixes. Keep the sentinel
 # line in CHANGELOG.md or this script refuses to guess.
-#
-# Not shared with blog-changelog.yml: that one is a reusable workflow running in
-# a caller repo's checkout, which cannot see this repo's scripts.
 set -euo pipefail
 
 SENTINEL='<!-- entries below; newest first -->'
@@ -54,7 +51,7 @@ if [ ! -f "$changelog" ]; then
   printf '%s\n' \
     '# Changelog' \
     '' \
-    'One line per PR across this whole repo, sectioned by date, newest first.' \
+    'One line per PR, sectioned by date, newest first.' \
     '' \
     "$SENTINEL" > "$changelog"
 fi
