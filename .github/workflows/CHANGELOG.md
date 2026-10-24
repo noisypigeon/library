@@ -4,6 +4,18 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [5.0.1] - 2026-10-24
+
+### A theme release dispatches pages.yml in noisypigeon/noisypigeon.com (LIB-0034)
+
+The blog's Pages shim is now `noisypigeon/noisypigeon.com`, renamed from `noisypigeon/blog`, and its deploy workflow is `pages.yml` ([LIB-0034](https://github.com/noisypigeon/library/blob/main/docs/adr/LIB-0034-site-workloads-declare-their-pages-shim.md) §§4, 6). A `zola-site` release now dispatches it there by that name, rather than relying on GitHub's rename redirect (as COM-0007 had it).
+
+`CLAUDE.md`, `README.md` and the `release-pr` skill name the renamed shim too.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#169](https://github.com/noisypigeon/library/pull/169)
+
 ## [5.0.0] - 2026-10-24
 
 ### Read each site's Pages shim from values.yaml and write the blog changelog one line per PR
