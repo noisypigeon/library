@@ -13,9 +13,10 @@ policies written by name (LIB-0033 §3).
   create-before-destroy, and it expires a week after each scheduled rotation
   (LIB-0024 §4). Without it, `expires_on`, or 365 days after creation.
 
-It mints the spoke's Cloudflare deployer token, signed in with a breakglass
-token that can only mint (LIB-0033 §2), and each workload's own token
-(LIB-0033 §4).
+A spoke's breakglass token, which can only mint, signs in to mint both the
+spoke's Cloudflare deployer token (LIB-0033 §2) and each workload's own token
+(LIB-0033 §4). A token minted here can never mint in turn: Cloudflare won't
+grant *Account API Tokens Write* from a token, so the plan refuses it.
 
 ## Usage
 
@@ -26,7 +27,6 @@ module "token" {
   account_id = local.cloudflare_account_id
   name       = "runway-cloudflare-deployer"
   policies = [
-    { permission_groups = ["Account API Tokens Read", "Account API Tokens Write"], account = true },
     { permission_groups = ["Zone Read"], all_zones = true },
   ]
 }
