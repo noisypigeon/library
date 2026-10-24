@@ -44,6 +44,10 @@ ADR-0154 and ADR-0084 each made before it.
 
 <!-- entries below; newest first -->
 
+## 2026-10-24
+
+- [adr] docs(adr): record LIB-0030 to LIB-0033's verification and accept them ([#163](https://github.com/noisypigeon/library/pull/163))
+
 ## 2026-10-23
 
 - [workflows] resolve-workloads.sh --check accepts a Cloudflare stub's workload token ([#162](https://github.com/noisypigeon/library/pull/162))
