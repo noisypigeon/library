@@ -4,6 +4,32 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.14.0] - 2026-10-24
+
+### A site workload's features.githubPages implies its Pages CNAMEs (LIB-0034)
+
+A workload's `values.yaml` can now say which GitHub Pages shim deploys its site, and gets the site's Pages DNS from that ([LIB-0034](https://github.com/noisypigeon/library/blob/main/docs/adr/LIB-0034-site-workloads-declare-their-pages-shim.md) §§1–2):
+
+```yaml
+features:
+  githubPages:
+    pagesShim: noisypigeon/noisypigeon.com
+    pagesBaseUrl: noisypigeon.github.io
+```
+
+- **Two records are implied.** `cloudflare.dnsRecord.github-pages-root-cname` (`@`) and `github-pages-www-cname` (`www`): each is a CNAME to `pagesBaseUrl` with `ttl: 1`, not proxied, and with the comments the blog's records carry today. They land in `cloudflare.zone`, which `githubPages` now requires.
+- **An explicit entry under either key overrides its default field by field.** Every other `dnsRecord` entry is untouched.
+- **`resolve-workloads.sh` applies the defaults before anything reads `values.yaml`.** So the implied records count toward the stub list, LIB-0030 §6's clash checks, the `type`/`content` check, and the `secrets.yaml` check for undeclared entries. `--check` refuses a malformed stanza, an unknown key under it, or a `githubPages` without `cloudflare.zone`.
+- **`root.hcl` is the twin.** It merges the same defaults under `cloudflare.dnsRecord` for a workload leaf's inputs.
+- **The workload schema** (`schemas/workload/v1.json`) learns `features.githubPages`.
+
+A workload without `features` is unchanged. For runway's blog, replacing the two hand-written CNAMEs with the stanza produces the same stub list, byte-identical stubs, and the same module inputs. Its plan should therefore be `No changes.`
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#168](https://github.com/noisypigeon/library/pull/168)
+
 ## [4.13.1] - 2026-10-23
 
 ### resolve-workloads.sh --check accepts a Cloudflare stub's workload token
