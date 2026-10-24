@@ -2,22 +2,36 @@
 # (LIB-0031 §4). actions/deploy-pages only deploys the repo it runs in
 # (DEV-0156), so a spoke whose workload holds a site can't deploy it itself:
 # this asks the shim repo's deploy workflow to build the spoke's current main
-# and deploy that. The spoke's caller says when, by its own `on:` paths.
+# and deploy that.
 #
-# Needs BOT_GITHUB_TOKEN with actions: write on site_repo. Without it this
-# fails loudly -- the symptom otherwise is a merged post that never deploys.
+# Two modes. A caller passing `site_repo` and `workflow` dispatches exactly
+# that, as before, and says when by its own `on:` paths. A caller passing
+# neither gets LIB-0034 §3's mode: it names no workload, and this finds them.
+# On a push it diffs the push and keeps each workloads/<w>/ with a change
+# outside values.yaml and secrets.yaml and a config.toml (LIB-0031 §1); on
+# workflow_dispatch it keeps every one with a config.toml. Each site's shim
+# comes from its values.yaml's `features.githubPages.pagesShim` (LIB-0034 §1),
+# and every shim's deploy workflow is pages.yml (LIB-0034 §4). A site with no
+# pagesShim would never deploy, so it fails the run -- after the others have
+# been dispatched, so one bad stanza doesn't hold back every other site.
+#
+# Needs BOT_GITHUB_TOKEN with actions: write on every shim it dispatches.
+# Without it this fails loudly -- the symptom otherwise is a merged post that
+# never deploys.
 name: Site dispatch
 on:
   workflow_call:
     inputs:
       site_repo:
-        description: "owner/name of the Pages shim repo that deploys the site."
+        description: "owner/name of the Pages shim repo that deploys the site. Empty (the default) reads each changed site workload's shim from its values.yaml (LIB-0034 §3)."
         type: string
-        required: true
+        required: false
+        default: ""
       workflow:
-        description: "Deploy workflow filename in site_repo."
+        description: "Deploy workflow filename in site_repo. Only read with site_repo; the values.yaml mode always dispatches pages.yml (LIB-0034 §4)."
         type: string
-        required: true
+        required: false
+        default: ""
     secrets:
       BOT_GITHUB_TOKEN:
         required: true
@@ -30,6 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch the shim's deploy
+        if: inputs.site_repo != ''
         env:
           GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
           SITE_REPO: ${{ inputs.site_repo }}
@@ -40,3 +55,57 @@ jobs:
             exit 1
           fi
           echo "Dispatched $WORKFLOW in $SITE_REPO."
+
+      # fetch-depth: 0 so the push's `before` is reachable to diff against.
+      # github.* is the caller's context, so this is the caller's tree.
+      - uses: actions/checkout@v4
+        if: inputs.site_repo == ''
+        with:
+          fetch-depth: 0
+
+      - name: Dispatch each changed site's shim
+        if: inputs.site_repo == ''
+        env:
+          GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          # An all-zero `before` is a new branch, and an unreachable one a
+          # force-push: nothing to diff against, so every workload counts as
+          # changed.
+          if [ "$EVENT_NAME" = "push" ] && [ -n "${BEFORE//0/}" ] \
+            && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            CANDIDATES=$(git diff --name-only "$BEFORE" "$AFTER" \
+              | grep -E '^workloads/[^/]+/' \
+              | grep -vE '^workloads/[^/]+/(values|secrets)\.yaml$' \
+              | cut -d/ -f2 | sort -u || true)
+          else
+            CANDIDATES=$(find workloads -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
+              | cut -d/ -f2 | sort -u || true)
+          fi
+
+          dispatched=0
+          failed=0
+          for w in $CANDIDATES; do
+            # A workload is a site because config.toml exists (LIB-0031 §1).
+            [ -f "workloads/$w/config.toml" ] || continue
+            shim=$(yq '.features.githubPages.pagesShim // ""' "workloads/$w/values.yaml" 2>/dev/null || true)
+            if [ -z "$shim" ]; then
+              echo "::error::workloads/$w is a site but its values.yaml sets no features.githubPages.pagesShim, so it can never deploy (LIB-0034 §1)"
+              failed=1
+              continue
+            fi
+            if ! gh workflow run pages.yml -R "$shim" --ref main; then
+              echo "::error::could not dispatch pages.yml in $shim for workloads/$w; BOT_GITHUB_TOKEN needs actions: write there (LIB-0031 §4)"
+              failed=1
+              continue
+            fi
+            echo "Dispatched pages.yml in $shim for workloads/$w."
+            dispatched=$((dispatched + 1))
+          done
+
+          if [ "$dispatched" -eq 0 ] && [ "$failed" -eq 0 ]; then
+            echo "No site workload changed; nothing to dispatch."
+          fi
+          exit "$failed"
