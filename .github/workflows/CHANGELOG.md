@@ -4,6 +4,31 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [5.1.0] - 2026-10-24
+
+### Reusable site-generate.yml and site-pages.yml (LIB-0035)
+
+Two new reusable workflows for site workloads ([LIB-0035](https://github.com/noisypigeon/library/blob/main/docs/adr/LIB-0035-move-garden-into-runway.md) §§2–3). Existing callers don't change.
+
+- **`site-generate.yml`** regenerates a site workload's generated files and commits them to the caller's `main`.
+  - Inputs: `src_dir` and `generate_cmd`.
+  - It fetches the library at the caller's pin with every tag, installs terraform-docs, and runs the command.
+  - It commits only what changed under `src_dir`. If nothing changed, it makes no commit and so triggers no deploy.
+  - It pushes with `BOT_GITHUB_TOKEN`, so the push starts the caller's `sites.yml` and the site's shim deploys it.
+  - The caller holds the `main-writer` concurrency group, as `blog-changelog.yml`'s caller does.
+- **`site-pages.yml`** is a Pages shim's whole deploy.
+  - Inputs: `spoke` and `workload`.
+  - It builds `<spoke>/workloads/<workload>` at the spoke's `main` through `zola-site-pages.yml`, with the standard fetch and theme scripts and the commit stamp.
+  - A shim's `pages.yml` then names only those two inputs, and must grant `pages: write` and `id-token: write`.
+  - This closes #164 once both shims use it.
+
+garden's move into runway comes next: its generation runs through `site-generate.yml`, and its shim through `site-pages.yml`.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#172](https://github.com/noisypigeon/library/pull/172)
+
 ## [5.0.1] - 2026-10-24
 
 ### A theme release dispatches pages.yml in noisypigeon/noisypigeon.com (LIB-0034)
