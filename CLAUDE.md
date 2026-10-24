@@ -148,12 +148,14 @@ Filing one, by hand:
 ## Runbooks
 
 Operational procedures live at `docs/runbooks/<slug>.md`: step-by-step, for
-any spoke, citing the ADR they serve. Today there are two:
+any spoke, citing the ADR they serve. Today there are three:
 
 - `restore-terraform-state-from-b2.md` (LIB-0007 §4) puts one leaf's state
   back into R2 from the B2 backup, through B2's native API with an admin key.
 - `release-a-stuck-state-lock.md` (LIB-0022 §4) releases a leaf's `.tflock`
   left behind by a run that died, once nothing still holds it.
+- `import-a-leaf-into-a-workload.md` (LIB-0032 §3) moves a hand-written leaf's
+  resources into workload leaves, by import, without recreating them.
 
 ## Dev cycle
 
