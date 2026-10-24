@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-23.
-- **Status**: Proposed; amended twice on 2026-10-23 (see `## Amendments`). Amends:
+- **Status**: Proposed; amended three times on 2026-10-23 (see `## Amendments`). Amends:
   - LIB-0014, which gains two breakglass providers;
   - LIB-0024, whose deployers reach Cloudflare;
   - LIB-0030, whose Cloudflare kinds move to workload credentials, behind a
@@ -288,4 +288,24 @@ answered Verification 6's first question, and the answer breaks §2's chain.
   either. Whether B2 limits a minted key to its creator's capabilities is
   still open, until runway#59's apply.
 - **It ships in `terragrunt/root-hcl` v5.4.0.**
+
+### 2026-10-23: the bootstrap token reads zones
+
+The second amendment made the bootstrap token mint every workload token. Its
+first such plan, stage 4 of the blog's bootstrap
+([runway#61](https://github.com/noisypigeon/runway/pull/61)), failed before
+minting anything.
+
+- **A workload token's scope needs zone IDs.** `cloudflare/api-token` looks
+  each zone up by apex, and the leaf signs in with the bootstrap token. With
+  only *Account API Tokens Read and Write*, that token can't list zones:
+  Cloudflare returns none, so the lookup reports "0 found" for every zone.
+  runway#59's spoke token never hit this, since `all_zones` needs no lookup.
+- **So §1's Cloudflare bootstrap token also holds *Zone Read* on all zones.**
+  It still can't change DNS, rulesets or anything else, and it still mints
+  only. It can now see which zones exist. The owner adds the group to the
+  existing token in Cloudflare's dashboard, which keeps its value, so no
+  secrets file changes.
+- **No code changes.** A spoke whose bootstrap token lacks *Zone Read* fails
+  the same way, at plan time, before anything is minted.
 
