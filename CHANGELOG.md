@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-24
 
+- [adr] docs(adr): LIB-0034, a site workload declares its Pages shim ([#166](https://github.com/noisypigeon/library/pull/166))
 - [repo] docs(runbooks): import a hand-written leaf into a workload ([#154](https://github.com/noisypigeon/library/pull/154))
 - [adr] docs(adr): record LIB-0030 to LIB-0033's verification and accept them ([#163](https://github.com/noisypigeon/library/pull/163))
 
