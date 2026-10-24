@@ -98,9 +98,9 @@ module index.
 There is no site, no Terraform state, no live `root.hcl` (only the template the spokes copy) and no secrets here. The
 practical consequence: **every deploy dispatch is cross-repo.** A module release
 dispatches `garden-pages.yml` in `noisypigeon/garden`; a theme release
-additionally dispatches `blog-pages.yml` in
-`noisypigeon/blog`, the Pages shim that builds runway's `workloads/blog/`
-(LIB-0031, LIB-0032). Both need `BOT_GITHUB_TOKEN` to carry
+additionally dispatches `pages.yml` in
+`noisypigeon/noisypigeon.com`, the Pages shim that builds runway's `workloads/blog/`
+(LIB-0031, LIB-0032, LIB-0034). Both need `BOT_GITHUB_TOKEN` to carry
 `actions: write` on the target, and both fail loudly if it does not — the
 symptom otherwise is a tagged, released version whose short URL 404s.
 
@@ -114,7 +114,7 @@ ADRs live at `docs/adr/LIB-NNNN-<slug>.md`, numbered from `0001` within that
 directory. `LIB-0001` defines the architecture; `LIB-0002` created this repo.
 
 **This is also where the spokes' decisions live.** The spokes are garden and
-runway; blog is now only a Pages shim (LIB-0032). None of them holds ADRs
+runway; blog is now only a Pages shim (LIB-0032), `noisypigeon/noisypigeon.com` (LIB-0034). None of them holds ADRs
 (LIB-0017): a decision about one of them is an amendment on the `LIB-`
 record whose standard it applies, or a new `LIB-` record. Their old records
 are all here:

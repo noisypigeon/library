@@ -74,8 +74,8 @@ later — get the PR body right the first time.
    which regenerates this version's redirect page, overview entry and release
    post) and, on any resulting `.tf` changes, `module-docs.yml` (regenerates
    the module's `README.md` input/output table). A `zola-site` release
-   additionally dispatches `blog-pages.yml` in
-   `noisypigeon/blog`, the other site that renders with the theme.
+   additionally dispatches `pages.yml` in
+   `noisypigeon/noisypigeon.com`, the other site that renders with the theme.
    None need triggering manually.
 
    Watch those dispatch steps. This repo hosts no site, so **every** deploy it

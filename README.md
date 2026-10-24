@@ -73,7 +73,7 @@ Per-module and theme `CHANGELOG.md` files carry the full, versioned entries.
 ## Decision records
 
 The family's ADRs live in [`docs/adr/`](docs/adr), as `LIB-NNNN-<slug>.md`.
-The spokes (garden, blog and runway) have none of their own, because they
+The spokes (garden and runway) have none of their own, because they
 depend on this repo for their design standards
 ([LIB-0017](docs/adr/LIB-0017-spokes-do-not-get-their-own-adrs.md)). The older
 `DEV-` records are archived verbatim in [`docs/adr/archive/`](docs/adr/archive),
