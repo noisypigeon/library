@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-24
 
+- [adr] docs(adr): LIB-0035, move garden into runway ([#171](https://github.com/noisypigeon/library/pull/171))
 - [adr] docs(adr): record LIB-0034's verification and accept it ([#170](https://github.com/noisypigeon/library/pull/170))
 - [workflows] A theme release dispatches pages.yml in noisypigeon/noisypigeon.com (LIB-0034) ([#169](https://github.com/noisypigeon/library/pull/169))
 - [workflows] Read each site's Pages shim from values.yaml and write the blog changelog one line per PR ([#167](https://github.com/noisypigeon/library/pull/167))
