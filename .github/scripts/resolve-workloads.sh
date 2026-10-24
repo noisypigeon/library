@@ -622,11 +622,13 @@ if [ "$CHECK" = true ]; then
     fi
     unknown=$(jq -r --argjson props "$props" 'keys - $props | join(", ")' <<<"$entry")
     # A wiring input the stub sets has to exist at this version too: an older
-    # pin can predate it (iam-api-key v0.1.0 has no default_project_id).
+    # pin can predate it (iam-api-key v0.1.0 has no default_project_id). The
+    # provider credentials a stub passes aren't module inputs: root.hcl signs
+    # the provider in with them (LIB-0024 §2, LIB-0033 §4).
     missing_wiring=""
     for dep in $declared_deps; do
       while IFS='|' read -r input _; do
-        case "$input" in "" | scaleway_access_key | scaleway_secret_key) continue ;; esac
+        case "$input" in "" | scaleway_access_key | scaleway_secret_key | cloudflare_api_token) continue ;; esac
         if ! jq -e --arg i "$input" 'has($i)' <<<"$entry" >/dev/null &&
            ! jq -e --arg i "$input" 'index($i) != null' <<<"$props" >/dev/null; then
           missing_wiring="${missing_wiring:+$missing_wiring, }$input"
