@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-24.
-- **Status**: Proposed. Amends:
+- **Status**: Accepted, with Verification items 2 and 3 open. Amends:
   - LIB-0031, whose site dispatch (§4) reads its target from `values.yaml`,
     and whose site changelog (§6) becomes one line per PR;
   - LIB-0032, which left `noisypigeon/blog`'s name out of scope;
@@ -191,13 +191,37 @@ Releases:
 
 ## Verification
 
+Recorded 2026-10-24, from the rollout in §7: library#168 and #167
+(`terragrunt/root-hcl/v5.5.0`, `workflows/v4.14.0` and `v5.0.0`), the repo
+rename,
+[noisypigeon.com#55](https://github.com/noisypigeon/noisypigeon.com/pull/55),
+library#169 (`workflows/v5.0.1`) and
+[runway#65](https://github.com/noisypigeon/runway/pull/65). Items 2 and 3
+remain open.
+
 1. **The DNS doesn't change.** runway's PR that adds `githubPages` and
    removes the two hand-written CNAMEs plans `No changes.` for every blog
    leaf.
+   - **Passed:** runway#65's plan at its head, `986ff33`, had 57 leaves with
+     no changes and none with changes. Before it opened, the stub list and
+     both `github-pages-*` stubs were byte-identical with and without the
+     stanza, and `root.hcl`'s merge gave the same inputs.
 2. **A post deploys through the renamed shim.** A post-only runway PR
    reaches `noisypigeon.com` through `noisypigeon/noisypigeon.com`'s
    `pages.yml`. This also closes LIB-0031 Verification item 1.
+   - **Open, in part:** runway#65's merge, and the changelog commit after
+     it, each ran `sites.yml`, which dispatched `pages.yml` in
+     `noisypigeon/noisypigeon.com` for `workloads/blog`. The shim deployed,
+     and `noisypigeon.com` returned 200. A post-only PR hasn't been merged
+     yet.
 3. **A theme release reaches the site.** A `zola-site` release dispatches
    `pages.yml` in `noisypigeon/noisypigeon.com`, and it deploys.
+   - **Open:** library#169 points the dispatch there, and a bare dispatch
+     of the renamed `pages.yml` deployed. No theme release has happened
+     since.
 4. **The changelog takes the new shape.** The next blog PR's line lands under
    its date in `workloads/blog/CHANGELOG.md`, below the marker.
+   - **Passed:** runway#65's merge wrote
+     `- [blog] The blog declares its Pages shim in values.yaml (LIB-0034)`,
+     with its link, under `## 2026-10-24`, below the marker and above the
+     collapsed entries.
