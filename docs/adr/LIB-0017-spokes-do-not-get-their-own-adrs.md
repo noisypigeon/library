@@ -5,7 +5,7 @@
 - **Status**: Accepted. Amends LIB-0001 (invariant 5, §2, and its 2026-10-15
   amendment's item 1), and DEV-0031's filing target (§6). Amended
   2026-10-19 (see `## Amendments`): §5's boundary is lifted for CLI-0161.
-  LIB-0032 (proposed) would make blog a shim repo, not a spoke.
+  LIB-0032 makes blog a Pages shim repo, not a spoke (see `## Amendments`).
   Amended 2026-10-20 by LIB-0021: §1 no longer asks for a list of records.
 
 ## Context
@@ -212,3 +212,17 @@ line. It no longer names the records that are load-bearing for it, because
 that list is a copy of this repo, and copies drift. LIB-0021 §6 also does the
 deferred `^adr/=adr` cleanup, closing
 [#75](https://github.com/noisypigeon/library/issues/75).
+
+### 2026-10-24: blog is a Pages shim, not a spoke (LIB-0032)
+
+LIB-0032 moved `noisypigeon/blog`'s site and its Cloudflare zones into
+runway's `blog` workload, at `workloads/blog/`.
+
+- **The spokes are garden and runway.** blog keeps only a README and the
+  workflow that deploys runway's `workloads/blog/` to its Pages site. That's
+  the shim repo LIB-0031 describes: it holds no leaves, no secrets and no
+  `.lib-version`, writes no tags, and runs no Terragrunt.
+- **blog's records stay where §2 put them.** Its `COM-` amendments are still
+  read where they are, and a decision about the blog is now a `LIB-` record
+  or an amendment about runway's workload, like any other.
+

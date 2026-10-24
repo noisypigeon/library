@@ -2,10 +2,10 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-23.
-- **Status**: Proposed. Applies LIB-0030 and LIB-0031 to `noisypigeon/blog`.
+- **Status**: Accepted, with Verification items 4 and 5 open. Applies LIB-0030 and LIB-0031 to `noisypigeon/blog`.
   Amends LIB-0017, whose spoke list loses blog. Last of three records, with
-  LIB-0030 and LIB-0031. LIB-0033 (proposed) would replace §1's hand-made
-  Cloudflare token with a minting key and a Terraform-made deployer.
+  LIB-0030 and LIB-0031. LIB-0033 replaces §1's hand-made Cloudflare
+  token with a minting key and a Terraform-made deployer.
 
 ## Context
 
@@ -169,15 +169,35 @@ the R2 state bucket, the B2 backup bucket and its key.
 
 ## Verification
 
+Recorded 2026-10-24. Items 4 and 5 remain open: item 4 is the owner's teardown.
+
 1. **The DNS never changes.** Every blog leaf plans `No changes.` after the
    import, and `dig` for each record returns the same answer before and after
    the cutover.
+   - **Passed:** every imported leaf planned `No changes.` before its
+     resource left blog's state, and again in runway#63. The 19 public
+     answers from 1.1.1.1 matched the preflight snapshot after each zone's
+     import, after runway#63 merged, and after the shim's first deploy.
+
 2. **The site deploys from runway.** A post merged in runway reaches
    `noisypigeon.com` through the shim, and blog's repo holds only its README
    and deploy workflow.
+   - **Passed:** after [blog#54](https://github.com/noisypigeon/blog/pull/54),
+     blog's deploy built `noisypigeon/runway` at `main` and noisypigeon.com
+     serves commit `dbe097d`. noisypigeon/blog holds only `README.md` and
+     `blog-pages.yml`.
+
 3. **The redirects still redirect.** `pigeon.dev` and `willowgraysen.com`
    answer with their redirect to `noisypigeon.com`.
+   - **Passed:** `pigeon.dev`, `willowgraysen.com` and both `www` names
+     answered `301` to `https://noisypigeon.com/` at every step.
+
 4. **blog's apparatus is gone.** Its state bucket, backup bucket and key no
    longer exist, and their credentials are revoked.
+   - **Open:** the owner's teardown of blog's R2 state bucket, its B2 backup
+     bucket and key, and their credentials, by hand. Their Terraform code
+     left with blog#54.
+
 5. **runway converges.** A re-plan of every leaf in runway shows
    `No changes.`
+   - **Open:** as LIB-0030's item 5.

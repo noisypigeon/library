@@ -2,8 +2,9 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-23.
-- **Status**: Proposed; amended 2026-10-23 (see `## Amendments`). LIB-0033
-  (proposed) would move §1's credentials from spoke to workload. Amends LIB-0023, whose §2 kind table gains Cloudflare
+- **Status**: Accepted; amended 2026-10-23 (see `## Amendments`), with
+  Verification items open. LIB-0033 moves §1's credentials from spoke to
+  workload. Amends LIB-0023, whose §2 kind table gains Cloudflare
   rows and whose §4 gains their defaults, and LIB-0028, whose §4 table gains
   the same rows. First of three records, with LIB-0031 and LIB-0032, that
   move the blog into runway.
@@ -198,21 +199,47 @@ so the check is a per-file one in practice.
 
 ## Verification
 
+Recorded 2026-10-24, from LIB-0032's migration in runway and the build's local tests. Item 5 remains open, and items 2 and 3 were exercised only locally.
+
 Run against LIB-0032's migration of the blog.
 
 1. **Imported records plan clean.** Every record and redirect from the blog
    spoke, once imported into the `blog` workload, plans `No changes.`
+   - **Passed:** after the import moved 25 resources out of noisypigeon/blog's
+     state ([library#154](https://github.com/noisypigeon/library/pull/154)'s
+     runbook), [runway#63](https://github.com/noisypigeon/runway/pull/63)
+     planned all 21 blog Cloudflare leaves `No changes.`
+
 2. **Ownership holds.** Each of these is refused, by name, before planning:
    - a record naming a zone that `zones.yaml` registers to another workload;
    - a hand-written leaf under a zone registered to `blog`;
    - a record with no zone and no `cloudflare.zone`;
    - `account_id` or `zone_id` written in `values.yaml`.
+   - **Passed locally, not in runway:** on a scratch spoke,
+     `resolve-workloads.sh` refused each by name, and root.hcl refused a
+     zone not registered to the workload, a missing zone, `account_id` and
+     `zone_id`, and a hand-written leaf in a workload's zone. runway's real
+     entries never tripped any of them.
+
 3. **Entrypoints hold.** A second `apexRedirect` for one zone, and a
    `http_request_dynamic_redirect` ruleset beside one, are refused.
+   - **Passed locally, in part:** a `http_request_dynamic_redirect` ruleset
+     beside an `apexRedirect`, and two rulesets in one phase, were refused.
+     A second `apexRedirect` for one zone wasn't tried.
+
 4. **Other leaves don't change.** Scaleway and Backblaze workload leaves, and
    runway's hand-written leaves, render identically.
+   - **Passed:** Scaleway and Backblaze workload leaves, and hand-written
+     leaves, rendered identically under v5.1.0 and v5.2.0. `poc`'s leaves
+     planned `No changes.` throughout
+     [runway#61](https://github.com/noisypigeon/runway/pull/61) and #63.
+
 5. **It converges.** After the migration, a re-plan of every leaf in runway
    shows `No changes.`
+   - **Open:** every blog and `poc` leaf has planned `No changes.` (runway#61,
+     #63), and so have runway's seven hand-written Backblaze leaves (a local
+     plan for [runway#60](https://github.com/noisypigeon/runway/pull/60)). A
+     single re-plan of every leaf in runway hasn't been run.
 
 ## Amendments
 
