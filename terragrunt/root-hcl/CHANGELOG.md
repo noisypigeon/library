@@ -4,6 +4,23 @@ All notable changes to this template are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [5.4.0] - 2026-10-23
+
+### A workload's Cloudflare token is minted with the breakglass token (LIB-0033)
+
+Fixes LIB-0033's minting chain, which [runway#59](https://github.com/noisypigeon/runway/pull/59)'s plan showed can't work: Cloudflare won't let a token grant *Account API Tokens Write*. A spoke token minted by the bootstrap token could never mint workload tokens. Nothing was applied.
+
+- **`terragrunt/root-hcl`:** a workload's `cloudflare/api-token/deployer` leaf now signs in with the spoke's Cloudflare breakglass token, wherever the spoke has one, with no `breakglass.leaves` entry. It's tested on the path alone, so it can't depend on the secrets it decides on.
+  - Every other leaf, the workload's Cloudflare record, ruleset and bucket leaves included, is unchanged.
+  - A spoke without Cloudflare breakglass renders identically to v5.3.0.
+- **The spoke's own Cloudflare token no longer needs to mint.** It holds only what hand-written Cloudflare leaves need. The `cloudflare/api-token` README's example drops the token groups (README only, no module release).
+
+LIB-0033 gains a second amendment recording runway#59's answer to its Verification 6: a minted token may hold groups its minter lacks, except the power to mint.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#160](https://github.com/noisypigeon/library/pull/160)
+
 ## [5.3.0] - 2026-10-23
 
 ### Workloads sign in to Cloudflare with their own token; bootstrap keys only mint (LIB-0033)

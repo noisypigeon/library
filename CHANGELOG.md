@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-23
 
+- [terragrunt/root-hcl] A workload's Cloudflare token is minted with the breakglass token (LIB-0033) ([#160](https://github.com/noisypigeon/library/pull/160))
 - [workflows] Workloads sign in to Cloudflare with their own token; bootstrap keys only mint (LIB-0033) ([#159](https://github.com/noisypigeon/library/pull/159))
 - [terragrunt/root-hcl] Workloads sign in to Cloudflare with their own token; bootstrap keys only mint (LIB-0033) ([#159](https://github.com/noisypigeon/library/pull/159))
 - [cloudflare/api-token] Workloads sign in to Cloudflare with their own token; bootstrap keys only mint (LIB-0033) ([#159](https://github.com/noisypigeon/library/pull/159))
