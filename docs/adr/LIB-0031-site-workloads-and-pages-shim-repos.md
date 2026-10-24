@@ -7,7 +7,8 @@
   shim repo, and LIB-0023, whose second amendment's gitignore narrows. Second
   of three records, with LIB-0030 and LIB-0032, that move the blog into
   runway. LIB-0034 has §4's dispatch read its target from `values.yaml`, and
-  §6's site changelog take one line per PR.
+  §6's site changelog take one line per PR. LIB-0035 makes §5's shim workflow
+  a reusable one, and moves garden.
 
 ## Context
 

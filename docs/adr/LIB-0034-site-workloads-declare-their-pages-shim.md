@@ -8,6 +8,8 @@
   - LIB-0032, which left `noisypigeon/blog`'s name out of scope;
   - COM-0007, folded into LIB-0016, which named repos for their role.
 
+  LIB-0035 applies it to garden, and gives §4's `pages.yml` a reusable body.
+
 ## Context
 
 LIB-0032 moved the blog into runway as `workloads/blog/`. It deploys through
