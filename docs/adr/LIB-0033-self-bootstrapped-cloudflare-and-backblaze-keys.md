@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-23.
-- **Status**: Proposed; amended 2026-10-23 (see `## Amendments`). Amends:
+- **Status**: Proposed; amended twice on 2026-10-23 (see `## Amendments`). Amends:
   - LIB-0014, which gains two breakglass providers;
   - LIB-0024, whose deployers reach Cloudflare;
   - LIB-0030, whose Cloudflare kinds move to workload credentials, behind a
@@ -260,4 +260,32 @@ four things.
      module resolves account policies at account scope. If the first plan
      finds no such group there, the spoke deployer's policy names change in
      another amendment.
+
+### 2026-10-23: the bootstrap token mints every token
+
+runway's first plan ([runway#59](https://github.com/noisypigeon/runway/pull/59))
+answered Verification 6's first question, and the answer breaks §2's chain.
+
+- **Cloudflare won't let a token grant token-minting.** The deployer leaf's
+  plan stopped at `cloudflare/api-token`'s precondition: the bootstrap token
+  "may not grant Account API Tokens Write". *Zone Read* and *Account API
+  Tokens Read* were grantable. So a minted token may hold groups its minter
+  lacks, except the power to mint. A spoke token minted by the bootstrap token
+  can never mint workload tokens. Nothing was applied.
+- **So the bootstrap token mints every Cloudflare token itself.**
+  - §4's workload token leaf, `workloads/<w>/cloudflare/api-token/deployer`,
+    signs in with `cloudflare_breakglass.enc` wherever the spoke has
+    Cloudflare breakglass on. root.hcl turns breakglass on for that path
+    without a `breakglass.leaves` entry, since a prefix can't name every
+    workload. A spoke without Cloudflare breakglass still mints with its own
+    token, which must then be a hand-made one with *Account API Tokens Write*.
+  - §2's spoke Cloudflare token no longer mints. It holds what the spoke's
+    hand-written Cloudflare leaves need, *Zone Read* on all zones in runway,
+    which has none. Its job is to replace the bootstrap-token placeholder in
+    `cloudflare.enc` (the first amendment, item 2), so the minting token
+    reaches only the leaves that mint.
+- **The bootstrap token's grants don't change,** and Backblaze's half doesn't
+  either. Whether B2 limits a minted key to its creator's capabilities is
+  still open, until runway#59's apply.
+- **It ships in `terragrunt/root-hcl` v5.4.0.**
 

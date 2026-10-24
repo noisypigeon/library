@@ -91,9 +91,10 @@
 # and a hand-written zone leaf only on zones no workload owns.
 #
 # Since v5.3.0 (LIB-0033) a workload that owns a zone, or declares an R2
-# bucket, gets its own Cloudflare token, cloudflare/api-token/deployer, minted
-# with the spoke's token and scoped to exactly those zones. Its Cloudflare
-# leaves sign in with it, not with the spoke's token.
+# bucket, gets its own Cloudflare token, cloudflare/api-token/deployer, scoped
+# to exactly those zones. Its Cloudflare leaves sign in with it, not with the
+# spoke's token. Since v5.4.0 that token is minted with the spoke's Cloudflare
+# breakglass token, where it has one: Cloudflare won't let a minted token mint.
 
 locals {
   # The spoke's instance values. Missing spoke.hcl is a hard error, which is
@@ -146,9 +147,21 @@ locals {
   # "every leaf" default: a breakglass key every leaf reads is just a second
   # provider key, so leaves is required.
   breakglass_providers = [for name in local.known_providers : name if can(local.providers[name].breakglass)]
+  # A workload's own Cloudflare token leaf (LIB-0033 §4) is breakglass too,
+  # wherever the spoke has Cloudflare breakglass: Cloudflare won't let a minted
+  # token mint, so only the bootstrap token can. Tested on the path alone, so
+  # it can't depend on the secrets it decides on.
+  is_cf_token_leaf = (
+    local.is_workload_leaf &&
+    try(local.path_segments[2], "") == "cloudflare" &&
+    try(local.path_segments[3], "") == "api-token" &&
+    try(local.path_segments[4], "") == "deployer"
+  )
   breakglass_on = {
-    for name in local.known_providers : name => local.provider_on[name] && contains(local.breakglass_providers, name) &&
-    anytrue([for prefix in try(local.providers[name].breakglass.leaves, []) : startswith(local.leaf, prefix)])
+    for name in local.known_providers : name => local.provider_on[name] && contains(local.breakglass_providers, name) && (
+      anytrue([for prefix in try(local.providers[name].breakglass.leaves, []) : startswith(local.leaf, prefix)]) ||
+      (name == "cloudflare" && local.is_cf_token_leaf)
+    )
   }
 
   # Misconfigurations fail the run rather than silently dropping a provider.
@@ -535,7 +548,9 @@ locals {
       credentials = "spoke"
       state       = "workload"
     }
-    # The workload's Cloudflare token (LIB-0033 §4), minted with the spoke's.
+    # The workload's Cloudflare token (LIB-0033 §4), minted with the spoke's
+    # breakglass token where it has one (breakglass_on), since a minted token
+    # can't mint; with the spoke's own token otherwise.
     # An entry under cloudflare.deployer overrides any default.
     "cloudflare/api-token#deployer" = {
       declared     = local.workload_instance == "deployer" && local.workload_cf_deployer
