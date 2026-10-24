@@ -4,6 +4,20 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [4.13.1] - 2026-10-23
+
+### resolve-workloads.sh --check accepts a Cloudflare stub's workload token
+
+Fixes a bug from LIB-0033's build (#159), found in LIB-0032's import preflight (#149).
+
+A Cloudflare workload stub passes its workload token, `cloudflare_api_token`, to root.hcl, which signs the provider in with it, as a Scaleway stub passes its deployer key. `--check` skipped only the Scaleway names when checking that a stub's wiring exists at the module's version. So every Cloudflare entry failed with "has no input(s) cloudflare_api_token … pin a newer version", and with it any spoke's plan.
+
+`--check` now skips `cloudflare_api_token` too. A real missing input is still caught: a `cloudflare.ruleset` pinned to `0.1` still fails for `zone`. Against the blog workload's 21 transcribed entries, it now passes all 22 of its Cloudflare stubs.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#162](https://github.com/noisypigeon/library/pull/162)
+
 ## [4.13.0] - 2026-10-23
 
 ### Workloads sign in to Cloudflare with their own token; bootstrap keys only mint (LIB-0033)

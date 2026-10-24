@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-23
 
+- [workflows] resolve-workloads.sh --check accepts a Cloudflare stub's workload token ([#162](https://github.com/noisypigeon/library/pull/162))
 - [adr] docs(adr): LIB-0033's bootstrap token also reads zones ([#161](https://github.com/noisypigeon/library/pull/161))
 - [terragrunt/root-hcl] A workload's Cloudflare token is minted with the breakglass token (LIB-0033) ([#160](https://github.com/noisypigeon/library/pull/160))
 - [workflows] Workloads sign in to Cloudflare with their own token; bootstrap keys only mint (LIB-0033) ([#159](https://github.com/noisypigeon/library/pull/159))
