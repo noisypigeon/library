@@ -20,6 +20,12 @@
 # A workload that owns a zone, or declares an R2 bucket, also gets its own
 # Cloudflare token, cloudflare/api-token/deployer, which its Cloudflare leaves
 # sign in with (LIB-0033 §4).
+# A site workload's features.githubPages (LIB-0034 §§1-2) implies two
+# cloudflare.dnsRecord entries, github-pages-root-cname and
+# github-pages-www-cname, the CNAMEs at @ and www that point the workload's
+# zone at its Pages host. An explicit entry under either key is merged over
+# its default, field by field. expand_values applies them before anything
+# reads values.yaml, so every check and stub counts them.
 # Values, defaults and the module version are root.hcl's, at plan time: it
 # writes them into the leaf's generated module block as literals, since a
 # `type = any` variable set through TF_VAR_ arrives as a string.
@@ -285,6 +291,24 @@ schema_properties() {
   cat "$cache"
 }
 
+# values.yaml as JSON, with what its features imply (LIB-0034 §2). A malformed
+# features.githubPages is passed through as it is, for the structural check
+# to name.
+expand_values() {
+  yq -o=json '.' "$1" | jq -c '
+    (try .features.githubPages catch null) as $p |
+    if ($p | type) == "object" and ($p.pagesShim | type) == "string" and ($p.pagesBaseUrl | type) == "string" then
+      ({
+        "github-pages-root-cname": {name: "@", type: "CNAME", content: $p.pagesBaseUrl, ttl: 1, proxied: false, comment: "github pages root cname (apex, cloudflare-flattened)"},
+        "github-pages-www-cname": {name: "www", type: "CNAME", content: $p.pagesBaseUrl, ttl: 1, proxied: false, comment: "github pages www cname"}
+      }) as $d |
+      .cloudflare = ((.cloudflare // {}) | .dnsRecord = (
+        (.dnsRecord // {}) as $e |
+        if ($e | type) != "object" then $e
+        else $e + ($d | with_entries(.value += (($e[.key] // {}) | if type == "object" then . else {} end))) end))
+    else . end'
+}
+
 EXPECTED_DIR="$(mktemp -d)"
 trap 'rm -rf "$EXPECTED_DIR"' EXIT
 mkdir -p "$EXPECTED_DIR/.cache"
@@ -324,7 +348,7 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
     fail "$rel: workload name '$workload' must be kebab-case"
     continue
   fi
-  if ! json=$(yq -o=json '.' "$values"); then
+  if ! json=$(expand_values "$values"); then
     fail "$rel: not valid YAML"
     continue
   fi
@@ -334,7 +358,20 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
     def keys_in($where; $allowed): (keys - $allowed)[] | "unknown key \($where).\(.); known: \($allowed | join(", "))";
     if type != "object" then "the file must be a mapping"
     else
-      keys_in(""; ["prefix", "suffix", "scaleway", "backblaze", "cloudflare"]),
+      keys_in(""; ["prefix", "suffix", "features", "scaleway", "backblaze", "cloudflare"]),
+      # What a workload is for, beyond its kinds (LIB-0034 §1).
+      (.features // {} | if type != "object" then "features must be a mapping" else
+        keys_in("features"; ["githubPages"]),
+        (.githubPages | if . == null then empty elif type != "object" then "features.githubPages must be a mapping of pagesShim and pagesBaseUrl (LIB-0034 §1)" else
+          keys_in("features.githubPages"; ["pagesShim", "pagesBaseUrl"]),
+          (if (.pagesShim | type) == "string" and (.pagesShim | test("^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$")) then empty
+           else "features.githubPages.pagesShim must be the shim repo, as owner/name (LIB-0034 §1)" end),
+          (if (.pagesBaseUrl | type) == "string" and (.pagesBaseUrl | test("^[a-z0-9-]+(\\.[a-z0-9-]+)+$")) then empty
+           else "features.githubPages.pagesBaseUrl must be the Pages host, e.g. owner.github.io (LIB-0034 §1)" end)
+        end)
+      end),
+      (if (.features.githubPages? | type) == "object" and ((.cloudflare.zone? // "") == "") then
+         "features.githubPages needs cloudflare.zone, the zone its records land in (LIB-0034 §1)" else empty end),
       (if (.prefix | type) != "string" or .prefix == "" then "prefix must be a non-empty string" else empty end),
       (if (.suffix | type) != "string" or .suffix == "" then "suffix must be a non-empty string" else empty end),
       (.scaleway // {} | if type != "object" then "scaleway must be a mapping" else
@@ -543,7 +580,7 @@ if [ "$CHECK" = true ]; then
       fail "$rel: not valid YAML"
       continue
     fi
-    vjson=$(yq -o=json '.' "$values")
+    vjson=$(expand_values "$values")
     problems=$(jq -r --argjson v "$vjson" '
       def leaves: paths(scalars) as $p | {path: $p, value: getpath($p)};
       if (type != "object") or (has("sops") | not) then
@@ -588,7 +625,7 @@ if [ "$CHECK" = true ]; then
     IFS='|' read -r workload module name jq_path declared_deps credentials <<<"$inst"
     values="$SPOKE_DIR/workloads/$workload/values.yaml"
     secrets="$SPOKE_DIR/workloads/$workload/secrets.yaml"
-    entry=$(yq -o=json '.' "$values" | jq -c "$jq_path // {}")
+    entry=$(expand_values "$values" | jq -c "$jq_path // {}")
     # scaleway.state.prefix is the stub's state key, not a module input
     # (LIB-0028 §3).
     if [ "$jq_path" = .scaleway.state ]; then entry=$(jq -c 'del(.prefix)' <<<"$entry"); fi

@@ -95,6 +95,10 @@
 # to exactly those zones. Its Cloudflare leaves sign in with it, not with the
 # spoke's token. Since v5.4.0 that token is minted with the spoke's Cloudflare
 # breakglass token, where it has one: Cloudflare won't let a minted token mint.
+#
+# Since v5.5.0 (LIB-0034) a site workload's features.githubPages implies two
+# cloudflare.dnsRecord entries, the Pages CNAMEs at @ and www. An explicit
+# entry under either key is merged over its default, field by field.
 
 locals {
   # The spoke's instance values. Missing spoke.hcl is a hard error, which is
@@ -403,6 +407,7 @@ locals {
   # dependency fills and their types (§4's wiring, which the stub sets), the
   # defaults, and whose credentials it signs in with (LIB-0024 §2). resolve-workloads.sh's KINDS and generate-module-redirects.sh's
   # schema list are this table's twins: change one and change all three.
+  # resolve-workloads.sh's expand_values is workload_cf_dns's twin.
   # A YAML key with nothing under it is null, so every lookup goes through
   # try(); a conditional can't stand in, since HCL wants both of its arms to
   # be the same shape of object.
@@ -418,9 +423,23 @@ locals {
   # zone kinds; a zone always comes from the file, never the path.
   workload_cloudflare = try(local.workload_values.cloudflare, null)
   workload_cf_zone    = try(tostring(local.workload_cloudflare.zone), "")
+  # The Pages records features.githubPages implies (LIB-0034 §2), under any
+  # explicit entry of the same key. A for with an `if` stands in for a
+  # conditional, whose arms HCL wants the same shape.
+  workload_pages_host = try(tostring(local.workload_values.features.githubPages.pagesBaseUrl), "")
+  workload_pages_dns = {
+    for k, v in {
+      "github-pages-root-cname" = { name = "@", type = "CNAME", content = local.workload_pages_host, ttl = 1, proxied = false, comment = "github pages root cname (apex, cloudflare-flattened)" }
+      "github-pages-www-cname"  = { name = "www", type = "CNAME", content = local.workload_pages_host, ttl = 1, proxied = false, comment = "github pages www cname" }
+    } : k => v if local.workload_pages_host != ""
+  }
+  workload_cf_dns = merge(local.workload_pages_dns, {
+    for k, v in merge({}, try(local.workload_cloudflare.dnsRecord, null)) :
+    k => merge(lookup(local.workload_pages_dns, k, {}), merge({}, v))
+  })
   workload_cf_maps = {
     "cloudflare/bucket"        = try(local.workload_cloudflare.bucket, null)
-    "cloudflare/dns-record"    = try(local.workload_cloudflare.dnsRecord, null)
+    "cloudflare/dns-record"    = local.workload_cf_dns
     "cloudflare/ruleset"       = try(local.workload_cloudflare.ruleset, null)
     "cloudflare/apex-redirect" = try(local.workload_cloudflare.apexRedirect, null)
   }
