@@ -1,0 +1,111 @@
+# Reusable: regenerates a site workload's generated files and commits them to
+# the caller's main (LIB-0035 §2). garden's module redirect pages, theme-version
+# pages, release posts and schemas are generate-module-redirects.sh's output,
+# and are committed under workloads/garden/ rather than built inside a Pages
+# deploy: the shim then builds exactly what main holds, and a broken
+# generation fails here, before the live site.
+#
+# The push lands under src_dir, outside values.yaml and secrets.yaml, so the
+# caller's sites.yml dispatches the site's shim (LIB-0034 §3). That's why it
+# pushes with BOT_GITHUB_TOKEN: a push made with GITHUB_TOKEN starts no
+# workflow. Nothing changed means no commit, and so no deploy.
+#
+# The caller holds the main-writer concurrency group, as blog-changelog.yml's
+# caller does, since both push to the same main.
+name: Site generate
+
+on:
+  workflow_call:
+    inputs:
+      src_dir:
+        description: "Path (in the caller's checkout) to the site whose generated files to commit, e.g. workloads/garden. Only changes under it are committed."
+        type: string
+        required: true
+      generate_cmd:
+        description: "Command to run from the caller's repo root, after fetch_script, that writes the generated files under src_dir."
+        type: string
+        required: true
+      fetch_script:
+        description: "Script (relative to the caller's repo root) that materializes library at the version the caller pins, with every tag."
+        type: string
+        required: false
+        default: "fetch-lib.sh"
+      git_user_name:
+        type: string
+        required: false
+        default: "istx25"
+      git_user_email:
+        type: string
+        required: false
+        default: "6799989+istx25@users.noreply.github.com"
+    secrets:
+      BOT_GITHUB_TOKEN:
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      # The newest main, as blog-changelog.yml checks it out: a commit made on
+      # an older one conflicts with any line another writer pushed since.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.BOT_GITHUB_TOKEN }}
+
+      - name: Fetch library
+        env:
+          FETCH_SCRIPT: ${{ inputs.fetch_script }}
+        run: '"./$FETCH_SCRIPT"'
+
+      # generate-module-redirects.sh --static-root needs it for LIB-0023's
+      # schemas; the same pin as zola-site-pages.yml's.
+      - name: Install terraform-docs
+        env:
+          TERRAFORM_DOCS_VERSION: "0.24.0"
+        run: |
+          curl -sSL "https://github.com/terraform-docs/terraform-docs/releases/download/v${TERRAFORM_DOCS_VERSION}/terraform-docs-v${TERRAFORM_DOCS_VERSION}-linux-amd64.tar.gz" \
+            | tar -xz -C /usr/local/bin terraform-docs
+
+      - name: Generate
+        run: ${{ inputs.generate_cmd }}
+
+      - name: Commit and push what changed
+        env:
+          SRC_DIR: ${{ inputs.src_dir }}
+          GIT_USER_NAME: ${{ inputs.git_user_name }}
+          GIT_USER_EMAIL: ${{ inputs.git_user_email }}
+        run: |
+          git config user.name "$GIT_USER_NAME"
+          git config user.email "$GIT_USER_EMAIL"
+          git add -A -- "$SRC_DIR"
+          if git diff --cached --quiet; then
+            echo "Nothing to regenerate under $SRC_DIR."
+            exit 0
+          fi
+          git diff --cached --stat | tail -n 1
+          git commit -m "chore: regenerate $SRC_DIR"
+          # Retry rather than fail on a rejected push, as blog-changelog.yml
+          # does: the caller's other main writers can race for main. A rebase
+          # conflict needs another writer to have touched these generated
+          # files in the seconds since the checkout, so it stays fatal.
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              echo "::error::rebase onto origin/main conflicted; refusing to guess"
+              exit 1
+            fi
+            if git push origin HEAD:main; then
+              echo "Pushed on attempt ${attempt}."
+              exit 0
+            fi
+            echo "Push rejected (attempt ${attempt}/5); another writer won the race."
+            sleep $((attempt * 5))
+          done
+          echo "::error::could not push to main after 5 attempts"
+          exit 1

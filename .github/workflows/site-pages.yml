@@ -1,0 +1,39 @@
+# Reusable: a Pages shim repo's whole deploy (LIB-0031 §5, LIB-0035 §3). It
+# builds one site workload, <spoke>/workloads/<workload>, at the spoke's
+# current main, and deploys it to the calling shim's own Pages site. A shim's
+# pages.yml (LIB-0034 §4) then names only its spoke and its workload.
+#
+# The site's generated files, if it has any, are already committed in the
+# workload (LIB-0035 §2), so a shim runs no library script but the theme's.
+#
+# Nested through ./, which resolves to this repo at the ref the shim pins,
+# so the shim's one `workflows/vX.Y.Z` pin covers both files.
+name: Site pages
+
+on:
+  workflow_call:
+    inputs:
+      spoke:
+        description: "owner/name of the spoke whose workload holds the site, e.g. noisypigeon/runway."
+        type: string
+        required: true
+      workload:
+        description: "The workload under the spoke's workloads/, e.g. blog."
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/zola-site-pages.yml
+    with:
+      repository: ${{ inputs.spoke }}
+      ref: main
+      src_dir: workloads/${{ inputs.workload }}
+      build_cmd: "SITE_COMMIT_SHA=$(git rev-parse --short HEAD) zola build"
+      fetch_script: fetch-lib.sh
+      theme_script: .lib-src/zola-site/resolve-theme.sh
