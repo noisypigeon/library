@@ -270,9 +270,18 @@ between the import and the merge of the PR that moves the entries.
 
 ## Verification
 
+Recorded 2026-10-25. Every item passed.
+
 1. **The DNS doesn't change.** Every moved leaf plans `No changes.` in step 4's
    PR, and `dig` for each moved name and type answers the same before and
    after.
+   - **Passed:** each of the 17 records and 2 redirects planned `No changes.` in
+     its zone leaf before it left blog's state, and all 19 zone leaves did again
+     in [runway#72](https://github.com/noisypigeon/runway/pull/72), whose 19
+     removed blog stubs changed only their outputs. After runway#72 applied,
+     every name and type from 1.1.1.1, and all four apex and `www` redirects,
+     matched the snapshot taken before the first import.
+
 2. **Ownership holds.** Each is refused by name, before planning:
    - a workload entry in a zone whose `zone.yaml` doesn't name it;
    - a `zone` in a `zone.yaml` entry;
@@ -281,11 +290,31 @@ between the import and the merge of the PR that moves the entries.
    - a workload `ruleset` or `apexRedirect`;
    - a hand-written `terraform/cloudflare/<zone>/` leaf;
    - a workload record that clashes with its zone's.
+
+   - **Passed, on copies of runway's `main` at `workflows/v6.0.0`:**
+     `resolve-workloads.sh` refused each, with its own message. root.hcl 6.0.0
+     also refused a root `zones.yaml`, a workload ruleset's leaf and a
+     hand-written zone leaf when each was rendered.
+
 3. **State lands in the zone's bucket.** A zone leaf's key is under
    `zones/<zone>/`, in that zone's own bucket.
+   - **Passed:** a zone leaf's rendered backend keys its state under
+     `zones/<zone>/`, in the zone's own bucket: its stub reads the bucket from
+     its `state` dependency, the zone's `scaleway/bucket/state`.
+
 4. **Tokens are scoped.** Each zone's token lists only its zone. After step 4,
    the blog's token lists only noisypigeon.com, without the ruleset groups.
+   - **Passed:** each of the four zone tokens holds *Zone Read*, *DNS Write* and
+     *Dynamic URL Redirects Write* on its own zone and nothing else. blog's
+     holds *Zone Read* and *DNS Write* on noisypigeon.com, and garden's the same
+     on noisypigeon.garden.
+     [runway#72](https://github.com/noisypigeon/runway/pull/72) updated blog's
+     in place.
+
 5. **It converges.** A re-plan of every leaf in runway shows `No changes.`
+   - **Passed:** [runway#73](https://github.com/noisypigeon/runway/pull/73), the
+     bump to `workflows/v6.0.0` and root.hcl 6.0.0, planned all 79 leaves with
+     no changes.
 
 ## Amendments
 
@@ -324,3 +353,23 @@ Two smaller things settled on the way:
   rather than once per file, so a zone's records and its workload's are
   checked together.
 
+### 2026-10-25: what the import taught
+
+§7's step 3 ran as two scripts, one per record and one per redirect, each
+following the runbook and removing a resource from blog's state only after
+its zone leaf planned `No changes.`. Four things they hit are now in
+`docs/runbooks/import-a-leaf-into-a-workload.md`:
+
+1. **A new leaf has no state.** Before its first import, `state list` fails
+   with `No state file was found!`, which means empty, not broken.
+2. **Terragrunt prefixes Terraform's lines,** so `No changes.` follows
+   `<time> STDOUT terraform:`. `plan -detailed-exitcode` is the check to
+   trust; a text check must not anchor at the line start.
+3. **`state list` lists data sources.** An apex redirect's
+   `module.this.data.cloudflare_zone.this` can't be imported and doesn't need
+   to be: the new leaf reads its own.
+4. **A many-resource leaf moves as one.** A redirect's ruleset, apex and `www`
+   records are imported together, planned once, and removed in one `state rm`.
+
+The runbook's sops check was also wrong: the `.enc` files are dotenv, so it
+needs `--input-type dotenv --output-type dotenv`.
