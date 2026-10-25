@@ -50,7 +50,9 @@
 # runs resolve-workloads.sh, plans every leaf of a workload whose values.yaml
 # changed, and plans an instance values.yaml no longer has as a destroy, from
 # its stub at the PR's base. Since v5.2.0 a zone's leaves (LIB-0036) are
-# generated and selected the same way, from zones/<zone>/zone.yaml.
+# generated and selected the same way, from zones/<zone>/zone.yaml, and since
+# v6.1.0 a workload in its zone's (LIB-0037), from
+# workloads/<zone>/<workload>/workload.yaml.
 #
 # secrets_files and prepare_cmd exist for spokes (LIB-0003). A spoke keeps its
 # secrets in one sops file per concern under terraform/secrets/ (LIB-0012), and
@@ -223,7 +225,8 @@ jobs:
           done
           # A workload's secrets.yaml (LIB-0025), every value, one line at a
           # time so a multi-line secret is masked whole.
-          for file in workloads/*/secrets.yaml; do
+          for file in workloads/*/secrets.yaml workloads/*/*/secrets.workload.yaml; do
+            [ -f "$file" ] || continue
             while IFS= read -r value; do
               [ -n "$value" ] && echo "::add-mask::$value" && printf '%s\n' "$value" >> "$masked"
             done < <(sops --decrypt --output-type json "$file" | jq -r '.. | scalars | tostring')
@@ -260,9 +263,11 @@ jobs:
       # in worktrees of tracked files. A spoke with a workloads/ or zones/
       # excludes them from the git filter -- deleting a committed stub must not
       # plan its destroy -- and selects them here instead, by unit: every leaf
-      # of a workload whose values.yaml changed, of a zone whose zone.yaml
-      # changed and of the workload it names before or after, and of every
-      # unit when root.hcl, spoke.hcl, zones.yaml or a secret changed. An instance values.yaml no longer has is planned as a destroy
+      # of a workload whose values.yaml or workload.yaml changed, of a zone
+      # whose zone.yaml changed and of the workload it names before or after
+      # and every workload under workloads/<zone>/, whose hosts it gives, and
+      # of every unit when root.hcl, spoke.hcl, zones.yaml or a secret
+      # changed. An instance its unit file no longer has is planned as a destroy
       # from its stub as of the PR's base (`git merge-base main HEAD`, which
       # moves only when the head does), generated in a worktree of that base.
       #
@@ -313,13 +318,18 @@ jobs:
             changed=$(git diff --name-only "$base" HEAD)
             # Each a unit directory, workloads/<w> or zones/<z>.
             if grep -qE '^(root\.hcl|spoke\.hcl|zones\.yaml|terraform/secrets/)' <<<"$changed"; then
-              names=$(for f in workloads/*/values.yaml zones/*/zone.yaml; do if [ -f "$f" ]; then dirname "$f"; fi; done)
+              names=$(for f in workloads/*/values.yaml workloads/*/*/workload.yaml zones/*/zone.yaml; do if [ -f "$f" ]; then dirname "$f"; fi; done)
             else
               names=$(grep -E '^workloads/[^/]+/(values|secrets)\.yaml$' <<<"$changed" | cut -d/ -f1-2 || true)
-              # A zone, and the workload it names at the base and at the head.
+              names="$names"$'\n'"$(grep -E '^workloads/[^/]+/[^/]+/(workload|secrets\.workload)\.yaml$' <<<"$changed" | cut -d/ -f1-3 || true)"
+              # A zone, the workload it names at the base and at the head, and
+              # the workloads in it, whose hosts it gives (LIB-0037 §3).
               while IFS= read -r zf; do
                 [ -z "$zf" ] && continue
                 names="$names"$'\n'"$(dirname "$zf")"
+                for wf in "workloads/$(basename "$(dirname "$zf")")"/*/workload.yaml; do
+                  [ -f "$wf" ] && names="$names"$'\n'"$(dirname "$wf")"
+                done
                 for owner in "$( { git show "$base:$zf" 2>/dev/null || true; } | yq '.workload // ""')" "$( { cat "$zf" 2>/dev/null || true; } | yq '.workload // ""')"; do
                   [ -n "$owner" ] && [ -f "workloads/$owner/values.yaml" ] && names="$names"$'\n'"workloads/$owner"
                 done
@@ -520,7 +530,7 @@ jobs:
             } >> output.txt
           fi
 
-          # Workload instances values.yaml no longer has (LIB-0023), planned
+          # Unit instances their unit file no longer has (LIB-0023), planned
           # with -destroy from the base's stubs. Their plans land in the same
           # $PLAN_DIR, keyed by the same relative paths. Terragrunt orders a
           # saved plan's apply as if it created, so the destroys are applied one
@@ -528,7 +538,7 @@ jobs:
           if [ -s "$RUNNER_TEMP/destroy-units.txt" ] && [ "$code" -eq 0 ]; then
             DESTROY_ARGS=()
             while IFS= read -r unit; do DESTROY_ARGS+=(--filter "./$unit"); done < "$RUNNER_TEMP/destroy-units.txt"
-            echo "=== Removed from values.yaml: planned as destroys from $(git merge-base main HEAD | cut -c1-7) ===" >> output.txt
+            echo "=== Removed from their unit file: planned as destroys from $(git merge-base main HEAD | cut -c1-7) ===" >> output.txt
             set +e
             if [ "$COMMAND" = plan ]; then
               (cd "$RUNNER_TEMP/base" && terragrunt --no-color run --all "${DESTROY_ARGS[@]}" --non-interactive --out-dir "$PLAN_DIR" --json-out-dir "$JSON_DIR" -- plan -destroy) >> output.txt 2>&1
