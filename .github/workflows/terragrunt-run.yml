@@ -123,6 +123,8 @@ jobs:
       JSON_DIR: ${{ github.workspace }}/.terragrunt-plans-json
       ARTIFACT_PREFIX: terragrunt-plan-${{ github.event.pull_request.number || github.event.issue.number }}
     steps:
+      # Only once this job holds the PR's concurrency group, so a caller that
+      # wants it at once also calls terragrunt-ack.yml, outside the group.
       - name: React to triggering comment
         if: github.event_name == 'issue_comment'
         uses: actions/github-script@v7
