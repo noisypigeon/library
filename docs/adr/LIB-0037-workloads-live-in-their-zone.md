@@ -245,8 +245,8 @@ runway has blog and garden under zones, and poc with none.
    The resource addresses don't change, only the leaf's path and backend, so
    nothing is imported. runway is frozen from the first push until the PR
    that commits the move merges, as
-   `docs/runbooks/import-a-leaf-into-a-workload.md` requires. Each new leaf must plan `No changes.` before its old state is
-   deleted.
+   `docs/runbooks/import-a-leaf-into-a-workload.md` requires. Each new leaf
+   must plan `No changes.` before its old state is deleted.
 4. **Commit the move:** `hosts` in noisypigeon.com and noisypigeon.garden,
    `deployments.githubPages: {}` in blog and garden, and poc under
    `workloads/private/poc/`. Its plan must show `No changes.` for every moved
