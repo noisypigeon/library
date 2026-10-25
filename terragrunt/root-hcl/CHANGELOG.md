@@ -4,6 +4,82 @@ All notable changes to this template are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [6.1.0] - 2026-10-25
+
+### Read workloads that live in their zone (LIB-0037)
+
+A workload can now live in its zone, as LIB-0037 decides, beside the old layout while a spoke moves. Nothing changes for a spoke that keeps `workloads/<workload>/values.yaml`: its stubs come out byte-identical, and its leaves render exactly as on `root-hcl/v6.0.0`.
+
+**The new layout:**
+
+- **Where:** `workloads/<zone>/<workload>/workload.yaml`, with `secrets.workload.yaml` beside it. A workload with no zone lives in `workloads/private/<workload>/`. The directory names the zone, so a `workload.yaml` never writes `cloudflare.zone`, and `name` defaults to the directory.
+- **Project:** a zoned workload lives in its zone's Scaleway project by default, with no project leaf of its own. Its deployer and state bucket depend on `zones/<zone>/scaleway/project/main`. `prefix` and `suffix` are the zone's, unless `deployments.scaleway.project` sets `name`, `prefix` or `suffix`, which gives it its own project. A private workload always has its own.
+- **Names:** its names carry `name`:
+  - deployer `<prefix>-<suffix>-<name>-deployer`;
+  - state bucket `<prefix>-<code>-<name>-terraform-state`;
+  - token `<prefix>-<suffix>-<name>-cloudflare-deployer`;
+  - a bucket's `name_prefix` `<prefix>-<name>-<key>`;
+  - IAM application `<prefix>-<suffix>-<name>`.
+
+  Its leaves sit one segment deeper, and its state keys start `workloads/<zone>/<workload>/`.
+- **Hosts:** `zone.yaml`'s new `hosts` gives the apex `@` and each subdomain label to one workload in `workloads/<zone>/`.
+  - **The workload** writes records only at its host: `@`, `www` and `_` names under them for the apex; the label and names under it for a subdomain. Its token gets *Zone Read* and *DNS Write* on its zone only when it has a host.
+  - **The zone** keeps every other name. It can't write under a subdomain host, nor `www` or an A, AAAA or CNAME at `@` beside an apex host, so its MX and TXT records at `@` stay.
+  - **Beside `hosts`,** `workload` still names an old-layout workload. So a spoke can create a workload's new deployer, state bucket and token before it moves the records.
+- **Pages:** `deployments.githubPages` replaces `features.githubPages`.
+  - `username` defaults to the spoke repo's owner: `GITHUB_REPOSITORY_OWNER`, or locally the owner in origin's URL.
+  - `shim` defaults to the host as a domain, and `url` to `<username>.github.io`.
+  - An apex host gets LIB-0034's two CNAMEs, with the same keys and contents. A subdomain host gets one, `github-pages-cname`.
+
+**Refusals.** `resolve-workloads.sh --check` refuses each of these before planning, and so does this template's guards:
+
+- in a `workload.yaml`:
+  - `features`;
+  - a top-level `prefix` or `suffix`;
+  - `scaleway.project`;
+  - any `zone`;
+  - a workload named `zone`;
+- a `secrets.yaml` beside a `workload.yaml`;
+- `githubPages` without a host, or in `private/`;
+- a record outside the workload's host;
+- a host naming no workload;
+- one workload holding two hosts;
+- `hosts.@` beside an `apexRedirect`;
+- a zone record at a host's name;
+- a `values.yaml` under a zone's directory, or a `workload.yaml` at the old depth.
+
+**The reusable CI follows:**
+
+- **`terragrunt-run.yml`** selects a nested workload by its `workload.yaml` or `secrets.workload.yaml`, and every workload in a zone whose `zone.yaml` changed. It masks `secrets.workload.yaml` too.
+- **`terragrunt-detect.yml`'s** default `leaf_pattern` gains `^workloads/[^/]+/[^/]+/(workload|secrets\.workload)\.yaml$`.
+- **`site-dispatch.yml`** finds sites at both depths, and dispatches a nested site's `<username>/<shim>`.
+- **`site-pages.yml`** already accepts `workload: <zone>/<workload>`; only its description changes.
+- **A run comment** now says a removed instance was "removed from its unit file".
+
+**Schemas:** the garden publishes `/schemas/workload/v2.json` for `workload.yaml`, and `/schemas/zone/v1.json` gains `hosts`. Workload v1 stays.
+
+**A spoke adopting the new layout:**
+
+- gitignores each provider's stub directory, `/workloads/*/*/scaleway/`, `/workloads/*/*/cloudflare/` and `/workloads/*/*/backblaze/`, never `/workloads/*/*/*/`, which would also hide a site's `content/`, `static/` and `templates/`;
+- adds `^workloads/[^/]+/[^/]+/(workload|secrets\.workload)\.yaml$` to its `leaf_pattern` if it overrides it;
+- adds `^workloads/[^/]+/[^/]+/secrets\.workload\.yaml$` to `.sops.yaml`.
+
+**Tested on copies of runway's `main`:**
+
+- **The old layout:** `--list` and every stub match `workflows/v6.0.0` byte for byte (55 stubs). 14 leaves across every kind, the zones' and a hand-written one included, render the same hash under the old and new template.
+- **The bootstrap layout** (`name`-only `workload.yaml`s, with zones giving each one `@` beside `workload`): it generates exactly a deployer, state bucket and token per workload. The 7 old-layout leaves it touches, both tokens included, render unchanged.
+- **The moved blog** renders §2's names, a token scoped to `noisypigeon.com`, and the two CNAMEs with LIB-0034's contents. So do a subdomain workload with its own project and a private one.
+- **Refusals:** each of the script's 22 fires, and so does each of the template's 12. The owner fallback was tested with SSH and HTTPS origins and with no origin.
+- **Lint and unit tests:** shellcheck, actionlint, `terragrunt hcl fmt` and `node --test` pass. The new schema's structure was checked; no JSON Schema validator ran on it.
+
+Refusing the old layout is the major that follows the move (LIB-0037 §6).
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+
+[#189](https://github.com/noisypigeon/library/pull/189)
+
 ## [6.0.0] - 2026-10-25
 
 ### Refuse zones.yaml, workload rulesets and redirects, and hand-written zone leaves

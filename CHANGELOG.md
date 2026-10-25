@@ -46,6 +46,8 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-25
 
+- [workflows] Read workloads that live in their zone (LIB-0037) ([#189](https://github.com/noisypigeon/library/pull/189))
+- [terragrunt/root-hcl] Read workloads that live in their zone (LIB-0037) ([#189](https://github.com/noisypigeon/library/pull/189))
 - [adr] Link LIB-0037's out-of-scope issues ([#188](https://github.com/noisypigeon/library/pull/188))
 - [adr] LIB-0037: workloads live in their zone ([#183](https://github.com/noisypigeon/library/pull/183))
 - [adr] Record LIB-0036's verification and what the import taught ([#182](https://github.com/noisypigeon/library/pull/182))
