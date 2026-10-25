@@ -47,7 +47,8 @@
 # each workloads/<workload>/values.yaml, rather than committed. "Select units"
 # runs resolve-workloads.sh, plans every leaf of a workload whose values.yaml
 # changed, and plans an instance values.yaml no longer has as a destroy, from
-# its stub at the PR's base.
+# its stub at the PR's base. Since v5.2.0 a zone's leaves (LIB-0036) are
+# generated and selected the same way, from zones/<zone>/zone.yaml.
 #
 # secrets_files and prepare_cmd exist for spokes (LIB-0003). A spoke keeps its
 # secrets in one sops file per concern under terraform/secrets/ (LIB-0012), and
@@ -227,13 +228,14 @@ jobs:
       # (noisypigeon/noisypigeon.com#19). If the lookup fails, fail the run
       # rather than risk the duplicate.
       #
-      # Workload leaves (LIB-0023) are generated, never committed, so the git
-      # filter can't see them: it plans in worktrees of tracked files. A spoke
-      # with a workloads/ excludes them from the git filter -- deleting a
-      # committed stub must not plan its destroy -- and selects them here
-      # instead, by workload: every leaf of a workload whose values.yaml
-      # changed, and of every workload when root.hcl, spoke.hcl or a secret
-      # changed. An instance values.yaml no longer has is planned as a destroy
+      # Unit leaves, a workload's (LIB-0023) or a zone's (LIB-0036), are
+      # generated, never committed, so the git filter can't see them: it plans
+      # in worktrees of tracked files. A spoke with a workloads/ or zones/
+      # excludes them from the git filter -- deleting a committed stub must not
+      # plan its destroy -- and selects them here instead, by unit: every leaf
+      # of a workload whose values.yaml changed, of a zone whose zone.yaml
+      # changed and of the workload it names before or after, and of every
+      # unit when root.hcl, spoke.hcl, zones.yaml or a secret changed. An instance values.yaml no longer has is planned as a destroy
       # from its stub as of the PR's base (`git merge-base main HEAD`, which
       # moves only when the head does), generated in a worktree of that base.
       #
@@ -250,11 +252,11 @@ jobs:
           set -euo pipefail
           base=$(git merge-base main HEAD)
           workloads=false
-          if [ -d workloads ] || git cat-file -e "$base:workloads" 2>/dev/null; then
+          if [ -d workloads ] || [ -d zones ] || git cat-file -e "$base:workloads" 2>/dev/null || git cat-file -e "$base:zones" 2>/dev/null; then
             workloads=true
           fi
           if [ "$workloads" = true ]; then
-            FILTER_ARGS=(--filter '[main...HEAD] | !./workloads/**')
+            FILTER_ARGS=(--filter '[main...HEAD] | !./workloads/** | !./zones/**')
           else
             FILTER_ARGS=(--filter '[main...HEAD]')
           fi
@@ -262,7 +264,7 @@ jobs:
           dirs=""
           while IFS= read -r f; do
             [ -z "$f" ] && continue
-            case "$f" in workloads/*) continue ;; esac
+            case "$f" in workloads/* | zones/*) continue ;; esac
             dir=$(dirname "$f")
             while [ "$dir" != "." ] && [ ! -f "$dir/terragrunt.hcl" ]; do
               dir=$(dirname "$dir")
@@ -282,10 +284,20 @@ jobs:
             resolver="$GITHUB_WORKSPACE/$SCRIPTS_DIR/resolve-workloads.sh"
             "$resolver"
             changed=$(git diff --name-only "$base" HEAD)
+            # Each a unit directory, workloads/<w> or zones/<z>.
             if grep -qE '^(root\.hcl|spoke\.hcl|zones\.yaml|terraform/secrets/)' <<<"$changed"; then
-              names=$(find workloads -mindepth 2 -maxdepth 2 -name values.yaml | cut -d/ -f2)
+              names=$(for f in workloads/*/values.yaml zones/*/zone.yaml; do if [ -f "$f" ]; then dirname "$f"; fi; done)
             else
-              names=$(grep -E '^workloads/[^/]+/(values|secrets)\.yaml$' <<<"$changed" | cut -d/ -f2 | sort -u || true)
+              names=$(grep -E '^workloads/[^/]+/(values|secrets)\.yaml$' <<<"$changed" | cut -d/ -f1-2 || true)
+              # A zone, and the workload it names at the base and at the head.
+              while IFS= read -r zf; do
+                [ -z "$zf" ] && continue
+                names="$names"$'\n'"$(dirname "$zf")"
+                for owner in "$( { git show "$base:$zf" 2>/dev/null || true; } | yq '.workload // ""')" "$( { cat "$zf" 2>/dev/null || true; } | yq '.workload // ""')"; do
+                  [ -n "$owner" ] && [ -f "workloads/$owner/values.yaml" ] && names="$names"$'\n'"workloads/$owner"
+                done
+              done < <(grep -E '^zones/[^/]+/zone\.yaml$' <<<"$changed" || true)
+              names=$(sort -u <<<"$names")
             fi
             # Their own filters, run by their own terragrunt invocation, never
             # beside the git expression: with one in play, terragrunt resolves
@@ -293,14 +305,14 @@ jobs:
             # committed there plans as a removal and a generated one, being
             # gitignored, isn't found at all.
             "$resolver" --list | LC_ALL=C sort > "$RUNNER_TEMP/head-stubs.txt"
-            for w in $names; do
+            for u in $names; do
               while IFS= read -r unit; do
                 WORKLOAD_ARGS+=(--filter "./$unit")
-              done < <(grep "^workloads/$w/" "$RUNNER_TEMP/head-stubs.txt" || true)
+              done < <(grep "^$u/" "$RUNNER_TEMP/head-stubs.txt" || true)
             done
 
             git worktree add -q --detach "$RUNNER_TEMP/base" "$base"
-            if [ -d "$RUNNER_TEMP/base/workloads" ]; then
+            if [ -d "$RUNNER_TEMP/base/workloads" ] || [ -d "$RUNNER_TEMP/base/zones" ]; then
               (cd "$RUNNER_TEMP/base" && "$resolver" >/dev/null && "$resolver" --list) | LC_ALL=C sort > "$RUNNER_TEMP/base-stubs.txt"
             else
               : > "$RUNNER_TEMP/base-stubs.txt"

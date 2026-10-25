@@ -41,7 +41,8 @@
 # With --static-root (the site's static/ directory), also publishes LIB-0023
 # §6's JSON Schemas there: one inputs.schema.json per terraform/scaleway
 # module version a workload can use, beside that version's redirect page, and
-# the workload schema at schemas/workload/v1.json that ties them together.
+# the workload schema at schemas/workload/v1.json that ties them together,
+# and the zone schema at schemas/zone/v1.json (LIB-0036).
 # Without it, nothing under static/ is touched.
 #
 # Regenerate-all semantics: every run wipes and rewrites every generated page
@@ -228,7 +229,8 @@ echo "Generated ${overview_count} module overview page(s) under ${CONTENT_DIR#"$
 # each kind against its newest version, or the version its `version` pins.
 #
 # The module list is the third copy of the kind table; its twins are
-# resolve-workloads.sh's KINDS and root.hcl's workload_kinds.
+# resolve-workloads.sh's KINDS and root.hcl's workload_kinds. The zone schema
+# (LIB-0036) takes the kinds whose units include a zone.
 #
 # The workload state bucket, scaleway.state (LIB-0028), is a scaleway/bucket
 # with one input of its own, `prefix`. Each inputs schema refuses properties it
@@ -245,7 +247,7 @@ if [ -n "$STATIC_ROOT" ]; then
     exit 2
   fi
   find "$STATIC_ROOT/terraform" \( -name inputs.schema.json -o -name state.schema.json -o -name workload.schema.json \) -type f -delete 2>/dev/null || true
-  rm -f "$STATIC_ROOT/schemas/workload/v1.json"
+  rm -f "$STATIC_ROOT/schemas/workload/v1.json" "$STATIC_ROOT/schemas/zone/v1.json"
 
   kinds_json='{}'
   schema_count=0
@@ -423,7 +425,50 @@ if [ -n "$STATIC_ROOT" ]; then
     }
   }' <<<"$kinds_json" >"$STATIC_ROOT/schemas/workload/v1.json"
 
-  echo "Generated ${schema_count} module inputs schema(s) and the workload schema under ${STATIC_ROOT}."
+  # A zone's zone.yaml (LIB-0036 §1): the kinds a zone takes, from the same
+  # table. A zone entry never names its zone, since its directory does.
+  mkdir -p "$STATIC_ROOT/schemas/zone"
+  jq --arg base "$SCHEMA_BASE_URL" '. as $k |
+    def zone_entries($kind): {
+      type: ["object", "null"],
+      propertyNames: {pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"},
+      additionalProperties: {allOf: [($k[$kind] // {}), {not: {required: ["zone"]}}]}
+    };
+    {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "\($base)/schemas/zone/v1.json",
+    title: "Zone zone.yaml (LIB-0036)",
+    type: "object",
+    additionalProperties: false,
+    required: ["suffix"],
+    properties: {
+      name: {type: "string", minLength: 1, description: "The zone unit'"'"'s name, and its Scaleway project'"'"'s. Default: the zone apex, its directory (LIB-0036 §1)"},
+      prefix: {type: "string", pattern: "^[a-z0-9-]+$", description: "What every other resource'"'"'s name starts with. Default: name, with each character outside a-z, 0-9 and - as a dash (LIB-0036 §1)"},
+      suffix: {type: "string", minLength: 1},
+      workload: {type: "string", pattern: "^[a-z0-9]+(-[a-z0-9]+)*$", description: "The one workload that may also write records in this zone (LIB-0036 §§1, 3)"},
+      scaleway: {
+        type: ["object", "null"],
+        additionalProperties: false,
+        properties: {
+          project: ($k["scaleway/project"] // {}),
+          deployer: ($k["scaleway/terraform-deployer-iam"] // {}),
+          state: ($k["scaleway/bucket#state"] // {})
+        }
+      },
+      cloudflare: {
+        type: ["object", "null"],
+        additionalProperties: false,
+        properties: {
+          deployer: ($k["cloudflare/api-token#workload"] // {}),
+          dnsRecord: zone_entries("cloudflare/dns-record"),
+          ruleset: zone_entries("cloudflare/ruleset#workload"),
+          apexRedirect: zone_entries("cloudflare/apex-redirect")
+        }
+      }
+    }
+  }' <<<"$kinds_json" >"$STATIC_ROOT/schemas/zone/v1.json"
+
+  echo "Generated ${schema_count} module inputs schema(s), and the workload and zone schemas, under ${STATIC_ROOT}."
 fi
 
 mkdir -p "$THEME_CONTENT_DIR"

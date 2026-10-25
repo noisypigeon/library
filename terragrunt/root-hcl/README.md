@@ -504,6 +504,53 @@ cloudflare:
 - **An entry under either key overrides its default field by field,** so
   `github-pages-www-cname: { comment: … }` changes only the comment.
 
+Since v5.6.0 (LIB-0036), with `workflows/v5.2.0` or later, a zone is a unit
+of its own. `zones/<zone>/zone.yaml`, named for the zone's apex, holds the
+records and redirects that belong to the domain rather than to a site:
+
+```yaml
+# zones/example.org/zone.yaml
+# yaml-language-server: $schema=https://noisypigeon.garden/schemas/zone/v1.json
+name: example.org   # the Scaleway project; defaults to the directory
+prefix: exo         # every other name; defaults to name, as example-org
+suffix: example     # required
+workload: site      # optional: the one workload that may write here too
+cloudflare:
+  dnsRecord:
+    mx-primary:
+      name: '@'
+      type: MX
+      content: mx1.example.net
+      priority: 10
+  apexRedirect:
+    main:
+      target_url: https://www.example.org
+```
+
+- **A zone gets what a workload gets,** with `zone-` in its names: a project
+  named `name`, a deployer `<prefix>-<suffix>-zone-deployer`, a state bucket
+  `<prefix>-<code>-zone-terraform-state`, and a token
+  `<prefix>-<suffix>-zone-cloudflare-deployer` with *Zone Read*, *DNS Write*
+  and *Dynamic URL Redirects Write* on its own zone only. Its leaves are
+  generated at `zones/<zone>/<provider>/<module>/<instance>/` and keep their
+  state under `zones/<zone>/`.
+- **It takes zone kinds only:** `dnsRecord`, `ruleset` and `apexRedirect`,
+  plus overrides for its `project`, `deployer`, `state` and Cloudflare
+  `deployer`. Its entries never write `zone`, and it has no `secrets.yaml`. A
+  record's `comment` defaults to `zones/<zone>`.
+- **`workload` takes `zones.yaml`'s place.** A workload acts only on zones
+  whose `zone.yaml` names it, or that `zones.yaml` still registers to it. A
+  zone in both is refused. A workload's token has the redirect group only if
+  it declares a `ruleset` or an `apexRedirect`.
+- **Clashes are checked across the spoke,** so a zone's records and its
+  workload's can't be one record.
+
+Moving an existing record into a zone is an import, never a recreate:
+`docs/runbooks/import-a-leaf-into-a-workload.md`. A spoke gitignores
+`/zones/*/scaleway/` and `/zones/*/cloudflare/` beside its workload lines, and
+adds `^zones/[^/]+/zone\.yaml$` to `terragrunt-detect.yml`'s `leaf_pattern`
+if it overrides it.
+
 A workload may also have a `workloads/<workload>/secrets.yaml` (v4.5.0,
 LIB-0025), encrypted with sops as YAML. Its rule in the spoke's `.sops.yaml` is
 `^workloads/[^/]+/secrets\.yaml$`. It holds secret inputs under the same kind
