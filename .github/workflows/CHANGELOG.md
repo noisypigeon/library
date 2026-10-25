@@ -4,6 +4,35 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [5.2.0] - 2026-10-24
+
+### Add zone units, zones/<zone>/zone.yaml (LIB-0036)
+
+A zone can now be a unit of its own, beside workloads (LIB-0036). A spoke adds `zones/<zone>/zone.yaml`, named for the zone's apex, for the records and redirects that belong to the domain rather than to a site: mail, verification, identity, apex redirects. Nothing changes for a spoke that adds none.
+
+A zone unit gets what a workload gets, with `zone-` in its names:
+
+- a Scaleway project named `name`, which defaults to the directory and may hold dots, such as `example.org`;
+- a deployer `<prefix>-<suffix>-zone-deployer` and a state bucket `<prefix>-<code>-zone-terraform-state`, where `prefix` defaults to `name` with anything outside `a-z0-9-` turned into `-`, and `suffix` is required;
+- a Cloudflare token `<prefix>-<suffix>-zone-cloudflare-deployer`, with *Zone Read*, *DNS Write* and *Dynamic URL Redirects Write* on that zone only.
+
+It takes `cloudflare.dnsRecord`, `ruleset` and `apexRedirect`, plus overrides for those four implicit kinds. Its leaves are generated at `zones/<zone>/<provider>/<module>/<instance>/`, and keep their state under `zones/<zone>/` in the zone's own bucket. Its entries never write `zone`, a record's `comment` defaults to `zones/<zone>`, and it has no `secrets.yaml`.
+
+A zone may name one `workload`, which may then write records and buckets in it too. That takes the place of `zones.yaml` for that zone. `zones.yaml` still works in this release, so a spoke can move one zone at a time; a zone in both places is refused. The clash checks (one entrypoint per phase, one record per name and type, an apex redirect's placeholders) now run across the whole spoke, so a zone's records and its workload's are checked together.
+
+One change reaches existing workloads: a workload's own Cloudflare token now gets *Dynamic URL Redirects Write* only if it declares a `ruleset` or an `apexRedirect`. A workload that has neither plans an in-place update to its token, dropping that group.
+
+`terragrunt-run.yml` selects a zone's leaves the way it selects a workload's: a changed `zone.yaml` plans that zone, and its workload at both the PR's base and head. `terragrunt-detect.yml`'s default `leaf_pattern` gains `^zones/[^/]+/zone\.yaml$`; a spoke that overrides it adds the same. A spoke gitignores `/zones/*/scaleway/` and `/zones/*/cloudflare/`. The editor schema `/schemas/zone/v1.json` is generated beside the workload schema, and moving a live record into a zone follows `docs/runbooks/import-a-leaf-into-a-workload.md`, now written for workloads and zones.
+
+A later major release refuses `zones.yaml`, a workload `ruleset` or `apexRedirect`, and hand-written zone leaves. LIB-0036's new amendment explains why this ships as a minor first.
+
+Tested on a scratch copy of runway with throwaway secrets: its 42 workload stubs, `--list` and `--check` output, and 30 of 31 rendered workload configs are byte-identical to v5.5.0. The one difference is garden's token losing the redirect group. Two zone units, one with a `prefix` and one without, rendered the names, token scope, comments and state keys above. Every refusal, in the script and in root.hcl, was triggered by name. Not tested: a real plan, and validating a `zone.yaml` against the generated schema.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#176](https://github.com/noisypigeon/library/pull/176)
+
 ## [5.1.1] - 2026-10-24
 
 ### A release regenerates noisypigeon.garden in runway (LIB-0035)

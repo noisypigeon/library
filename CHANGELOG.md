@@ -46,6 +46,8 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-24
 
+- [workflows] Add zone units, zones/<zone>/zone.yaml (LIB-0036) ([#176](https://github.com/noisypigeon/library/pull/176))
+- [terragrunt/root-hcl] Add zone units, zones/<zone>/zone.yaml (LIB-0036) ([#176](https://github.com/noisypigeon/library/pull/176))
 - [adr] docs(adr): LIB-0036, zones are units of their own ([#174](https://github.com/noisypigeon/library/pull/174))
 - [workflows] A release regenerates noisypigeon.garden in runway (LIB-0035) ([#173](https://github.com/noisypigeon/library/pull/173))
 - [workflows] Reusable site-generate.yml and site-pages.yml (LIB-0035) ([#172](https://github.com/noisypigeon/library/pull/172))
