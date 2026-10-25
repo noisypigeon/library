@@ -72,7 +72,10 @@ nothing that is deployed:
   site calls it to dispatch the site's deploy in its Pages shim repo, a repo
   holding only a README and that deploy workflow (LIB-0031). The shim calls
   `zola-site-pages.yml` with `repository` and `ref` to build the spoke's
-  `main`, since Pages deploys only the repo it runs in (DEV-0156).
+  `main`, since Pages deploys only the repo it runs in (DEV-0156). Since
+  LIB-0035 a shim does that through `site-pages.yml`, naming only its spoke
+  and workload, and `site-generate.yml` commits a site's generated files in
+  the spoke before it deploys.
 - `.github/workflows/container-image-release.yml` — builds a caller's
   Dockerfile natively per platform, runs the caller's smoke test inside each
   image before anything is pushed, then publishes one multi-arch,
@@ -80,8 +83,9 @@ nothing that is deployed:
   The Dockerfile, image name and smoke test stay in the spoke.
 - `.github/scripts/generate-module-redirects.sh` — generates the `noisypigeon.garden` site's module
   redirect pages, overview pages, theme-version pages and release posts from
-  this repo's tags, READMEs and CHANGELOGs. Runs in a *consuming* site's build,
-  so it reads two roots: `LIB_ROOT`, derived from `${BASH_SOURCE[0]}` so it
+  this repo's tags, READMEs and CHANGELOGs. Runs in a *spoke's* generation,
+  runway's `garden-generate.yml` through `site-generate.yml`, which commits its
+  output under `workloads/garden/` (LIB-0035 §2), so it reads two roots: `LIB_ROOT`, derived from `${BASH_SOURCE[0]}` so it
   finds the clone it was fetched into rather than the site's repo, and
   `--content-root`, which only the caller knows.
 
@@ -96,25 +100,32 @@ module index.
 ## This repo hosts nothing
 
 There is no site, no Terraform state, no live `root.hcl` (only the template the spokes copy) and no secrets here. The
-practical consequence: **every deploy dispatch is cross-repo.** A module release
-dispatches `garden-pages.yml` in `noisypigeon/garden`; a theme release
-additionally dispatches `pages.yml` in
-`noisypigeon/noisypigeon.com`, the Pages shim that builds runway's `workloads/blog/`
-(LIB-0031, LIB-0032, LIB-0034). Both need `BOT_GITHUB_TOKEN` to carry
-`actions: write` on the target, and both fail loudly if it does not — the
-symptom otherwise is a tagged, released version whose short URL 404s.
+practical consequence: **every deploy dispatch is cross-repo.** Every release
+dispatches `garden-generate.yml` in `noisypigeon/runway`, which regenerates
+`noisypigeon.garden`'s pages and commits them under `workloads/garden/`. That
+commit then deploys itself through runway's `sites.yml` and the
+`noisypigeon/noisypigeon.garden` shim (LIB-0035). A theme release additionally
+dispatches `pages.yml` in `noisypigeon/noisypigeon.com`, the Pages shim that
+builds runway's `workloads/blog/` (LIB-0031, LIB-0032, LIB-0034). Both need
+`BOT_GITHUB_TOKEN` to carry `actions: write` on the target, and both fail loudly
+if it does not — the symptom otherwise is a tagged, released version whose short
+URL 404s.
 
-`garden-pages.yml` deliberately does **not** live here: `actions/deploy-pages`
+The shims' `pages.yml` deliberately does **not** live here: `actions/deploy-pages`
 always targets the calling repo's own Pages site, so that caller has to live in
 the repo whose site it deploys (DEV-0156 — a constraint, not a style choice).
+Its body does: each shim's `pages.yml` only calls `site-pages.yml` with its
+spoke and workload (LIB-0035 §3).
 
 ## Where the decisions live
 
 ADRs live at `docs/adr/LIB-NNNN-<slug>.md`, numbered from `0001` within that
 directory. `LIB-0001` defines the architecture; `LIB-0002` created this repo.
 
-**This is also where the spokes' decisions live.** The spokes are garden and
-runway; blog is now only a Pages shim (LIB-0032), `noisypigeon/noisypigeon.com` (LIB-0034). None of them holds ADRs
+**This is also where the spokes' decisions live.** The one spoke is runway.
+blog and garden are now only Pages shims, `noisypigeon/noisypigeon.com`
+(LIB-0032, LIB-0034) and `noisypigeon/noisypigeon.garden` (LIB-0035), whose
+sites are runway's `blog` and `garden` workloads. None of them holds ADRs
 (LIB-0017): a decision about one of them is an amendment on the `LIB-`
 record whose standard it applies, or a new `LIB-` record. Their old records
 are all here:

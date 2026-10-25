@@ -92,7 +92,7 @@ path adjustment at all.
   the social-preview image, and any per-post images.
 - Any workload-specific template override, placed directly in the site's
   own `templates/` where it takes precedence over this theme's version of
-  the same filename — e.g. `noisypigeon/garden`'s own `templates/module-redirect.html`
+  the same filename — e.g. runway's `workloads/garden/templates/module-redirect.html`
   for [ADR-0109](https://github.com/noisypigeon/noisypigeon/blob/main/docs/adr/0109-short-module-source-urls-via-blog-redirect.md)'s
   Terraform-module redirect pages, or `theme-redirect.html` for this theme's
   own version-redirect pages (ADR-0114) — both have no business being part of

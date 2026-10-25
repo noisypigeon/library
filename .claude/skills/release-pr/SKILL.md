@@ -1,6 +1,6 @@
 ---
 name: release-pr
-description: Use this skill when making a change to one of this repo's terraform/ Terraform modules or the zola-site/ theme and getting it merged to main. This is the library hub repo; consumers are the spoke repos (noisypigeon, garden, blog, runway) and are bumped in a separate PR there. Covers branching off main, committing, opening the pull request, applying the required release:* label, merging, and syncing local main afterward. Trigger on requests like "open a PR for this", "release this module change", "ship this to main", or "merge this terraform module or zola-site theme change".
+description: Use this skill when making a change to one of this repo's terraform/ Terraform modules or the zola-site/ theme and getting it merged to main. This is the library hub repo; consumers are the spoke repos (noisypigeon, runway) and are bumped in a separate PR there. Covers branching off main, committing, opening the pull request, applying the required release:* label, merging, and syncing local main afterward. Trigger on requests like "open a PR for this", "release this module change", "ship this to main", or "merge this terraform module or zola-site theme change".
 ---
 
 # Releasing a terraform/ or zola-site/ change
@@ -70,10 +70,12 @@ later — get the PR body right the first time.
    ```
    Merging triggers `template-release.yml` automatically (tags the changed
    module(s), updates their `CHANGELOG.md` and the root one, cuts a GitHub
-   Release, then dispatches `garden-pages.yml` in `noisypigeon/garden`,
+   Release, then dispatches `garden-generate.yml` in `noisypigeon/runway`,
    which regenerates this version's redirect page, overview entry and release
-   post) and, on any resulting `.tf` changes, `module-docs.yml` (regenerates
-   the module's `README.md` input/output table). A `zola-site` release
+   post, commits them under `workloads/garden/`, and so deploys them through
+   the `noisypigeon/noisypigeon.garden` shim) and, on any resulting `.tf`
+   changes, `module-docs.yml` (regenerates the module's `README.md`
+   input/output table). A `zola-site` release
    additionally dispatches `pages.yml` in
    `noisypigeon/noisypigeon.com`, the other site that renders with the theme.
    None need triggering manually.
@@ -96,8 +98,8 @@ later — get the PR body right the first time.
 7. **Bump the consumer, if there is one.** Module consumers live in
    `noisypigeon/noisypigeon`, pinned by exact version in
    `*/terraform/**/*.tf` as `source = "https://noisypigeon.garden/terraform/<provider>/<module>/vX.Y.Z"`.
-   Theme consumers are the `garden` and `blog` site repos, each
-   pinning a version per LIB-0001 invariant 2. Either bump is a separate PR in
+   Theme consumers are runway's `garden` and `blog` site workloads, each
+   pinning a version in its `config.toml` per LIB-0001 invariant 2. Either bump is a separate PR in
    that repo, and it can only be opened once this release's deploy has
    finished — the short URL has to resolve before `terragrunt init` can fetch
    it.
