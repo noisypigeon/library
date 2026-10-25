@@ -4,6 +4,21 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [5.2.1] - 2026-10-24
+
+### Fix resolve-workloads.sh --list failing in a spoke without zones
+
+Since `workflows/v5.2.0`, `resolve-workloads.sh --list` printed the right stubs but then exited 1 in any tree with a `workloads/` directory and no `zones/` directory. It listed both roots with one `find`, which fails on a root that doesn't exist, and the script runs under `pipefail`.
+
+`terragrunt-run.yml`'s "Select units" runs `--list` at the PR's base too. So a spoke's plan failed, with no error message, whenever either side of the PR had no zone units. That includes a spoke's first PR that adds them, since its base has none yet. The fix lists only the roots that exist, the way the script's stub cleanup already did.
+
+Checked by exit code, for every mode (write, `--list` and `--check`), on a spoke with workloads only, one with workloads and zones, and one with zones only. I also replayed "Select units" on runway's zone bootstrap branch against its `main`: both lists succeed, and it plans no destroys.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#177](https://github.com/noisypigeon/library/pull/177)
+
 ## [5.2.0] - 2026-10-24
 
 ### Add zone units, zones/<zone>/zone.yaml (LIB-0036)
