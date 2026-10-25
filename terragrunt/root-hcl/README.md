@@ -563,6 +563,64 @@ the only way to register a zone. Each of these is refused before planning, by
 A spoke whose zones are all `zone.yaml`s, and whose workloads hold no redirect,
 plans `No changes.` on the bump.
 
+Since v6.1.0 (LIB-0037), with `workflows/v6.1.0` or later, a workload may live
+in its zone, beside the old layout while a spoke moves:
+
+```yaml
+# workloads/example.org/site/workload.yaml
+# yaml-language-server: $schema=https://noisypigeon.garden/schemas/workload/v2.json
+name: site            # defaults to the directory; never `zone`
+deployments:
+  scaleway:
+    project: {}       # the zone's project; name, prefix or suffix gives it its own
+  githubPages: {}     # username, shim and url all default
+```
+
+```yaml
+# zones/example.org/zone.yaml
+hosts:
+  '@': site           # the apex and www
+  docs: handbook      # workloads/example.org/handbook/
+```
+
+- **The directory names the zone,** so a `workload.yaml` never writes `zone`,
+  and `prefix` and `suffix` are the zone's unless
+  `deployments.scaleway.project` sets them. A workload with no zone lives in
+  `workloads/private/<workload>/`, in a project of its own, so it sets both.
+  Its secrets are `secrets.workload.yaml` beside it.
+- **It has no project leaf in its zone's project.** Its deployer and state
+  bucket depend on `zones/<zone>/scaleway/project/main`, and its names carry
+  `name`: `<prefix>-<suffix>-<name>-deployer`,
+  `<prefix>-<code>-<name>-terraform-state`,
+  `<prefix>-<suffix>-<name>-cloudflare-deployer`, and `<prefix>-<name>-<key>`
+  for a bucket. Its leaves are generated at
+  `workloads/<zone>/<workload>/<provider>/<module>/<instance>/` and keep their
+  state under `workloads/<zone>/<workload>/`.
+- **`hosts` says who serves what.** Each host names one workload in
+  `workloads/<zone>/`, which writes records only at its host: `@`, `www` and
+  `_` names under them for the apex, or the label and the names under it.
+  Its token gets *Zone Read* and *DNS Write* on its zone only with a host. The
+  zone keeps every other name, but not one under a subdomain host, nor `www`
+  or an A, AAAA or CNAME at `@` beside an apex host, so its MX and TXT at `@`
+  stay. `hosts.@` and an `apexRedirect` can't stand together. Beside `hosts`,
+  `workload` still names an old-layout workload, so a spoke can create a
+  workload's new deployer, state bucket and token before moving its records.
+- **`deployments.githubPages` replaces `features.githubPages`.** `username`
+  defaults to the spoke repo's owner (`GITHUB_REPOSITORY_OWNER`, else
+  origin's URL), `shim` to the host as a domain, and `url` to
+  `<username>.github.io`. An apex host gets LIB-0034's two CNAMEs, a subdomain
+  one, `github-pages-cname`. It needs a host. `site-dispatch.yml` dispatches
+  `<username>/<shim>`, and a shim passes `site-pages.yml` the workload as
+  `<zone>/<workload>`.
+
+A spoke gitignores each provider's stub directory, `/workloads/*/*/scaleway/`,
+`/workloads/*/*/cloudflare/` and `/workloads/*/*/backblaze/`, never
+`/workloads/*/*/*/`, which would also hide a site's `content/`, `static/` and
+`templates/`. It adds
+`^workloads/[^/]+/[^/]+/(workload|secrets\.workload)\.yaml$` to its
+`leaf_pattern` if it overrides it, and
+`^workloads/[^/]+/[^/]+/secrets\.workload\.yaml$` to its `.sops.yaml`.
+
 Moving an existing record into a zone is an import, never a recreate:
 `docs/runbooks/import-a-leaf-into-a-workload.md`. A spoke gitignores
 `/zones/*/scaleway/` and `/zones/*/cloudflare/` beside its workload lines, and

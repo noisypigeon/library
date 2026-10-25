@@ -142,7 +142,7 @@ locals {
   # provider on for every workload.
   provider_on = {
     for name in local.known_providers : name => contains(keys(local.providers), name) && (
-      local.is_workload_leaf ? name == try(local.path_segments[2], "") : (
+      local.is_workload_leaf ? name == local.leaf_provider : (
         length(try(local.providers[name].leaves, [])) == 0 ||
         anytrue([for prefix in try(local.providers[name].leaves, []) : startswith(local.leaf, prefix)])
       )
@@ -169,9 +169,9 @@ locals {
   # it can't depend on the secrets it decides on.
   is_cf_token_leaf = (
     local.is_workload_leaf &&
-    try(local.path_segments[2], "") == "cloudflare" &&
-    try(local.path_segments[3], "") == "api-token" &&
-    try(local.path_segments[4], "") == "deployer"
+    local.leaf_provider == "cloudflare" &&
+    local.workload_module == "cloudflare/api-token" &&
+    local.workload_instance == "deployer"
   )
   breakglass_on = {
     for name in local.known_providers : name => local.provider_on[name] && contains(local.breakglass_providers, name) && (
@@ -364,12 +364,21 @@ locals {
   # root is included from outside <spoke>/terraform/ is excluded -- except a
   # unit leaf, which is exactly <root>/<unit>/<provider>/<module>/<instance>:
   # a workload's under workloads/ (LIB-0023), or a zone's under zones/
-  # (LIB-0036). Every workload_* local below is a unit's, a zone's included.
-  path_segments    = split("/", path_relative_to_include())
-  unit_root        = local.path_segments[0]
-  is_workload_leaf = length(local.path_segments) == 5 && contains(["workloads", "zones"], local.unit_root)
-  is_zone_unit     = local.is_workload_leaf && local.unit_root == "zones"
-  is_valid_leaf    = local.path_segments[0] == "terraform" || local.is_workload_leaf
+  # (LIB-0036). Since LIB-0037 a workload may also live in its zone, one
+  # segment deeper: workloads/<zone>/<workload>/..., or with no zone
+  # workloads/private/<workload>/..., which unit_offset steps past. Every
+  # workload_* local below is a unit's, a zone's included.
+  path_segments      = split("/", path_relative_to_include())
+  unit_root          = local.path_segments[0]
+  is_nested_workload = length(local.path_segments) == 6 && local.unit_root == "workloads" && (length(regexall("^[a-z0-9-]+(\\.[a-z0-9-]+)+$", try(local.path_segments[1], ""))) > 0 || try(local.path_segments[1], "") == "private")
+  is_workload_leaf   = (length(local.path_segments) == 5 && contains(["workloads", "zones"], local.unit_root)) || local.is_nested_workload
+  is_zone_unit       = local.is_workload_leaf && local.unit_root == "zones"
+  is_valid_leaf      = local.path_segments[0] == "terraform" || local.is_workload_leaf
+  unit_offset        = local.is_nested_workload ? 1 : 0
+  # The zone a nested workload lives in, or `private`.
+  workload_parent     = local.is_nested_workload ? local.path_segments[1] : ""
+  is_private_workload = local.workload_parent == "private"
+  leaf_provider       = try(local.path_segments[2 + local.unit_offset], "")
 
   # A zone leaf (LIB-0008) is terraform/cloudflare/<zone>/<module>/<instance>/,
   # where <zone> is the zone's apex domain. A domain always has a dot and a
@@ -386,38 +395,68 @@ locals {
   # workload it names, or to none. Unit leaves are selected by
   # terragrunt-run.yml rather than the git filter, so these need no
   # mark_as_read. A root zones.yaml is only looked for, to be refused.
+  # Since LIB-0037 §3 each also gives its hosts, the apex `@` and each
+  # subdomain label, to the workloads under workloads/<zone>/ that serve them.
   zones = {
     for f in(local.is_workload_leaf ? fileset(get_parent_terragrunt_dir(), "zones/*/zone.yaml") : []) :
-    split("/", f)[1] => { workload = try(tostring(yamldecode(file("${get_parent_terragrunt_dir()}/${f}")).workload), "") }
+    split("/", f)[1] => {
+      workload = try(tostring(yamldecode(file("${get_parent_terragrunt_dir()}/${f}")).workload), "")
+      hosts    = try({ for h, w in yamldecode(file("${get_parent_terragrunt_dir()}/${f}")).hosts : h => tostring(w) }, {})
+    }
   }
 
   # Workload leaves (LIB-0023). HCL evaluates both arms of a conditional, so
   # every expression below runs for every leaf and is written to be harmless
   # for a hand-written one. Only the guards and workload_tf act, and only on a
   # workload leaf.
-  workload          = try(local.path_segments[1], "")
-  workload_module   = "${try(local.path_segments[2], "")}/${try(local.path_segments[3], "")}"
-  workload_instance = try(local.path_segments[4], "")
-  workload_file     = local.is_zone_unit ? "zones/${local.workload}/zone.yaml" : "workloads/${local.workload}/values.yaml"
-  workload_raw      = try(yamldecode(file(mark_as_read("${get_parent_terragrunt_dir()}/${local.workload_file}"))), null)
+  workload          = try(local.path_segments[1 + local.unit_offset], "")
+  workload_module   = "${try(local.path_segments[2 + local.unit_offset], "")}/${try(local.path_segments[3 + local.unit_offset], "")}"
+  workload_instance = try(local.path_segments[4 + local.unit_offset], "")
+  unit_dir          = local.is_nested_workload ? "workloads/${local.workload_parent}/${local.workload}" : "${local.unit_root}/${local.workload}"
+  workload_file = (
+    local.is_zone_unit ? "zones/${local.workload}/zone.yaml" :
+    local.is_nested_workload ? "${local.unit_dir}/workload.yaml" :
+    "workloads/${local.workload}/values.yaml"
+  )
+  workload_raw = try(yamldecode(file(mark_as_read("${get_parent_terragrunt_dir()}/${local.workload_file}"))), null)
   # A zone's file, read as a workload's (LIB-0036 §§1-2): its name defaults to
   # its directory, its prefix to that name with every character a resource
   # name can't hold turned into a dash, and every zone kind acts on the
   # directory's zone. Each overlay is a one-key for, since a conditional's arms
   # must be the same shape.
   zone_name = try(tostring(local.workload_raw.name), local.workload)
+  # A nested workload's workload.yaml, read as a values.yaml (LIB-0037
+  # §§1-2): `prefix` and `suffix` from deployments.scaleway.project, else
+  # its zone's; its zone from the directory; and a project entry only when
+  # it has its own project. resolve-workloads.sh's expand_workload is its twin.
+  workload_zone_raw     = local.is_nested_workload && !local.is_private_workload ? try(yamldecode(file("${get_parent_terragrunt_dir()}/zones/${local.workload_parent}/zone.yaml")), null) : null
+  workload_zone_prefix  = try(tostring(local.workload_zone_raw.prefix), replace(try(tostring(local.workload_zone_raw.name), local.workload_parent), "/[^a-z0-9-]/", "-"))
+  workload_project      = merge({}, try(local.workload_raw.deployments.scaleway.project, null))
+  workload_own_project  = local.is_nested_workload && (local.is_private_workload || length(setintersection(keys(local.workload_project), ["name", "prefix", "suffix"])) > 0)
+  workload_zone_project = local.is_nested_workload && !local.workload_own_project
+  workload_name         = local.is_nested_workload ? try(tostring(local.workload_raw.name), local.workload) : local.workload
   workload_values = local.workload_raw == null ? null : merge(
-    local.workload_raw,
+    { for k, v in merge({}, try(local.workload_raw, null)) : k => v if !(local.is_nested_workload && contains(["name", "deployments"], k)) },
     { for k, v in { prefix = replace(local.zone_name, "/[^a-z0-9-]/", "-") } : k => v if local.is_zone_unit && !can(tostring(local.workload_raw.prefix)) },
     { for k, v in { cloudflare = merge({}, try(local.workload_raw.cloudflare, null), { zone = local.workload }) } : k => v if local.is_zone_unit },
+    { for k, v in {
+      prefix = try(tostring(local.workload_project.prefix), local.is_private_workload ? "" : local.workload_zone_prefix)
+      suffix = try(tostring(local.workload_project.suffix), local.is_private_workload ? "" : try(tostring(local.workload_zone_raw.suffix), ""))
+    } : k => v if local.is_nested_workload },
+    { for k, v in { scaleway = merge({}, try(local.workload_raw.scaleway, null), { project = { for pk, pv in local.workload_project : pk => pv if !contains(["prefix", "suffix"], pk) } }) } : k => v if local.workload_own_project },
+    { for k, v in { cloudflare = merge({}, try(local.workload_raw.cloudflare, null), { zone = local.workload_parent }) } : k => v if local.is_nested_workload && !local.is_private_workload },
   )
-  # What a zone's implicit resources carry in their names (LIB-0036 §2).
-  unit_tag = local.is_zone_unit ? "-zone" : ""
+  # The host its zone gives a nested workload (LIB-0037 §3), or "".
+  workload_host = try([for h, w in local.zones[local.workload_parent].hosts : h if w == local.workload][0], "")
+  # What a unit's implicit resources carry in their names: a zone's `zone`
+  # (LIB-0036 §2), a nested workload's name (LIB-0037 §2).
+  workload_name_tag = local.is_nested_workload ? "-${local.workload_name}" : ""
+  unit_tag          = local.is_zone_unit ? "-zone" : local.workload_name_tag
   # The workload's secrets.yaml (LIB-0025), decrypted the way terraform/secrets/
   # is: a for whose filter, not a conditional, keeps sops from running for a
   # hand-written leaf or a workload without one. A file that won't decrypt
   # fails the run.
-  workload_secrets_file = "${local.unit_root}/${local.workload}/secrets.yaml"
+  workload_secrets_file = local.is_nested_workload ? "${local.unit_dir}/secrets.workload.yaml" : "${local.unit_root}/${local.workload}/secrets.yaml"
   workload_secrets = merge({}, [
     for f in ["${get_parent_terragrunt_dir()}/${local.workload_secrets_file}"] :
     jsondecode(run_cmd("--terragrunt-quiet", "sops", "--decrypt", "--output-type", "json", mark_as_read(f)))
@@ -454,13 +493,38 @@ locals {
   # The Pages records features.githubPages implies (LIB-0034 §2), under any
   # explicit entry of the same key. A for with an `if` stands in for a
   # conditional, whose arms HCL wants the same shape.
-  workload_pages_host = try(tostring(local.workload_values.features.githubPages.pagesBaseUrl), "")
-  workload_pages_dns = {
-    for k, v in {
-      "github-pages-root-cname" = { name = "@", type = "CNAME", content = local.workload_pages_host, ttl = 1, proxied = false, comment = "github pages root cname (apex, cloudflare-flattened)" }
-      "github-pages-www-cname"  = { name = "www", type = "CNAME", content = local.workload_pages_host, ttl = 1, proxied = false, comment = "github pages www cname" }
-    } : k => v if local.workload_pages_host != ""
-  }
+  # A nested workload's come from deployments.githubPages and its host
+  # (LIB-0037 §4): an apex host's are LIB-0034's two, a subdomain's one, all
+  # pointing at `url`, by default <username>.github.io.
+  workload_pages_on      = local.is_nested_workload && contains(try(keys(local.workload_raw.deployments), []), "githubPages")
+  workload_pages_entry   = merge({}, try(local.workload_raw.deployments.githubPages, null))
+  workload_pages_user_in = try(tostring(local.workload_pages_entry.username), "")
+  # The spoke repo's owner, username's default: CI's GITHUB_REPOSITORY_OWNER,
+  # else the owner in origin's URL. git runs only when needed, behind a for's
+  # filter, since HCL evaluates both arms of a conditional.
+  spoke_origin = join("", [
+    for c in ["origin"] : run_cmd("--terragrunt-quiet", "sh", "-c", "git -C \"$1\" remote get-url origin 2>/dev/null || true", "sh", get_parent_terragrunt_dir())
+    if local.workload_pages_on && local.workload_pages_user_in == "" && get_env("GITHUB_REPOSITORY_OWNER", "") == ""
+  ])
+  spoke_owner         = get_env("GITHUB_REPOSITORY_OWNER", try(regex("github\\.com[:/]([^/]+)/", local.spoke_origin)[0], ""))
+  workload_pages_user = local.workload_pages_user_in != "" ? local.workload_pages_user_in : local.spoke_owner
+  workload_pages_host = (
+    local.is_nested_workload ? (local.workload_pages_on && local.workload_host != "" ? try(tostring(local.workload_pages_entry.url), "${local.workload_pages_user}.github.io") : "") :
+    try(tostring(local.workload_values.features.githubPages.pagesBaseUrl), "")
+  )
+  workload_pages_dns = merge(
+    {
+      for k, v in {
+        "github-pages-root-cname" = { name = "@", type = "CNAME", content = local.workload_pages_host, ttl = 1, proxied = false, comment = "github pages root cname (apex, cloudflare-flattened)" }
+        "github-pages-www-cname"  = { name = "www", type = "CNAME", content = local.workload_pages_host, ttl = 1, proxied = false, comment = "github pages www cname" }
+      } : k => v if local.workload_pages_host != "" && (!local.is_nested_workload || local.workload_host == "@")
+    },
+    {
+      for k, v in {
+        "github-pages-cname" = { name = local.workload_host, type = "CNAME", content = local.workload_pages_host, ttl = 1, proxied = false, comment = "github pages cname" }
+      } : k => v if local.workload_pages_host != "" && local.is_nested_workload && local.workload_host != "@"
+    },
+  )
   workload_cf_dns = merge(local.workload_pages_dns, {
     for k, v in merge({}, try(local.workload_cloudflare.dnsRecord, null)) :
     k => merge(lookup(local.workload_pages_dns, k, {}), merge({}, v))
@@ -489,7 +553,13 @@ locals {
   # those. A zone's token always has one, its own zone (LIB-0036 §2), and only
   # a zone's gets the redirect group, since it alone holds entrypoints
   # (LIB-0036 §3).
-  workload_cf_owned    = local.is_zone_unit ? [local.workload] : sort([for z, v in local.zones : z if try(v.workload, "") == local.workload])
+  # A nested workload's token reaches its zone only when it has a host there
+  # (LIB-0037 §3).
+  workload_cf_owned = (
+    local.is_zone_unit ? [local.workload] :
+    local.is_nested_workload ? [for z in [local.workload_parent] : z if local.workload_host != ""] :
+    sort([for z, v in local.zones : z if try(v.workload, "") == local.workload])
+  )
   workload_cf_buckets  = length(try(keys(local.workload_cloudflare.bucket), [])) > 0
   workload_cf_deployer = local.is_zone_unit || length(local.workload_cf_owned) > 0 || local.workload_cf_buckets
   workload_cf_policies = concat(
@@ -518,7 +588,7 @@ locals {
       entry       = try(local.workload_iam.application, null)
       secrets     = try(local.workload_secrets_scaleway.iam.application, null)
       wiring      = {}
-      defaults    = { name = "${local.workload_prefix}-${local.workload_suffix}" }
+      defaults    = { name = "${local.workload_prefix}-${local.workload_suffix}${local.workload_name_tag}" }
       sensitive   = false
       credentials = "spoke"
       state       = "workload"
@@ -549,7 +619,7 @@ locals {
       wiring   = { project_id = "string" }
       defaults = {
         name_prefix       = local.workload_prefix
-        name_suffix       = "${local.is_zone_unit ? "zone-" : ""}terraform-state"
+        name_suffix       = "${trimprefix(local.unit_tag, "-")}${local.unit_tag == "" ? "" : "-"}terraform-state"
         enable_versioning = true
         storage_class     = "standard"
         force_destroy     = false
@@ -564,7 +634,7 @@ locals {
       entry       = try(local.workload_buckets[local.workload_instance], null)
       secrets     = try(local.workload_secrets_scaleway.bucket[local.workload_instance], null)
       wiring      = { project_id = "string" }
-      defaults    = { name_prefix = "${local.workload_prefix}-${local.workload_instance}", name_suffix = local.workload_suffix }
+      defaults    = { name_prefix = "${local.workload_prefix}${local.workload_name_tag}-${local.workload_instance}", name_suffix = local.workload_suffix }
       sensitive   = false
       credentials = "workload"
       state       = "workload"
@@ -587,7 +657,7 @@ locals {
       entry       = try(local.workload_b2_buckets[local.workload_instance], null)
       secrets     = try(local.workload_secrets.backblaze.bucket[local.workload_instance], null)
       wiring      = {}
-      defaults    = { name_prefix = "${local.workload_prefix}-${local.workload_instance}", name_suffix = local.workload_suffix }
+      defaults    = { name_prefix = "${local.workload_prefix}${local.workload_name_tag}-${local.workload_instance}", name_suffix = local.workload_suffix }
       sensitive   = false
       credentials = "spoke"
       state       = "workload"
@@ -600,7 +670,7 @@ locals {
       entry       = try({ for k, v in local.workload_b2_key_entry : k => v if k != "buckets" }, null)
       secrets     = try(local.workload_secrets.backblaze.apiKey[local.workload_instance], null)
       wiring      = { bucket_ids = "list(string)" }
-      defaults    = { key_name = "${local.workload_prefix}-${local.workload_instance}-${local.workload_suffix}" }
+      defaults    = { key_name = "${local.workload_prefix}${local.workload_name_tag}-${local.workload_instance}-${local.workload_suffix}" }
       sensitive   = true
       credentials = "spoke"
       state       = "workload"
@@ -629,7 +699,7 @@ locals {
       entry        = local.workload_cf_entry
       secrets      = local.workload_cf_secrets
       wiring       = {}
-      defaults     = { name_prefix = "${local.workload_prefix}-${local.workload_instance}", name_suffix = local.workload_suffix }
+      defaults     = { name_prefix = "${local.workload_prefix}${local.workload_name_tag}-${local.workload_instance}", name_suffix = local.workload_suffix }
       spoke_inputs = { account_id = local.cloudflare_account_id }
       sensitive    = false
       credentials  = "workload"
@@ -641,7 +711,7 @@ locals {
       entry       = local.workload_cf_entry
       secrets     = local.workload_cf_secrets
       wiring      = {}
-      defaults    = merge(local.workload_cf_zone_set, { name = local.workload_instance, comment = "${local.unit_root}/${local.workload}" })
+      defaults    = merge(local.workload_cf_zone_set, { name = local.workload_instance, comment = local.unit_dir })
       sensitive   = false
       credentials = "workload"
       state       = "workload"
@@ -705,8 +775,8 @@ locals {
   workload_credentials = local.is_workload_leaf && try(local.workload_kind.credentials, "spoke") == "workload"
   # Whose: a Scaleway leaf's comes from the workload deployer's key, a
   # Cloudflare leaf's from the workload's Cloudflare token (LIB-0033 §4).
-  workload_credentials_scaleway   = local.workload_credentials && try(local.path_segments[2], "") == "scaleway"
-  workload_credentials_cloudflare = local.workload_credentials && try(local.path_segments[2], "") == "cloudflare"
+  workload_credentials_scaleway   = local.workload_credentials && local.leaf_provider == "scaleway"
+  workload_credentials_cloudflare = local.workload_credentials && local.leaf_provider == "cloudflare"
 
   # Where a `workload`-state leaf's state sits in its workload's bucket
   # (LIB-0028 §3): under scaleway.state.prefix, by default workloads/<workload>/,
@@ -714,7 +784,7 @@ locals {
   # the stub's remote_state, which this file can't declare for it: only the stub
   # has the dependencies the bucket name and the deployer's key come from.
   workload_state        = try(local.workload_kind.state, "spoke")
-  workload_state_prefix = try(tostring(local.workload_scaleway.state.prefix), "${local.unit_root}/${local.workload}/")
+  workload_state_prefix = try(tostring(local.workload_scaleway.state.prefix), "${local.unit_dir}/")
   workload_state_key    = "${local.workload_state_prefix}${local.workload_module}/${local.workload_instance}/terraform.tfstate"
   # A stub from a resolve-workloads.sh older than LIB-0028 has no remote_state,
   # and would keep a workload-state leaf's state in the spoke's bucket.
@@ -754,14 +824,36 @@ locals {
   guard_workload_glacier  = local.is_workload_leaf && try(local.workload_scaleway.state.storage_class, "standard") == "glacier" ? file("${local.workload_file}: scaleway.state.storage_class can't be glacier; state moved to GLACIER after 90 days can't be read without a restore (LIB-0028 §2)") : true
   guard_workload_deployer = local.is_workload_leaf && can(local.workload_scaleway.deployer.project_permission_sets) && !contains(try(tolist(local.workload_scaleway.deployer.project_permission_sets), []), "ObjectStorageFullAccess") ? file("${local.workload_file}: scaleway.deployer.project_permission_sets must keep ObjectStorageFullAccess; the deployer's key signs in to the workload's state bucket (LIB-0028 §5)") : true
   guard_workload_backend  = !local.workload_stub_backend ? file("${path_relative_to_include()} keeps its state in the workload's bucket but its stub declares no remote_state; regenerate it with a resolve-workloads.sh from workflows v4.9.0 or later (LIB-0028 §5)") : true
-  guard_workload_b2_on    = local.is_workload_leaf && try(local.path_segments[2], "") == "backblaze" && !contains(keys(local.providers), "backblaze") ? file("${path_relative_to_include()} is a Backblaze workload leaf, but spoke.hcl's providers map has no backblaze (LIB-0029 §4)") : true
+  guard_workload_b2_on    = local.is_workload_leaf && local.leaf_provider == "backblaze" && !contains(keys(local.providers), "backblaze") ? file("${path_relative_to_include()} is a Backblaze workload leaf, but spoke.hcl's providers map has no backblaze (LIB-0029 §4)") : true
   guard_workload_b2_list  = local.is_workload_leaf && local.workload_module == "backblaze/api-key" && length(try(tolist(local.workload_b2_key_entry.buckets), [])) == 0 ? file("${local.workload_file}: backblaze.apiKey.${local.workload_instance}.buckets must list at least one of this workload's backblaze.bucket keys (LIB-0029 §3)") : true
   guard_workload_b2_known = local.is_workload_leaf && local.workload_module == "backblaze/api-key" && length(setsubtract(try(tolist(local.workload_b2_key_entry.buckets), []), try(keys(local.workload_b2_buckets), []))) > 0 ? file("${local.workload_file}: backblaze.apiKey.${local.workload_instance}.buckets names a bucket this workload's backblaze.bucket doesn't have (LIB-0029 §3)") : true
   guard_workload_b2_ids   = local.is_workload_leaf && local.workload_module == "backblaze/api-key" && (can(local.workload_b2_key_entry.bucket_ids) || can(local.workload_secrets.backblaze.apiKey[local.workload_instance].bucket_ids)) ? file("${local.workload_file}: backblaze.apiKey.${local.workload_instance}.bucket_ids can't be set; list the buckets in buckets instead (LIB-0029 §3)") : true
-  guard_workload_cf_on    = local.is_workload_leaf && try(local.path_segments[2], "") == "cloudflare" && !contains(keys(local.providers), "cloudflare") ? file("${path_relative_to_include()} is a Cloudflare workload leaf, but spoke.hcl's providers map has no cloudflare (LIB-0030 §1)") : true
-  guard_workload_cf_spoke = local.is_workload_leaf && try(local.path_segments[2], "") == "cloudflare" && (can(local.workload_cf_entry.account_id) || can(local.workload_cf_entry.zone_id) || can(local.workload_cf_secrets.account_id) || can(local.workload_cf_secrets.zone_id)) ? file("${local.workload_file}: cloudflare.${try(local.workload_cf_yaml[local.workload_module], "")}.${local.workload_instance} can't set account_id or zone_id; the account is the spoke's, and a zone is named (LIB-0030 §§4-5)") : true
+  guard_workload_cf_on    = local.is_workload_leaf && local.leaf_provider == "cloudflare" && !contains(keys(local.providers), "cloudflare") ? file("${path_relative_to_include()} is a Cloudflare workload leaf, but spoke.hcl's providers map has no cloudflare (LIB-0030 §1)") : true
+  guard_workload_cf_spoke = local.is_workload_leaf && local.leaf_provider == "cloudflare" && (can(local.workload_cf_entry.account_id) || can(local.workload_cf_entry.zone_id) || can(local.workload_cf_secrets.account_id) || can(local.workload_cf_secrets.zone_id)) ? file("${local.workload_file}: cloudflare.${try(local.workload_cf_yaml[local.workload_module], "")}.${local.workload_instance} can't set account_id or zone_id; the account is the spoke's, and a zone is named (LIB-0030 §§4-5)") : true
   guard_workload_cf_zone  = local.is_workload_leaf && local.workload_cf_zone_kind && local.workload_zone == "" ? file("${local.workload_file}: cloudflare.${try(local.workload_cf_yaml[local.workload_module], "")}.${local.workload_instance} has no zone, and the workload sets no cloudflare.zone (LIB-0030 §3)") : true
-  guard_workload_cf_owner = local.is_workload_leaf && !local.is_zone_unit && local.workload_cf_zone_kind && local.workload_zone != "" && try(local.zones[local.workload_zone].workload, "") != local.workload ? file("${local.workload_file}: zone ${local.workload_zone} isn't registered to workload ${local.workload}, in zones/${local.workload_zone}/zone.yaml (LIB-0036 §3)") : true
+  guard_workload_cf_owner = local.is_workload_leaf && !local.is_zone_unit && !local.is_nested_workload && local.workload_cf_zone_kind && local.workload_zone != "" && try(local.zones[local.workload_zone].workload, "") != local.workload ? file("${local.workload_file}: zone ${local.workload_zone} isn't registered to workload ${local.workload}, in zones/${local.workload_zone}/zone.yaml (LIB-0036 §3)") : true
+  # Nested workloads (LIB-0037 §§1-4): what a workload.yaml can't say, read
+  # before its defaults fill it in, then what its host allows.
+  workload_record_name = try(tostring(local.workload_cf_entry.name), local.workload_instance)
+  workload_nested_problems = local.is_nested_workload && local.workload_raw != null ? compact([
+    can(local.workload_raw.features) ? "features is replaced by deployments; githubPages moves to deployments.githubPages (LIB-0037 §4)" : "",
+    can(local.workload_raw.prefix) || can(local.workload_raw.suffix) ? "prefix and suffix move to deployments.scaleway.project (LIB-0037 §2)" : "",
+    can(local.workload_raw.scaleway.project) ? "scaleway.project moves to deployments.scaleway.project (LIB-0037 §2)" : "",
+    can(local.workload_raw.cloudflare.zone) || can(local.workload_raw.cloudflare[local.workload_cf_yaml[local.workload_module]][local.workload_instance].zone) ? "a zone can't be set; the directory names it (LIB-0037 §1)" : "",
+    local.workload_name == "zone" ? "name can't be zone, which a zone's own resources carry (LIB-0037 §1)" : "",
+    fileexists("${get_parent_terragrunt_dir()}/${local.unit_dir}/secrets.yaml") ? "secrets.yaml is now secrets.workload.yaml; rename it (LIB-0037 §1)" : "",
+    !local.is_private_workload && local.workload_zone_raw == null ? "zone ${local.workload_parent} has no zones/${local.workload_parent}/zone.yaml (LIB-0037 §1)" : "",
+    local.workload_pages_on && local.is_private_workload ? "deployments.githubPages needs a host, which a private workload never has (LIB-0037 §§1, 4)" : "",
+    local.workload_pages_on && !local.is_private_workload && local.workload_host == "" ? "deployments.githubPages needs a host; give this workload one in zones/${local.workload_parent}/zone.yaml (LIB-0037 §4)" : "",
+    local.workload_pages_on && local.workload_host != "" && local.workload_pages_user == "" ? "deployments.githubPages.username defaults to the spoke repo's owner, but neither GITHUB_REPOSITORY_OWNER nor origin's URL gives one (LIB-0037 §4)" : "",
+    local.workload_cf_zone_kind && local.workload_host == "" && !local.is_private_workload ? "cloudflare.${try(local.workload_cf_yaml[local.workload_module], "")}.${local.workload_instance}: this workload has no host in zones/${local.workload_parent}/zone.yaml, so it can't write records (LIB-0037 §3)" : "",
+    local.workload_cf_zone_kind && local.workload_host != "" && !(
+      local.workload_host == "@" ? (contains(["@", "www"], local.workload_record_name) || can(regex("^_[^.]+(\\.www)?$", local.workload_record_name))) :
+      (local.workload_record_name == local.workload_host || endswith(local.workload_record_name, ".${local.workload_host}"))
+    ) ? "cloudflare.${try(local.workload_cf_yaml[local.workload_module], "")}.${local.workload_instance}: ${local.workload_record_name} is outside this workload's host, ${local.workload_host}, in zones/${local.workload_parent}/zone.yaml (LIB-0037 §3)" : "",
+  ]) : []
+  guard_workload_nested = length(local.workload_nested_problems) > 0 ? file("${local.workload_file}: ${join("; ", local.workload_nested_problems)}") : true
+
   # Zone units (LIB-0036 §§1-4).
   guard_zones_file    = fileexists("${get_parent_terragrunt_dir()}/zones.yaml") ? file("zones.yaml is refused: each zone is zones/<zone>/zone.yaml, naming the workload that may write in it (LIB-0036 §1)") : true
   guard_zone_leaf     = local.is_zone_leaf ? file("${path_relative_to_include()} is a hand-written zone leaf, and those are retired: declare its entries in zones/${local.cloudflare_zone}/zone.yaml (LIB-0036 §4)") : true
@@ -770,6 +862,16 @@ locals {
   guard_zone_own_zone = local.is_zone_unit && (can(local.workload_raw.cloudflare.zone) || can(local.workload_raw.cloudflare[local.workload_cf_yaml[local.workload_module]][local.workload_instance].zone)) ? file("${local.workload_file}: a zone's entries can't set zone; the directory names it (LIB-0036 §1)") : true
   guard_zone_secrets  = local.is_zone_unit && fileexists("${get_parent_terragrunt_dir()}/${local.workload_secrets_file}") ? file("${local.workload_secrets_file}: a zone has no secrets.yaml (LIB-0036, Out of scope)") : true
   guard_zone_workload = local.is_zone_unit && try(tostring(local.workload_raw.workload), "") != "" && !fileexists("${get_parent_terragrunt_dir()}/workloads/${try(tostring(local.workload_raw.workload), "")}/values.yaml") ? file("${local.workload_file}: workload ${try(tostring(local.workload_raw.workload), "")} has no workloads/${try(tostring(local.workload_raw.workload), "")}/values.yaml (LIB-0036 §1)") : true
+  # A zone's hosts (LIB-0037 §3): each names a workload in workloads/<zone>/,
+  # and a host's names are its workload's, not the zone's.
+  zone_hosts        = local.is_zone_unit ? try(local.zones[local.workload].hosts, {}) : {}
+  zone_record_type  = upper(try(tostring(local.workload_cf_entry.type), ""))
+  zone_missing_host = [for h, w in local.zone_hosts : w if !fileexists("${get_parent_terragrunt_dir()}/workloads/${local.workload}/${w}/workload.yaml")]
+  guard_zone_hosts  = length(local.zone_missing_host) > 0 ? file("${local.workload_file}: hosts names ${join(", ", local.zone_missing_host)}, with no workloads/${local.workload}/<workload>/workload.yaml (LIB-0037 §3)") : true
+  guard_zone_host_record = local.is_zone_unit && local.workload_module == "cloudflare/dns-record" && (
+    anytrue([for h, w in local.zone_hosts : h != "@" && (local.workload_record_name == h || endswith(local.workload_record_name, ".${h}"))]) ||
+    (contains(keys(local.zone_hosts), "@") && (local.workload_record_name == "www" || endswith(local.workload_record_name, ".www") || (local.workload_record_name == "@" && contains(["A", "AAAA", "CNAME"], local.zone_record_type))))
+  ) ? file("${local.workload_file}: cloudflare.dnsRecord.${local.workload_instance}: ${local.workload_record_name} is a host's, in hosts (LIB-0037 §3)") : true
 
   # The leaf's module call. Inputs are written as literals -- JSON is HCL
   # expression syntax -- with template sequences escaped, since a `type = any`

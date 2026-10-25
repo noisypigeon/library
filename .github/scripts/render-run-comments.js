@@ -110,7 +110,7 @@ function classify(unit, ctx) {
   }
   if (failed(lines)) return { kind: 'failed', label: ctx.command === 'apply' ? '❌ failed' : '❌ error', open: true };
   const c = (ctx.jsonPlans[unit] && countPlan(ctx.jsonPlans[unit])) || countFromText(lines);
-  const destroy = ctx.destroys.has(unit) ? 'destroy (removed from values.yaml) ' : '';
+  const destroy = ctx.destroys.has(unit) ? 'destroy (removed from its unit file) ' : '';
   if (!c) return { kind: 'unknown', label: `${destroy}no result found`, open: true };
   if (ctx.command === 'apply') {
     return changes(c)

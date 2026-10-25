@@ -83,7 +83,7 @@ test('the apply fixture reads as applied', () => {
 test('a removed instance is labelled as a destroy', () => {
   const output = '00:00:00.000 STDOUT [/home/runner/_temp/base/workloads/w/scaleway/bucket/b] terraform: Plan: 0 to add, 0 to change, 2 to destroy.';
   const r = plan({ output, roots: ['/home/runner/_temp/base'], destroys: ['workloads/w/scaleway/bucket/b'] });
-  assert.match(r.summary, /\| `workloads\/w\/scaleway\/bucket\/b` \| destroy \(removed from values.yaml\) \+0 ~0 -2 \|/);
+  assert.match(r.summary, /\| `workloads\/w\/scaleway\/bucket\/b` \| destroy \(removed from its unit file\) \+0 ~0 -2 \|/);
 });
 
 test('nothing is truncated: a large plan is packed and split, within budget', () => {

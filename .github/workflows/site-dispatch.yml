@@ -15,6 +15,13 @@
 # pagesShim would never deploy, so it fails the run -- after the others have
 # been dispatched, so one bad stanza doesn't hold back every other site.
 #
+# Since v6.1.0 a site may also be a workload in its zone (LIB-0037),
+# workloads/<zone>/<w>/, with a change outside workload.yaml and
+# secrets.workload.yaml. Its shim is <username>/<shim> from its
+# deployments.githubPages, each defaulting as LIB-0037 §4 says: username to
+# the spoke repo's owner, shim to its host, from zones/<zone>/zone.yaml, as a
+# domain.
+#
 # Needs BOT_GITHUB_TOKEN with actions: write on every shim it dispatches.
 # Without it this fails loudly -- the symptom otherwise is a merged post that
 # never deploys.
@@ -70,38 +77,74 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           BEFORE: ${{ github.event.before }}
           AFTER: ${{ github.sha }}
+          OWNER: ${{ github.repository_owner }}
         run: |
+          # Each changed path's unit: workloads/<zone>/<w> where <zone> is a
+          # domain or `private` (LIB-0037 §1), else workloads/<w>, leaving out
+          # its unit file and secrets.
+          units() {
+            awk -F/ '
+              $1 != "workloads" || NF < 3 { next }
+              ($2 ~ /\./ || $2 == "private") {
+                if (NF < 4 || $3 == "" || (NF == 4 && ($4 == "workload.yaml" || $4 == "secrets.workload.yaml"))) next
+                print $1 "/" $2 "/" $3; next
+              }
+              NF == 3 && ($3 == "values.yaml" || $3 == "secrets.yaml") { next }
+              { print $1 "/" $2 }
+            ' | sort -u
+          }
           # An all-zero `before` is a new branch, and an unreachable one a
           # force-push: nothing to diff against, so every workload counts as
           # changed.
           if [ "$EVENT_NAME" = "push" ] && [ -n "${BEFORE//0/}" ] \
             && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
-            CANDIDATES=$(git diff --name-only "$BEFORE" "$AFTER" \
-              | grep -E '^workloads/[^/]+/' \
-              | grep -vE '^workloads/[^/]+/(values|secrets)\.yaml$' \
-              | cut -d/ -f2 | sort -u || true)
+            CANDIDATES=$(git diff --name-only "$BEFORE" "$AFTER" | units)
           else
-            CANDIDATES=$(find workloads -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
-              | cut -d/ -f2 | sort -u || true)
+            # Every site's directory, as a path inside it.
+            CANDIDATES=$(find workloads -mindepth 2 -maxdepth 3 -name config.toml 2>/dev/null \
+              | sed 's|/config\.toml$|/x|' | units)
           fi
 
           dispatched=0
           failed=0
-          for w in $CANDIDATES; do
+          for u in $CANDIDATES; do
             # A workload is a site because config.toml exists (LIB-0031 §1).
-            [ -f "workloads/$w/config.toml" ] || continue
-            shim=$(yq '.features.githubPages.pagesShim // ""' "workloads/$w/values.yaml" 2>/dev/null || true)
-            if [ -z "$shim" ]; then
-              echo "::error::workloads/$w is a site but its values.yaml sets no features.githubPages.pagesShim, so it can never deploy (LIB-0034 §1)"
-              failed=1
-              continue
+            [ -f "$u/config.toml" ] || continue
+            if [ -f "$u/workload.yaml" ]; then
+              zone=$(cut -d/ -f2 <<<"$u"); w=$(cut -d/ -f3 <<<"$u")
+              if [ "$(yq '.deployments | has("githubPages")' "$u/workload.yaml" 2>/dev/null)" != true ]; then
+                echo "::error::$u is a site but its workload.yaml sets no deployments.githubPages, so it can never deploy (LIB-0037 §4)"
+                failed=1
+                continue
+              fi
+              host=$(W="$w" yq '.hosts // {} | to_entries | map(select(.value == strenv(W))) | .[0].key // ""' "zones/$zone/zone.yaml" 2>/dev/null || true)
+              case "$host" in
+                "") default_shim="" ;;
+                "@") default_shim="$zone" ;;
+                *) default_shim="$host.$zone" ;;
+              esac
+              user=$(yq '.deployments.githubPages.username // ""' "$u/workload.yaml")
+              name=$(D="$default_shim" yq '.deployments.githubPages.shim // strenv(D)' "$u/workload.yaml")
+              if [ -z "$name" ]; then
+                echo "::error::$u is a site with no host in zones/$zone/zone.yaml, so it has no shim to deploy it (LIB-0037 §4)"
+                failed=1
+                continue
+              fi
+              shim="${user:-$OWNER}/$name"
+            else
+              shim=$(yq '.features.githubPages.pagesShim // ""' "$u/values.yaml" 2>/dev/null || true)
+              if [ -z "$shim" ]; then
+                echo "::error::$u is a site but its values.yaml sets no features.githubPages.pagesShim, so it can never deploy (LIB-0034 §1)"
+                failed=1
+                continue
+              fi
             fi
             if ! gh workflow run pages.yml -R "$shim" --ref main; then
-              echo "::error::could not dispatch pages.yml in $shim for workloads/$w; BOT_GITHUB_TOKEN needs actions: write there (LIB-0031 §4)"
+              echo "::error::could not dispatch pages.yml in $shim for $u; BOT_GITHUB_TOKEN needs actions: write there (LIB-0031 §4)"
               failed=1
               continue
             fi
-            echo "Dispatched pages.yml in $shim for workloads/$w."
+            echo "Dispatched pages.yml in $shim for $u."
             dispatched=$((dispatched + 1))
           done
 

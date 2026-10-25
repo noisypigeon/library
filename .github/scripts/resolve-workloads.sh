@@ -34,6 +34,15 @@
 # clash checks below run across every unit, so a zone's file and its
 # workload's are checked together. Rulesets and redirects are a zone's alone
 # (LIB-0036 §3), and a root zones.yaml is refused (LIB-0036 §1).
+# Since LIB-0037 a workload may also live in its zone, as
+# workloads/<zone>/<workload>/workload.yaml with secrets.workload.yaml beside
+# it, or with no zone under workloads/private/<workload>/. Its stubs are one
+# segment deeper. expand_workload reads it as a values.yaml: prefix and suffix
+# come from its zone, its zone from its directory, and its Pages records from
+# the host the zone's `hosts` gives it. A zoned workload has no project of its
+# own unless deployments.scaleway.project names one, and its deployer and state
+# bucket then depend on the zone's project. Both layouts work side by side
+# while a spoke moves.
 # Values, defaults and the module version are root.hcl's, at plan time: it
 # writes them into the leaf's generated module block as literals, since a
 # `type = any` variable set through TF_VAR_ arrives as a string.
@@ -45,7 +54,9 @@
 # The stubs are generated, never committed: a workload commits only its
 # values.yaml, and the spoke gitignores /workloads/*/*/ (LIB-0023's second
 # 2026-10-20 amendment), and a zone's /zones/*/scaleway/ and
-# /zones/*/cloudflare/. A spoke's terraform-prepare task runs this before
+# /zones/*/cloudflare/. A workload in its zone (LIB-0037) is ignored by
+# provider, /workloads/*/*/scaleway/ and the like, never /workloads/*/*/*/,
+# which would hide a site's content/ too. A spoke's terraform-prepare task runs this before
 # terragrunt, and terragrunt-run.yml runs it in CI. Terragrunt's [main...HEAD]
 # filter plans in worktrees holding only tracked files, so it can't see a stub;
 # terragrunt-run.yml selects workload leaves by their values.yaml instead, and
@@ -146,7 +157,10 @@ KINDS=(
 # Backblaze bucket, its key's dashes written as underscores.
 dep_dir() {
   case "$1" in
-    project) echo "scaleway/project/main" ;;
+    project)
+      # A workload in its zone's project (LIB-0037 §2) takes the zone's.
+      if [ -n "$ZONE_PROJECT" ]; then echo "../../../zones/$ZONE_PROJECT/scaleway/project/main"; else echo "scaleway/project/main"; fi
+      ;;
     application) echo "scaleway/iam-application/main" ;;
     deployer) echo "scaleway/terraform-deployer-iam/main" ;;
     state) echo "scaleway/bucket/state" ;;
@@ -333,6 +347,50 @@ expand_zone() {
     end'
 }
 
+# workload.yaml as JSON, read as a values.yaml (LIB-0037 §§1-4): `prefix`
+# and `suffix` from deployments.scaleway.project, else the zone's; the zone
+# from the directory; a project entry only when the workload has its own; and
+# the Pages records its host implies, under any explicit entry of the same key.
+# root.hcl's workload_values is its twin.
+# expand_workload <file> <zone or private> <zone file JSON> <host> <username>
+expand_workload() {
+  yq -o=json '.' "$1" | jq -c --arg z "$2" --argjson zf "$3" --arg host "$4" --arg user "$5" '
+    if type != "object" then . else
+      ((.deployments.scaleway.project? // {}) | if type == "object" then . else {} end) as $p |
+      ($z == "private" or ($p | has("name") or has("prefix") or has("suffix"))) as $own |
+      (($zf.prefix // (($zf.name // $z) | tostring | gsub("[^a-z0-9-]"; "-"))) | tostring) as $zp |
+      (.deployments.githubPages? // {} | if type == "object" then . else {} end) as $gp |
+      ((.deployments // {}) | objects | has("githubPages")) as $pages |
+      ($gp.url // "\($user).github.io") as $url |
+      (if $host == "@" then {
+         "github-pages-root-cname": {name: "@", type: "CNAME", content: $url, ttl: 1, proxied: false, comment: "github pages root cname (apex, cloudflare-flattened)"},
+         "github-pages-www-cname": {name: "www", type: "CNAME", content: $url, ttl: 1, proxied: false, comment: "github pages www cname"}}
+       else {"github-pages-cname": {name: $host, type: "CNAME", content: $url, ttl: 1, proxied: false, comment: "github pages cname"}} end) as $d |
+      .prefix = (($p.prefix // (if $z == "private" then "" else $zp end)) | tostring) |
+      .suffix = (($p.suffix // (if $z == "private" then "" else ($zf.suffix // "") end)) | tostring) |
+      (if $own then .scaleway = ((.scaleway // {}) | if type == "object" then . + {project: ($p | del(.prefix, .suffix))} else . end) else . end) |
+      (if $z != "private" then .cloudflare = ((.cloudflare // {}) | if type == "object" then . + {zone: $z} else . end) else . end) |
+      (if $pages and $host != "" then
+        .cloudflare = (.cloudflare | .dnsRecord = (
+          (.dnsRecord // {}) as $e |
+          if ($e | type) != "object" then $e
+          else $e + ($d | with_entries(.value += (($e[.key] // {}) | if type == "object" then . else {} end))) end))
+       else . end) |
+      del(.name, .deployments)
+    end'
+}
+
+# The spoke repo's owner, githubPages' default username (LIB-0037 §4): CI's
+# GITHUB_REPOSITORY_OWNER, else the owner in origin's URL. root.hcl's
+# spoke_owner is its twin.
+spoke_owner() {
+  if [ -n "${GITHUB_REPOSITORY_OWNER:-}" ]; then echo "$GITHUB_REPOSITORY_OWNER"; return; fi
+  { git -C "$SPOKE_DIR" remote get-url origin 2>/dev/null || true; } | sed -nE 's#^.*github\.com[:/]([^/]+)/.*$#\1#p'
+}
+
+# A unit's cached, expanded file, by its directory.
+unit_cache() { echo "$EXPECTED_DIR/.cache/unit-$(tr / _ <<<"$1").json"; }
+
 EXPECTED_DIR="$(mktemp -d)"
 trap 'rm -rf "$EXPECTED_DIR"' EXIT
 mkdir -p "$EXPECTED_DIR/.cache"
@@ -347,13 +405,19 @@ fi
 shopt -s nullglob
 
 # zones/<zone>/zone.yaml (LIB-0036 §1): each registers its zone to the
-# workload it names, or to none.
+# workload it names, or to none, and since LIB-0037 §3 gives each host to the
+# workload under workloads/<zone>/ that serves it.
 APEX='^[a-z0-9-]+(\.[a-z0-9-]+)+$'
+LABEL='^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
 for zone_file in "$SPOKE_DIR"/zones/*/zone.yaml; do
   zone="$(basename "$(dirname "$zone_file")")"
   [[ "$zone" =~ $APEX ]] || continue
-  owner=$(yq -o=json '.' "$zone_file" 2>/dev/null | jq -r 'if type == "object" and (.workload | type) == "string" then .workload else "" end') || owner=""
-  ZONES=$(jq -c --arg z "$zone" --arg w "$owner" '.[$z] = {workload: $w}' <<<"$ZONES")
+  entry=$(yq -o=json '.' "$zone_file" 2>/dev/null | jq -c '
+    if type != "object" then {workload: "", hosts: {}} else
+      {workload: (if (.workload | type) == "string" then .workload else "" end),
+       hosts: (if (.hosts | type) == "object" then (.hosts | with_entries(select(.value | type == "string"))) else {} end)}
+    end') || entry='{"workload":"","hosts":{}}'
+  ZONES=$(jq -c --arg z "$zone" --argjson e "$entry" '.[$z] = $e' <<<"$ZONES")
 done
 
 # Each unit, a workload's values.yaml or a zone's zone.yaml, validated and
@@ -362,14 +426,35 @@ done
 # collected for the spoke-wide clash checks below.
 instances=()   # "<unit dir>|<unit file>|<module>|<instance>|<jq path>|<declared dependencies>|<credentials>"
 unit_files=()
-for f in "$SPOKE_DIR"/workloads/*/values.yaml "$SPOKE_DIR"/zones/*/zone.yaml; do
-  unit_files+=("${f#"$SPOKE_DIR"/}")
+# A workload's directory under workloads/ is a zone, `private`, or, in the old
+# layout, the workload itself (LIB-0037 §1).
+is_parent() { [[ "$1" =~ $APEX ]] || [ "$1" = private ]; }
+for f in "$SPOKE_DIR"/workloads/*/values.yaml "$SPOKE_DIR"/workloads/*/*/workload.yaml "$SPOKE_DIR"/zones/*/zone.yaml; do
+  rel="${f#"$SPOKE_DIR"/}"
+  parent=$(cut -d/ -f2 <<<"$rel")
+  case "$rel" in
+    workloads/*/values.yaml)
+      if is_parent "$parent"; then fail "$rel: workloads/$parent/ holds workloads, each in its own directory with a workload.yaml (LIB-0037 §1)"; continue; fi ;;
+    workloads/*/*/workload.yaml)
+      if ! is_parent "$parent"; then fail "$rel: workloads/$parent/ isn't a zone or private, so it can't hold a workload.yaml (LIB-0037 §1)"; continue; fi ;;
+  esac
+  unit_files+=("$rel")
+done
+for f in "$SPOKE_DIR"/workloads/*/workload.yaml "$SPOKE_DIR"/workloads/*/*/values.yaml; do
+  rel="${f#"$SPOKE_DIR"/}"
+  case "$rel" in
+    workloads/*/workload.yaml) fail "$rel: a workload.yaml lives in workloads/<zone>/<workload>/ or workloads/private/<workload>/ (LIB-0037 §1)" ;;
+    *) is_parent "$(cut -d/ -f2 <<<"$rel")" && fail "$rel: a workload under workloads/<zone>/ or workloads/private/ has a workload.yaml, not a values.yaml (LIB-0037 §1)" ;;
+  esac
 done
 : >"$EXPECTED_DIR/.cache/clash.jsonl"
 for rel in ${unit_files[@]+"${unit_files[@]}"}; do
   unit_root="${rel%%/*}"
   workload="$(basename "$(dirname "$rel")")"
-  unit_dir="$unit_root/$workload"
+  unit_dir="$(dirname "$rel")"
+  # A workload in its zone (LIB-0037): its zone or `private`, and its host.
+  nested=false; parent=""; host=""; ZONE_PROJECT=""
+  case "$rel" in workloads/*/*/workload.yaml) nested=true; parent=$(cut -d/ -f2 <<<"$rel") ;; esac
   if [ "$unit_root" = zones ]; then
     unit=zone
     if [[ ! "$workload" =~ $APEX ]]; then
@@ -392,6 +477,33 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
           (("dnsRecord", "ruleset", "apexRedirect") as $m | .[$m] // {} | objects | to_entries[]
             | select(.value | objects | has("zone")) | "cloudflare.\($m).\(.key) can'"'"'t set zone; the directory names it (LIB-0036 §1)"))
       end' <<<"$raw")
+    # Its hosts (LIB-0037 §3): who serves the apex and each subdomain.
+    host_problems=$(jq -r --arg kebab "$KEBAB" --arg label "$LABEL" '
+      objects | select(has("hosts")) |
+      if (.hosts | type) != "object" then "hosts must be a mapping of host to workload (LIB-0037 §3)" else
+        # Beside hosts, workload still names a workloads/<w>/ unit, so a
+        # spoke can bootstrap a workload in its zone before it moves; hosts
+        # names only workloads/<zone>/<w>/ ones (LIB-0037 §3).
+        (.hosts | to_entries[] |
+          (if .key == "@" or (.key | test($label)) then empty else "hosts.\(.key) must be @ or one DNS label (LIB-0037 §3)" end),
+          (if (.value | type) == "string" and (.value | test($kebab)) then empty else "hosts.\(.key) must name one workload (LIB-0037 §3)" end)),
+        ([.hosts | to_entries[] | .value] | group_by(.)[] | select(length > 1) | "workload \(.[0]) holds more than one host; a workload serves one (LIB-0037 §3)"),
+        (if (.hosts | has("@")) and ((.cloudflare.apexRedirect // {}) | objects | length > 0) then "hosts.@ and cloudflare.apexRedirect both claim the apex and www; keep one (LIB-0037 §3)" else empty end),
+        # A host is its workload'"'"'s: no zone record at a subdomain host or
+        # under it, and none at www or an A, AAAA or CNAME at the apex
+        # beside an @ host (LIB-0037 §3).
+        ([.hosts | keys[] | select(. != "@")]) as $subs | (.hosts | has("@")) as $apex |
+        (.cloudflare.dnsRecord // {} | objects | to_entries[] | ((.value | objects | .name) // .key | tostring) as $n |
+          ((.value | objects | .type) // "" | tostring | ascii_upcase) as $t |
+          (if ($subs | any(. as $h | $n == $h or ($n | endswith(".\($h)")))) then "cloudflare.dnsRecord.\(.key): \($n) is a host'"'"'s, in hosts (LIB-0037 §3)"
+           elif $apex and ($n == "www" or ($n | endswith(".www")) or ($n == "@" and ([$t] | inside(["A", "AAAA", "CNAME"])))) then "cloudflare.dnsRecord.\(.key): \($n) \($t) is the apex host'"'"'s, in hosts (LIB-0037 §3)"
+           else empty end))
+      end' <<<"$raw")
+    while IFS= read -r h; do
+      [ -z "$h" ] && continue
+      [ -f "$SPOKE_DIR/workloads/$workload/$h/workload.yaml" ] || host_problems="${host_problems:+$host_problems$'\n'}a host names workload $h, which has no workloads/$workload/$h/workload.yaml (LIB-0037 §3)"
+    done < <(jq -r --arg kebab "$KEBAB" 'objects | .hosts? // {} | objects | .[] | strings | select(test($kebab))' <<<"$raw" | sort -u)
+    zone_problems="${zone_problems:+$zone_problems${host_problems:+$'\n'}}$host_problems"
     owner=$(jq -r --arg kebab "$KEBAB" 'if type == "object" and (.workload | type) == "string" and (.workload | test($kebab)) then .workload else "" end' <<<"$raw")
     if [ -n "$owner" ] && [ ! -f "$SPOKE_DIR/workloads/$owner/values.yaml" ]; then
       zone_problems="${zone_problems:+$zone_problems$'\n'}workload $owner has no workloads/$owner/values.yaml (LIB-0036 §1)"
@@ -404,6 +516,79 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
       continue
     fi
     json=$(expand_zone "$SPOKE_DIR/$rel" "$workload")
+  elif [ "$nested" = true ]; then
+    unit=workload
+    if [[ ! "$workload" =~ $KEBAB ]]; then
+      fail "$rel: workload name '$workload' must be kebab-case"
+      continue
+    fi
+    if [ "$parent" != private ] && [ ! -f "$SPOKE_DIR/zones/$parent/zone.yaml" ]; then
+      fail "$rel: zone $parent has no zones/$parent/zone.yaml (LIB-0037 §1)"
+      continue
+    fi
+    if ! raw=$(yq -o=json '.' "$SPOKE_DIR/$rel"); then
+      fail "$rel: not valid YAML"
+      continue
+    fi
+    if [ "$parent" = private ]; then zf='{}'; else zf=$(yq -o=json '. // {}' "$SPOKE_DIR/zones/$parent/zone.yaml" 2>/dev/null | jq -c 'objects') || zf='{}'; [ -n "$zf" ] || zf='{}'; fi
+    host=$(jq -r --arg z "$parent" --arg w "$workload" '.[$z].hosts // {} | to_entries[] | select(.value == $w) | .key' <<<"$ZONES" | head -n1)
+    # What a workload.yaml can't say, read before its defaults fill it in.
+    workload_problems=$(jq -r --arg kebab "$KEBAB" --arg z "$parent" --arg host "$host" '
+      def keys_in($where; $allowed): (keys - $allowed)[] | "unknown key \($where).\(.); known: \($allowed | join(", "))";
+      if type != "object" then "the file must be a mapping"
+      else
+        (if has("features") then "features is replaced by deployments; githubPages moves to deployments.githubPages (LIB-0037 §4)" else empty end),
+        ((["prefix", "suffix"] - (keys - ["prefix", "suffix"]))[] as $k | select(has($k)) | "\($k) moves to deployments.scaleway.project.\($k) (LIB-0037 §2)"),
+        ((keys - ["name", "deployments", "scaleway", "backblaze", "cloudflare", "features", "prefix", "suffix"])[] | "unknown key \(.); known: name, deployments, scaleway, backblaze, cloudflare"),
+        (if has("name") and ((.name | type) != "string" or (.name | test($kebab) | not)) then "name must be kebab-case (LIB-0037 §1)"
+         elif .name == "zone" then "name can'"'"'t be zone, which a zone'"'"'s own resources carry (LIB-0036 §2, LIB-0037 §1)" else empty end),
+        (.scaleway // {} | objects | select(has("project")) | "scaleway.project moves to deployments.scaleway.project (LIB-0037 §2)"),
+        (.deployments // {} | if type != "object" then "deployments must be a mapping" else
+          keys_in("deployments"; ["scaleway", "githubPages"]),
+          (.scaleway // {} | if type != "object" then "deployments.scaleway must be a mapping" else
+            keys_in("deployments.scaleway"; ["project"]),
+            (.project // {} | if type != "object" then "deployments.scaleway.project must be a mapping of module inputs" else
+              ((["name", "prefix", "suffix"][]) as $k | select(has($k)) | select((.[$k] | type) != "string" or .[$k] == "") | "deployments.scaleway.project.\($k) must be a non-empty string")
+            end)
+          end),
+          (if has("githubPages") then
+            (.githubPages // {} | if type != "object" then "deployments.githubPages must be a mapping" else
+              keys_in("deployments.githubPages"; ["username", "shim", "url"]),
+              (to_entries[] | select((.value | type) != "string" or .value == "") | "deployments.githubPages.\(.key) must be a non-empty string")
+            end),
+            (if $z == "private" then "deployments.githubPages needs a host, which a private workload never has (LIB-0037 §§1, 4)"
+             elif $host == "" then "deployments.githubPages needs a host; give this workload one in zones/\($z)/zone.yaml (LIB-0037 §4)" else empty end)
+          else empty end)
+        end),
+        (if $z == "private" then
+          ((["prefix", "suffix"][]) as $k | select((.deployments.scaleway.project[$k]? // "") == "") | "a private workload has its own project, so it needs deployments.scaleway.project.\($k) (LIB-0037 §1)")
+         else empty end),
+        (.cloudflare // {} | objects |
+          (if has("zone") then "cloudflare.zone can'"'"'t be set; the directory names the zone (LIB-0037 §1)" else empty end),
+          (if $z == "private" and (.dnsRecord // {} | objects | length > 0) then "cloudflare.dnsRecord needs a zone, which a private workload has none of (LIB-0037 §1)" else empty end),
+          (.dnsRecord // {} | objects | to_entries[] | select(.value | objects | has("zone")) | "cloudflare.dnsRecord.\(.key) can'"'"'t set zone; the directory names it (LIB-0037 §1)"))
+      end' <<<"$raw")
+    if [ -e "$SPOKE_DIR/$unit_dir/secrets.yaml" ]; then
+      workload_problems="${workload_problems:+$workload_problems$'\n'}secrets.yaml is now secrets.workload.yaml; rename it (LIB-0037 §1)"
+    fi
+    if [ -n "$workload_problems" ]; then
+      while IFS= read -r msg; do fail "$rel: $msg"; done <<<"$workload_problems"
+      continue
+    fi
+    user=""
+    if jq -e '(.deployments // {}) | has("githubPages")' <<<"$raw" >/dev/null; then
+      user=$(jq -r '.deployments.githubPages.username? // ""' <<<"$raw")
+      [ -n "$user" ] || user=$(spoke_owner)
+      if [ -z "$user" ]; then
+        fail "$rel: deployments.githubPages.username defaults to the spoke repo's owner, but neither GITHUB_REPOSITORY_OWNER nor origin's URL gives one (LIB-0037 §4)"
+        continue
+      fi
+    fi
+    if [ "$parent" != private ] && ! jq -e '(.deployments.scaleway.project? // {}) | objects | has("name") or has("prefix") or has("suffix")' <<<"$raw" >/dev/null; then
+      ZONE_PROJECT="$parent"
+    fi
+    name=$(jq -r --arg w "$workload" '.name // $w' <<<"$raw")
+    json=$(expand_workload "$SPOKE_DIR/$rel" "$parent" "$zf" "$host" "$user")
   else
     unit=workload
     if [[ ! "$workload" =~ $KEBAB ]]; then
@@ -415,13 +600,15 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
       continue
     fi
   fi
+  # A nested workload's names carry its name (LIB-0037 §2).
+  if [ "$nested" = true ]; then tag="-$name"; else tag=""; fi
 
-  structural=$(jq -r --arg kebab "$KEBAB" --arg workload "$workload" --arg unit "$unit" --argjson zones "$ZONES" '
+  structural=$(jq -r --arg kebab "$KEBAB" --arg workload "$workload" --arg unit "$unit" --argjson zones "$ZONES" --arg nested "$nested" --arg host "$host" --arg tag "$tag" '
     def entry_ok($where): if . == null or type == "object" then empty else "\($where) must be a mapping of module inputs" end;
     def keys_in($where; $allowed): (keys - $allowed)[] | "unknown key \($where).\(.); known: \($allowed | join(", "))";
     if type != "object" then "the file must be a mapping"
     else
-      keys_in(""; if $unit == "zone" then ["name", "prefix", "suffix", "workload", "scaleway", "cloudflare"]
+      keys_in(""; if $unit == "zone" then ["name", "prefix", "suffix", "workload", "hosts", "scaleway", "cloudflare"]
                   else ["prefix", "suffix", "features", "scaleway", "backblaze", "cloudflare"] end),
       # What a workload is for, beyond its kinds (LIB-0034 §1).
       (.features // {} | if type != "object" then "features must be a mapping" else
@@ -472,7 +659,7 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
             (if (.key | test($kebab)) then empty else "backblaze.bucket.\(.key): bucket name must be kebab-case" end),
             (.value | entry_ok("backblaze.bucket.\(.key)")),
             (.key as $k | .value // {} | objects | select(has("exact_name") | not)
-              | ((.name_prefix // "\($file.prefix)-\($k)") + "-xxxxxx-" + (.name_suffix // $file.suffix)) as $n
+              | ((.name_prefix // "\($file.prefix)\($tag)-\($k)") + "-xxxxxx-" + (.name_suffix // $file.suffix)) as $n
               | if ($n | length) > 50 then "backblaze.bucket.\($k): its name, \($n | length) characters with the random code, is longer than B2'"'"'s 50; shorten the key or set exact_name (LIB-0029 §5)" else empty end)
         end),
         (.bucket // {} | objects | keys) as $buckets |
@@ -499,7 +686,7 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
         (if $unit == "workload" then ("ruleset", "apexRedirect") as $m | select(has($m))
            | "cloudflare.\($m) is a zone'"'"'s alone; move it into zones/<zone>/zone.yaml (LIB-0036 §3)" else empty end),
         (if has("zone") and ((.zone | type) != "string" or (.zone | test("\\.") | not)) then "cloudflare.zone must be a zone apex domain (LIB-0030 §3)"
-         elif $unit == "workload" and has("zone") and ($zones[.zone].workload // "") != $workload then "cloudflare.zone: \(.zone) is not registered to workload \($workload), in zones/\(.zone)/zone.yaml (LIB-0036 §3)"
+         elif $unit == "workload" and $nested != "true" and has("zone") and ($zones[.zone].workload // "") != $workload then "cloudflare.zone: \(.zone) is not registered to workload \($workload), in zones/\(.zone)/zone.yaml (LIB-0036 §3)"
          else empty end),
         (.zone // "") as $dz |
         (("bucket", "dnsRecord", "ruleset", "apexRedirect") as $m | .[$m] // {} |
@@ -510,11 +697,18 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
             ($e | objects | select(has("account_id") or has("zone_id")) | "cloudflare.\($m).\($k) cannot set account_id or zone_id; the account is the spoke one, and a zone is named (LIB-0030 §§4-5)"),
             (if $m == "bucket" then
                ($e | objects | select(has("exact_name") | not)
-                 | ((.name_prefix // "\($file.prefix)-\($k)") + "-xxxxxx-" + (.name_suffix // $file.suffix)) as $n
+                 | ((.name_prefix // "\($file.prefix)\($tag)-\($k)") + "-xxxxxx-" + (.name_suffix // $file.suffix)) as $n
                  | if ($n | length) > 63 then "cloudflare.bucket.\($k): its name, \($n | length) characters with the random code, is longer than the 63 R2 allows; shorten the key or set exact_name (LIB-0030 §4)" else empty end)
              else
                (($e | objects | .zone) // $dz) as $z |
                if $z == "" then "cloudflare.\($m).\($k) has no zone, and cloudflare.zone is not set (LIB-0030 §3)"
+               elif $unit == "workload" and $nested == "true" then
+                 # A nested workload writes only at its host (LIB-0037 §3).
+                 ((($e | objects | .name) // $k) | tostring) as $n |
+                 if $host == "" then "cloudflare.\($m).\($k): this workload has no host in zones/\($z)/zone.yaml, so it can'"'"'t write records (LIB-0037 §3)"
+                 elif $host == "@" and ($n == "@" or $n == "www" or ($n | test("^_[^.]+(\\.www)?$"))) then empty
+                 elif $host != "@" and ($n == $host or ($n | endswith(".\($host)"))) then empty
+                 else "cloudflare.\($m).\($k): \($n) is outside this workload'"'"'s host, \($host), in zones/\($z)/zone.yaml (LIB-0037 §3)" end
                elif $unit == "workload" and ($zones[$z].workload // "") != $workload then "cloudflare.\($m).\($k): zone \($z) is not registered to workload \($workload), in zones/\($z)/zone.yaml (LIB-0036 §3)"
                else empty end
              end),
@@ -534,7 +728,7 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
     while IFS= read -r msg; do fail "$rel: $msg"; done <<<"$structural"
     continue
   fi
-  printf '%s\n' "$json" >"$EXPECTED_DIR/.cache/unit-$unit_root-$workload.json"
+  printf '%s\n' "$json" >"$(unit_cache "$unit_dir")"
 
   # Its zone entries, each with its zone, for the clash checks (LIB-0030 §6),
   # which group them across every unit (LIB-0036 §3).
@@ -551,6 +745,8 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
     IFS='|' read -r yaml_path module shape deps credentials state units <<<"$kind"
     [ "$unit" = zone ] && [[ "$units" != *z* ]] && continue
     [ "$unit" = workload ] && [[ "$units" != *w* ]] && continue
+    # A workload in its zone's project has no project leaf (LIB-0037 §2).
+    [ "$module" = scaleway/project ] && [ -n "$ZONE_PROJECT" ] && continue
     jq_path=".${yaml_path}"
     if [ "$credentials" = workload ]; then
       case "$module" in
@@ -566,6 +762,9 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
       names=main
     elif [ "$shape" = cfimplicit ] && [ "$unit" = zone ]; then
       names=deployer
+    elif [ "$shape" = cfimplicit ] && [ "$nested" = true ]; then
+      # A host, or an R2 bucket (LIB-0037 §3).
+      names=$(jq -r --arg host "$host" 'if $host != "" or ((.cloudflare.bucket // {}) | length) > 0 then "deployer" else empty end' <<<"$json")
     elif [ "$shape" = cfimplicit ]; then
       names=$(jq -r --arg w "$workload" --argjson zones "$ZONES" '
         if ([$zones | to_entries[] | select(.value.workload? == $w)] | length) > 0
@@ -635,7 +834,7 @@ generated_stubs() {
   local roots=()
   for r in workloads zones; do [ -d "$SPOKE_DIR/$r" ] && roots+=("$r"); done
   [ ${#roots[@]} -gt 0 ] || return 0
-  (cd "$SPOKE_DIR" && find "${roots[@]}" -mindepth 5 -maxdepth 5 -name terragrunt.hcl -type f) |
+  (cd "$SPOKE_DIR" && find "${roots[@]}" -mindepth 5 -maxdepth 6 -name terragrunt.hcl -type f) |
     while IFS= read -r f; do
       if [ "$(head -n1 "$SPOKE_DIR/$f")" = "$HEADER" ]; then echo "$f"; fi
     done | LC_ALL=C sort
@@ -658,24 +857,27 @@ if [ "$CHECK" = true ]; then
   if git -C "$SPOKE_DIR" rev-parse --git-dir >/dev/null 2>&1; then
     while IFS= read -r f; do
       [ -z "$f" ] && continue
-      fail "$f is committed, but stubs are generated, never committed (LIB-0023); git rm --cached it and gitignore /workloads/*/*/ and /zones/*/*/"
+      fail "$f is committed, but stubs are generated, never committed (LIB-0023); git rm --cached it and gitignore its provider's stub directory, e.g. /workloads/*/scaleway/, /workloads/*/*/scaleway/ or /zones/*/scaleway/"
     done < <(git -C "$SPOKE_DIR" ls-files -- 'workloads/*/*/*/*/terragrunt.hcl' 'zones/*/*/*/*/terragrunt.hcl')
   fi
 
   # Each secrets.yaml's shape, by its clear-text keys (LIB-0025 §2).
-  for secrets in "$SPOKE_DIR"/workloads/*/secrets.yaml; do
-    workload="$(basename "$(dirname "$secrets")")"
-    rel="workloads/$workload/secrets.yaml"
-    values="$SPOKE_DIR/workloads/$workload/values.yaml"
+  # A nested workload's is secrets.workload.yaml (LIB-0037 §1).
+  for secrets in "$SPOKE_DIR"/workloads/*/secrets.yaml "$SPOKE_DIR"/workloads/*/*/secrets.workload.yaml; do
+    rel="${secrets#"$SPOKE_DIR"/}"
+    unit_dir="$(dirname "$rel")"
+    case "$rel" in */secrets.workload.yaml) values="$SPOKE_DIR/$unit_dir/workload.yaml" ;; *) values="$SPOKE_DIR/$unit_dir/values.yaml" ;; esac
     if [ ! -f "$values" ]; then
-      fail "$rel has no values.yaml beside it"
+      fail "$rel has no $(basename "$values") beside it"
       continue
     fi
     if ! sjson=$(yq -o=json '.' "$secrets"); then
       fail "$rel: not valid YAML"
       continue
     fi
-    vjson=$(expand_values "$values")
+    # A unit that failed above has no cache, and its failure already stands.
+    [ -f "$(unit_cache "$unit_dir")" ] || continue
+    vjson=$(cat "$(unit_cache "$unit_dir")")
     problems=$(jq -r --argjson v "$vjson" '
       def leaves: paths(scalars) as $p | {path: $p, value: getpath($p)};
       if (type != "object") or (has("sops") | not) then
@@ -718,8 +920,8 @@ if [ "$CHECK" = true ]; then
 
   for inst in ${instances[@]+"${instances[@]}"}; do
     IFS='|' read -r unit_dir rel module name jq_path declared_deps credentials <<<"$inst"
-    secrets="$SPOKE_DIR/$unit_dir/secrets.yaml"
-    entry=$(jq -c "$jq_path // {}" "$EXPECTED_DIR/.cache/unit-${unit_dir%%/*}-${unit_dir#*/}.json")
+    case "$rel" in */workload.yaml) secrets="$SPOKE_DIR/$unit_dir/secrets.workload.yaml" ;; *) secrets="$SPOKE_DIR/$unit_dir/secrets.yaml" ;; esac
+    entry=$(jq -c "$jq_path // {}" "$(unit_cache "$unit_dir")")
     # scaleway.state.prefix is the stub's state key, not a module input
     # (LIB-0028 §3).
     if [ "$jq_path" = .scaleway.state ]; then entry=$(jq -c 'del(.prefix)' <<<"$entry"); fi

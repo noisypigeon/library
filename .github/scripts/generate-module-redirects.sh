@@ -42,7 +42,8 @@
 # §6's JSON Schemas there: one inputs.schema.json per terraform/scaleway
 # module version a workload can use, beside that version's redirect page, and
 # the workload schema at schemas/workload/v1.json that ties them together,
-# and the zone schema at schemas/zone/v1.json (LIB-0036).
+# its v2 for a workload.yaml (LIB-0037), and the zone schema at
+# schemas/zone/v1.json (LIB-0036).
 # Without it, nothing under static/ is touched.
 #
 # Regenerate-all semantics: every run wipes and rewrites every generated page
@@ -248,7 +249,7 @@ if [ -n "$STATIC_ROOT" ]; then
     exit 2
   fi
   find "$STATIC_ROOT/terraform" \( -name inputs.schema.json -o -name state.schema.json -o -name workload.schema.json \) -type f -delete 2>/dev/null || true
-  rm -f "$STATIC_ROOT/schemas/workload/v1.json" "$STATIC_ROOT/schemas/zone/v1.json"
+  rm -f "$STATIC_ROOT/schemas/workload/v1.json" "$STATIC_ROOT/schemas/workload/v2.json" "$STATIC_ROOT/schemas/zone/v1.json"
 
   kinds_json='{}'
   schema_count=0
@@ -417,6 +418,44 @@ if [ -n "$STATIC_ROOT" ]; then
     }
   }' <<<"$kinds_json" >"$STATIC_ROOT/schemas/workload/v1.json"
 
+  # A workload.yaml (LIB-0037 §§1-4): v1's kinds, with name and deployments
+  # in place of prefix, suffix and features, and no zone anywhere, since the
+  # directory names it.
+  jq --arg base "$SCHEMA_BASE_URL" '
+    ."$id" = "\($base)/schemas/workload/v2.json"
+    | .title = "Workload workload.yaml (LIB-0023, LIB-0028, LIB-0029, LIB-0030, LIB-0033, LIB-0037)"
+    | del(.required, .properties.prefix, .properties.suffix, .properties.features)
+    | .properties.scaleway.properties.project as $project
+    | del(.properties.scaleway.properties.project, .properties.cloudflare.properties.zone)
+    | .properties.cloudflare.properties.dnsRecord.additionalProperties |= {allOf: [., {not: {required: ["zone"]}}]}
+    | .properties = {
+        name: {type: "string", pattern: "^[a-z0-9]+(-[a-z0-9]+)*$", not: {const: "zone"}, description: "What the workload'"'"'s own resources carry in their names. Default: its directory (LIB-0037 §1)"},
+        deployments: {
+          type: ["object", "null"],
+          additionalProperties: false,
+          properties: {
+            scaleway: {
+              type: ["object", "null"],
+              additionalProperties: false,
+              properties: {
+                project: {allOf: [$project, {description: "Setting name, prefix or suffix gives the workload its own project; otherwise it lives in its zone'"'"'s, and prefix and suffix are the zone'"'"'s (LIB-0037 §2)"}, {anyOf: [{type: "null"}, {type: "object", properties: {prefix: {type: "string", minLength: 1}, suffix: {type: "string", minLength: 1}}}]}]}
+              }
+            },
+            githubPages: {
+              type: ["object", "null"],
+              additionalProperties: false,
+              description: "The site its host serves, deployed by the Pages shim <username>/<shim>. Implies the host'"'"'s Pages CNAMEs, which an entry of the same key overrides field by field (LIB-0037 §4)",
+              properties: {
+                username: {type: "string", minLength: 1, description: "Default: the spoke repo'"'"'s owner"},
+                shim: {type: "string", minLength: 1, description: "Default: the host as a domain, the zone for @"},
+                url: {type: "string", pattern: "^[a-z0-9-]+(\\.[a-z0-9-]+)+$", description: "Default: <username>.github.io"}
+              }
+            }
+          }
+        }
+      } + .properties
+  ' "$STATIC_ROOT/schemas/workload/v1.json" >"$STATIC_ROOT/schemas/workload/v2.json"
+
   # A zone's zone.yaml (LIB-0036 §1): the kinds a zone takes, from the same
   # table. A zone entry never names its zone, since its directory does.
   mkdir -p "$STATIC_ROOT/schemas/zone"
@@ -429,7 +468,7 @@ if [ -n "$STATIC_ROOT" ]; then
     {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "$id": "\($base)/schemas/zone/v1.json",
-    title: "Zone zone.yaml (LIB-0036)",
+    title: "Zone zone.yaml (LIB-0036, LIB-0037)",
     type: "object",
     additionalProperties: false,
     required: ["suffix"],
@@ -438,6 +477,12 @@ if [ -n "$STATIC_ROOT" ]; then
       prefix: {type: "string", pattern: "^[a-z0-9-]+$", description: "What every other resource'"'"'s name starts with. Default: name, with each character outside a-z, 0-9 and - as a dash (LIB-0036 §1)"},
       suffix: {type: "string", minLength: 1},
       workload: {type: "string", pattern: "^[a-z0-9]+(-[a-z0-9]+)*$", description: "The one workload that may also write records in this zone (LIB-0036 §§1, 3)"},
+      hosts: {
+        type: ["object", "null"],
+        propertyNames: {pattern: "^(@|[a-z0-9]([a-z0-9-]*[a-z0-9])?)$"},
+        additionalProperties: {type: "string", pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"},
+        description: "Who serves the apex (@) and each subdomain label: a workload under workloads/<zone>/, which writes records only at its host (LIB-0037 §3)"
+      },
       scaleway: {
         type: ["object", "null"],
         additionalProperties: false,

@@ -5,7 +5,7 @@
 # deploy: the shim then builds exactly what main holds, and a broken
 # generation fails here, before the live site.
 #
-# The push lands under src_dir, outside values.yaml and secrets.yaml, so the
+# The push lands under src_dir, outside the workload's unit file and secrets, so the
 # caller's sites.yml dispatches the site's shim (LIB-0034 §3). That's why it
 # pushes with BOT_GITHUB_TOKEN: a push made with GITHUB_TOKEN starts no
 # workflow. Nothing changed means no commit, and so no deploy.
