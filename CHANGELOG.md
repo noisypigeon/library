@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-24
 
+- [workflows] Auto-merge only after an apply that ran and succeeded ([#178](https://github.com/noisypigeon/library/pull/178))
 - [workflows] Fix resolve-workloads.sh --list failing in a spoke without zones ([#177](https://github.com/noisypigeon/library/pull/177))
 - [workflows] Add zone units, zones/<zone>/zone.yaml (LIB-0036) ([#176](https://github.com/noisypigeon/library/pull/176))
 - [terragrunt/root-hcl] Add zone units, zones/<zone>/zone.yaml (LIB-0036) ([#176](https://github.com/noisypigeon/library/pull/176))

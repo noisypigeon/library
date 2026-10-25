@@ -4,6 +4,23 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [5.2.2] - 2026-10-24
+
+### Auto-merge only after an apply that ran and succeeded
+
+`terragrunt-run.yml` could merge a PR whose apply never ran. Its Auto-merge step checked `steps.run.outputs.exit_code == '0'`. When the apply step is skipped, that output is null, and an Actions expression's loose equality treats `null == '0'` as true. So an apply that was refused, because there was no saved plan for the head or its selected units differed from the plan's, merged the PR anyway with `BOT_GITHUB_TOKEN`. Only after that did the job fail. noisypigeon/runway#69 merged this way, with nothing applied.
+
+Auto-merge now also requires `steps.run.outcome == 'success'`, so it merges only after an apply that ran and succeeded with nothing deferred. The plan's "Pack saved plan" and "Upload saved plan" steps get the same guard on their `exit_code` check. No other step compares a step output to `'0'`. The `== 'true'` and `!= ''` checks elsewhere already behave as intended when an output is null.
+
+Tested on GitHub with a throwaway workflow on a scratch branch, since deleted. With the apply step skipped, the old condition merged and the new one doesn't. Both merge after a successful run, and neither merges after a failed or deferred one.
+
+A spoke takes this by bumping its `@workflows/` refs. The apply side only gets the fix once the bump is on the spoke's `main`, because a `terragrunt apply` comment runs the workflow file from `main`.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#178](https://github.com/noisypigeon/library/pull/178)
+
 ## [5.2.1] - 2026-10-24
 
 ### Fix resolve-workloads.sh --list failing in a spoke without zones
