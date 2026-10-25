@@ -655,8 +655,13 @@ generated_stubs() {
       if [ "$(head -n1 "$SPOKE_DIR/$f")" = "$HEADER" ]; then echo "$f"; fi
     done | LC_ALL=C sort
 }
+# A spoke may have workloads and no zones, or the reverse, and find fails on
+# a root that doesn't exist, so each is listed only when it does.
 expected_stubs() {
-  (cd "$EXPECTED_DIR" && find workloads zones -name terragrunt.hcl -type f 2>/dev/null) | LC_ALL=C sort
+  local roots=()
+  for r in workloads zones; do [ -d "$EXPECTED_DIR/$r" ] && roots+=("$r"); done
+  [ ${#roots[@]} -gt 0 ] || return 0
+  (cd "$EXPECTED_DIR" && find "${roots[@]}" -name terragrunt.hcl -type f) | LC_ALL=C sort
 }
 
 if [ "$LIST" = true ]; then
