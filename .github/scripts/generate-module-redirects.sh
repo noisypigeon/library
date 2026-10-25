@@ -229,8 +229,9 @@ echo "Generated ${overview_count} module overview page(s) under ${CONTENT_DIR#"$
 # each kind against its newest version, or the version its `version` pins.
 #
 # The module list is the third copy of the kind table; its twins are
-# resolve-workloads.sh's KINDS and root.hcl's workload_kinds. The zone schema
-# (LIB-0036) takes the kinds whose units include a zone.
+# resolve-workloads.sh's KINDS and root.hcl's workload_kinds. The workload
+# schema takes the kinds whose units include a workload, and the zone schema
+# (LIB-0036) those whose units include a zone.
 #
 # The workload state bucket, scaleway.state (LIB-0028), is a scaleway/bucket
 # with one input of its own, `prefix`. Each inputs schema refuses properties it
@@ -405,20 +406,11 @@ if [ -n "$STATIC_ROOT" ]; then
             propertyNames: {pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"},
             additionalProperties: ($k["cloudflare/bucket#workload"] // {})
           },
+          # ruleset and apexRedirect belong to a zone alone (LIB-0036 §3).
           dnsRecord: {
             type: ["object", "null"],
             propertyNames: {pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"},
             additionalProperties: ($k["cloudflare/dns-record"] // {})
-          },
-          ruleset: {
-            type: ["object", "null"],
-            propertyNames: {pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"},
-            additionalProperties: ($k["cloudflare/ruleset#workload"] // {})
-          },
-          apexRedirect: {
-            type: ["object", "null"],
-            propertyNames: {pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"},
-            additionalProperties: ($k["cloudflare/apex-redirect"] // {})
           }
         }
       }

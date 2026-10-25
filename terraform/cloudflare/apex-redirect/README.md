@@ -15,11 +15,13 @@ manages the three things a redirect needs, which used to be two leaves calling
 Every request goes to `target_url` itself; the path isn't preserved. The query
 string is appended only when `preserve_query_string` is true.
 
-It's **zone-scoped**: a leaf calling it lives at
-`terraform/cloudflare/<zone>/apex-redirect/<instance>/`, where `<zone>` is the
-zone's apex domain (LIB-0008). The module looks the zone ID up from `zone`
-with `data "cloudflare_zone"`, so the leaf passes
-`zone = local.cloudflare_zone` and no zone ID is kept in a secret. The token
+It's **zone-scoped**: a spoke declares it as `cloudflare.apexRedirect.<instance>`
+in `zones/<zone>/zone.yaml`, and `resolve-workloads.sh` generates its leaf at
+`zones/<zone>/cloudflare/apex-redirect/<instance>/` (LIB-0036). Only a zone
+takes it. The hand-written `terraform/cloudflare/<zone>/apex-redirect/<instance>/`
+leaves LIB-0008 described are refused since `terragrunt/root-hcl` v6.0.0. The
+module looks the zone ID up from `zone` with `data "cloudflare_zone"`, so no
+zone ID is kept in a secret. The token
 needs **Zone:Read** on the zone, as well as DNS and ruleset edit.
 
 The module owns its resources directly rather than calling other library

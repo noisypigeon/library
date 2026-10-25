@@ -15,9 +15,9 @@
 # their state in that same workload bucket. An API key depends on each
 # bucket its `buckets` list names, and gets their IDs as bucket_ids.
 # Cloudflare kinds (LIB-0030) do the same with the spoke's Cloudflare token.
-# A zone kind may act only on a zone the spoke's zones.yaml registers to its
-# workload, and a zone's entrypoints and records are checked for clashes.
-# A workload that owns a zone, or declares an R2 bucket, also gets its own
+# A workload's records may land only in a zone whose zone.yaml names it, and a
+# zone's entrypoints and records are checked for clashes.
+# A workload that a zone names, or that declares an R2 bucket, also gets its own
 # Cloudflare token, cloudflare/api-token/deployer, which its Cloudflare leaves
 # sign in with (LIB-0033 §4).
 # A site workload's features.githubPages (LIB-0034 §§1-2) implies two
@@ -30,10 +30,10 @@
 # zones/<zone>/<provider>/<module>/<instance>/, the same way. It gets a
 # workload's project, deployer, state bucket and Cloudflare token, and takes
 # only zone kinds: its records, rulesets and redirects, on its own zone. It
-# names at most one workload, which may then write in it too, and the clash
-# checks below run across every unit, so a zone's file and its workload's are
-# checked together. zones.yaml still registers zones beside it, for the
-# migration; a zone in both is refused.
+# names at most one workload, which may then write records in it too, and the
+# clash checks below run across every unit, so a zone's file and its
+# workload's are checked together. Rulesets and redirects are a zone's alone
+# (LIB-0036 §3), and a root zones.yaml is refused (LIB-0036 §1).
 # Values, defaults and the module version are root.hcl's, at plan time: it
 # writes them into the leaf's generated module block as literals, since a
 # `type = any` variable set through TF_VAR_ arrives as a string.
@@ -112,8 +112,8 @@ done
 #   (LIB-0024 §1, LIB-0028 §1), and `state` is the workload's state bucket,
 #   whose instance is `state` (LIB-0028 §2), and `cfimplicit` is the
 #   workload's Cloudflare token, whose instance is `deployer`, present when
-#   zones.yaml gives the workload a zone or it declares an R2 bucket
-#   (LIB-0033 §4).
+#   a zone.yaml names the workload or it declares an R2 bucket (LIB-0033 §4),
+#   and always present in a zone.
 # - credentials (LIB-0024 §2): `spoke` kinds sign in with the spoke's key;
 #   `workload` kinds with their provider's workload credential, which they
 #   then also depend on: a Scaleway kind the deployer's key, a Cloudflare kind
@@ -123,8 +123,8 @@ done
 #   bucket and on the deployer whose key signs in to it.
 # - `buckets` (LIB-0029 §3) stands for one bucket_<key> dependency per entry
 #   in the instance's own `buckets` list, resolved per instance.
-# - units (LIB-0036): `w` if only a workload takes the kind, `wz` if a zone
-#   does too.
+# - units (LIB-0036): `w` if only a workload takes the kind, `z` if only a
+#   zone does, `wz` if both do.
 KINDS=(
   "scaleway.project|scaleway/project|implicit||spoke|spoke|wz"
   "scaleway.deployer|scaleway/terraform-deployer-iam|implicit|project|spoke|spoke|wz"
@@ -137,8 +137,8 @@ KINDS=(
   "cloudflare.deployer|cloudflare/api-token|cfimplicit||spoke|workload|wz"
   "cloudflare.bucket|cloudflare/bucket|map||workload|workload|w"
   "cloudflare.dnsRecord|cloudflare/dns-record|map||workload|workload|wz"
-  "cloudflare.ruleset|cloudflare/ruleset|map||workload|workload|wz"
-  "cloudflare.apexRedirect|cloudflare/apex-redirect|map||workload|workload|wz"
+  "cloudflare.ruleset|cloudflare/ruleset|map||workload|workload|z"
+  "cloudflare.apexRedirect|cloudflare/apex-redirect|map||workload|workload|z"
 )
 
 # A dependency's stub, relative to its workload directory, so a Backblaze
@@ -337,42 +337,23 @@ EXPECTED_DIR="$(mktemp -d)"
 trap 'rm -rf "$EXPECTED_DIR"' EXIT
 mkdir -p "$EXPECTED_DIR/.cache"
 
-# zones.yaml (LIB-0030 §2): each zone's apex and its one owner, a workload or
-# `terraform`. Without the file no workload may use a zone.
+# A zone is registered only by its zones/<zone>/zone.yaml. The root zones.yaml
+# that did it before (LIB-0030 §2) is refused, not read beside them.
 ZONES='{}'
-if [ -f "$SPOKE_DIR/zones.yaml" ]; then
-  if ! ZONES=$(yq -o=json '. // {}' "$SPOKE_DIR/zones.yaml"); then
-    fail "zones.yaml: not valid YAML"
-    ZONES='{}'
-  fi
-  zone_problems=$(jq -r --arg kebab "$KEBAB" '
-    if type != "object" then "zones.yaml must be a mapping of zones"
-    else to_entries[] |
-      (if (.key | test("^[a-z0-9-]+(\\.[a-z0-9-]+)+$")) then empty else "zones.yaml: \(.key) is not a zone apex domain" end),
-      (if (.value | type) == "object" and (.value.workload | type) == "string" and (.value.workload == "terraform" or (.value.workload | test($kebab)))
-       then empty else "zones.yaml: \(.key) needs a workload, a workload name or terraform" end)
-    end
-  ' <<<"$ZONES")
-  while IFS= read -r msg; do [ -n "$msg" ] && fail "$msg"; done <<<"$zone_problems"
-  while IFS= read -r owner; do
-    [ -z "$owner" ] && continue
-    [ -f "$SPOKE_DIR/workloads/$owner/values.yaml" ] || fail "zones.yaml: workload $owner has no workloads/$owner/values.yaml"
-  done < <(jq -r 'objects | .[] | .workload? // empty | select(. != "terraform")' <<<"$ZONES" | sort -u)
+if [ -e "$SPOKE_DIR/zones.yaml" ]; then
+  fail "zones.yaml is refused: each zone is zones/<zone>/zone.yaml, naming the workload that may write in it (LIB-0036 §1)"
 fi
 
 shopt -s nullglob
 
-# zones/<zone>/zone.yaml (LIB-0036 §1): each registers its zone too, to the
+# zones/<zone>/zone.yaml (LIB-0036 §1): each registers its zone to the
 # workload it names, or to none.
 APEX='^[a-z0-9-]+(\.[a-z0-9-]+)+$'
 for zone_file in "$SPOKE_DIR"/zones/*/zone.yaml; do
   zone="$(basename "$(dirname "$zone_file")")"
   [[ "$zone" =~ $APEX ]] || continue
-  if jq -e --arg z "$zone" 'has($z)' <<<"$ZONES" >/dev/null; then
-    fail "$zone is in both zones.yaml and zones/$zone/zone.yaml; a zone has one home (LIB-0036 §1)"
-  fi
   owner=$(yq -o=json '.' "$zone_file" 2>/dev/null | jq -r 'if type == "object" and (.workload | type) == "string" then .workload else "" end') || owner=""
-  ZONES=$(jq -c --arg z "$zone" --arg w "$owner" '.[$z] = {workload: $w, unit: true}' <<<"$ZONES")
+  ZONES=$(jq -c --arg z "$zone" --arg w "$owner" '.[$z] = {workload: $w}' <<<"$ZONES")
 done
 
 # Each unit, a workload's values.yaml or a zone's zone.yaml, validated and
@@ -514,8 +495,11 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
         keys_in("cloudflare"; if $unit == "zone" then ["zone", "deployer", "dnsRecord", "ruleset", "apexRedirect"] else ["zone", "deployer", "bucket", "dnsRecord", "ruleset", "apexRedirect"] end),
         (.deployer | entry_ok("cloudflare.deployer")),
         (.deployer // {} | objects | select(has("account_id")) | "cloudflare.deployer cannot set account_id; the account is the spoke one (LIB-0033 §4)"),
+        # A phase entrypoint belongs to the zone, so only a zone holds one (LIB-0036 §3).
+        (if $unit == "workload" then ("ruleset", "apexRedirect") as $m | select(has($m))
+           | "cloudflare.\($m) is a zone'"'"'s alone; move it into zones/<zone>/zone.yaml (LIB-0036 §3)" else empty end),
         (if has("zone") and ((.zone | type) != "string" or (.zone | test("\\.") | not)) then "cloudflare.zone must be a zone apex domain (LIB-0030 §3)"
-         elif $unit == "workload" and has("zone") and ($zones[.zone].workload // "") != $workload then "cloudflare.zone: \(.zone) is not registered to workload \($workload), in zones/\(.zone)/zone.yaml or zones.yaml (LIB-0030 §2, LIB-0036 §3)"
+         elif $unit == "workload" and has("zone") and ($zones[.zone].workload // "") != $workload then "cloudflare.zone: \(.zone) is not registered to workload \($workload), in zones/\(.zone)/zone.yaml (LIB-0036 §3)"
          else empty end),
         (.zone // "") as $dz |
         (("bucket", "dnsRecord", "ruleset", "apexRedirect") as $m | .[$m] // {} |
@@ -531,7 +515,7 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
              else
                (($e | objects | .zone) // $dz) as $z |
                if $z == "" then "cloudflare.\($m).\($k) has no zone, and cloudflare.zone is not set (LIB-0030 §3)"
-               elif $unit == "workload" and ($zones[$z].workload // "") != $workload then "cloudflare.\($m).\($k): zone \($z) is not registered to workload \($workload), in zones/\($z)/zone.yaml or zones.yaml (LIB-0030 §2, LIB-0036 §3)"
+               elif $unit == "workload" and ($zones[$z].workload // "") != $workload then "cloudflare.\($m).\($k): zone \($z) is not registered to workload \($workload), in zones/\($z)/zone.yaml (LIB-0036 §3)"
                else empty end
              end),
             ({dnsRecord: ["type", "content"], ruleset: ["kind", "phase", "rules"], apexRedirect: ["target_url"]}[$m] // [] | .[] as $r
@@ -566,6 +550,7 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
   for kind in "${KINDS[@]}"; do
     IFS='|' read -r yaml_path module shape deps credentials state units <<<"$kind"
     [ "$unit" = zone ] && [[ "$units" != *z* ]] && continue
+    [ "$unit" = workload ] && [[ "$units" != *w* ]] && continue
     jq_path=".${yaml_path}"
     if [ "$credentials" = workload ]; then
       case "$module" in

@@ -429,7 +429,10 @@ backblaze:
   only, so a spoke adds nothing for workloads.
 
 Since v5.2.0 (LIB-0030), with `workflows/v4.11.0` or later, a workload may also
-declare Cloudflare resources, in zones a root `zones.yaml` gives it:
+declare Cloudflare resources, in zones a root `zones.yaml` gives it. v6.0.0
+refuses `zones.yaml`, a workload's `ruleset` and `apexRedirect`, and
+hand-written zone leaves, so this is history; zones now work as the v5.6.0
+section below says:
 
 ```yaml
 # zones.yaml
@@ -544,6 +547,21 @@ cloudflare:
   it declares a `ruleset` or an `apexRedirect`.
 - **Clashes are checked across the spoke,** so a zone's records and its
   workload's can't be one record.
+
+Since v6.0.0 (LIB-0036), with `workflows/v6.0.0` or later, a `zone.yaml` is
+the only way to register a zone. Each of these is refused before planning, by
+`resolve-workloads.sh` and by this template:
+
+- **a root `zones.yaml`.** Move each zone into `zones/<zone>/zone.yaml`, and
+  name its workload there;
+- **a workload's `ruleset` or `apexRedirect`.** They're a zone's alone, since a
+  phase has one entrypoint per zone. A workload keeps `dnsRecord` and `bucket`,
+  and its token loses *Dynamic URL Redirects Write*;
+- **a hand-written `terraform/cloudflare/<zone>/` leaf.** Declare its entries
+  in the zone's `zone.yaml`, and import them (below).
+
+A spoke whose zones are all `zone.yaml`s, and whose workloads hold no redirect,
+plans `No changes.` on the bump.
 
 Moving an existing record into a zone is an import, never a recreate:
 `docs/runbooks/import-a-leaf-into-a-workload.md`. A spoke gitignores

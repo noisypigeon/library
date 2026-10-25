@@ -5,12 +5,13 @@ every argument is passed through as given, and an optional argument left `null`
 stays unset rather than picking up a default here. It exists so that a leaf
 managing DNS records calls a library module, like every other leaf (LIB-0004).
 
-It's **zone-scoped**: a leaf calling it lives at
-`terraform/cloudflare/<zone>/dns-record/<instance>/`, where `<zone>` is the
-zone's apex domain (LIB-0008). The module takes that apex as `zone` and looks
-the zone ID up itself with `data "cloudflare_zone"`, so the leaf passes
-`zone = local.cloudflare_zone`, which `terragrunt/root-hcl` derives from the
-path, and no zone ID is kept in a secret (LIB-0011). The lookup needs a token
+It's **zone-scoped**: a spoke declares it as `cloudflare.dnsRecord.<instance>`
+in `zones/<zone>/zone.yaml`, or in the `values.yaml` of the workload that zone
+names, and `resolve-workloads.sh` generates its leaf (LIB-0036). The
+hand-written `terraform/cloudflare/<zone>/dns-record/<instance>/` leaves
+LIB-0008 described are refused since `terragrunt/root-hcl` v6.0.0. The module
+takes the zone's apex as `zone` and looks the zone ID up itself with
+`data "cloudflare_zone"`, so no zone ID is kept in a secret (LIB-0011). The lookup needs a token
 with **Zone:Read** on the zone as well as DNS edit. The ID it found is the
 `zone_id` output.
 
