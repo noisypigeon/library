@@ -12,8 +12,10 @@
 # prefix -- DEV-0160 step 0 retired the last cross-repo mapping arm and
 # LIB-0002 flattened the prefix, so the mapping is a single constant.
 #
-# This script lives in the library and runs against a consuming site, so it
-# reads from two roots that are deliberately separate:
+# This script lives in the library and runs in a spoke's generation, not a
+# site's build: runway's garden-generate.yml runs it through site-generate.yml
+# and commits its output under workloads/garden/ (LIB-0035 §2). It reads from
+# two roots that are deliberately separate:
 #
 #   LIB_ROOT     -- the library clone this script was fetched into. Derived
 #                   from ${BASH_SOURCE[0]} two levels up (this script lives in

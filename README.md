@@ -6,10 +6,10 @@ releases and deploys them.
 
 This repo is the **hub**. It holds what other repos reuse and nothing that is
 deployed — no site, no Terraform state, no secrets. The repos that consume it
-(`garden`, `noisypigeon.com`, `runway`, and what is left of
-`noisypigeon`) are spokes: content plus the
+(`runway`, and what is left of `noisypigeon`) are spokes: content plus the
 infrastructure that serves it, each pinning a version of what it takes from
-here. The full argument is
+here. `noisypigeon.com` and `noisypigeon.garden` are only Pages shims for the
+sites runway holds as workloads. The full argument is
 [LIB-0001](docs/adr/LIB-0001-composable-hub-and-spoke-repo-architecture.md).
 
 ## What's here
@@ -22,12 +22,12 @@ here. The full argument is
 | `grafana-dashboards/<set>/` | versioned Grafana dashboard JSON, fetched by tag URL | `grafana-dashboards/<set>/vX.Y.Z` |
 | `.github/workflows/` | the reusable CI the spokes call | `workflows/vX.Y.Z` |
 
-Plus two scripts a consuming site runs at build time:
+Plus two scripts a site's build or generation runs:
 [`zola-site/resolve-theme.sh`](zola-site/resolve-theme.sh) (materializes the
 theme version a site pins) and
 [`.github/scripts/generate-module-redirects.sh`](.github/scripts/generate-module-redirects.sh) (generates
 `noisypigeon.garden`'s module pages and release posts from this repo's tags and
-changelogs). Both resolve their own location rather than asking git, so they
+changelogs, committed in runway's `workloads/garden/`). Both resolve their own location rather than asking git, so they
 work wherever a site fetched them to.
 
 ## Consuming a module
@@ -73,7 +73,7 @@ Per-module and theme `CHANGELOG.md` files carry the full, versioned entries.
 ## Decision records
 
 The family's ADRs live in [`docs/adr/`](docs/adr), as `LIB-NNNN-<slug>.md`.
-The spokes (garden and runway) have none of their own, because they
+The spokes (runway, and the shims) have none of their own, because they
 depend on this repo for their design standards
 ([LIB-0017](docs/adr/LIB-0017-spokes-do-not-get-their-own-adrs.md)). The older
 `DEV-` records are archived verbatim in [`docs/adr/archive/`](docs/adr/archive),
