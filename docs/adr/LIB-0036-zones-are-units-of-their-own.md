@@ -53,6 +53,8 @@ as LIB-0011 looks zones up, holding one `zone.yaml`:
 
 ```yaml
 # zones/noisypigeon.com/zone.yaml
+prefix: npc
+suffix: noisypigeon
 workload: blog
 cloudflare:
   dnsRecord:
@@ -65,14 +67,25 @@ cloudflare:
 
 ```yaml
 # zones/pigeon.dev/zone.yaml
+suffix: noisypigeon
 cloudflare:
   apexRedirect:
     main:
       target_url: https://noisypigeon.com
 ```
 
-- **Every key is optional.** An empty `zone.yaml` is a valid zone: it has a
-  project, a deployer, a state bucket and a token (§2), and no entries.
+- **Only `suffix` is required.** A `zone.yaml` with only a `suffix` is a valid
+  zone: it has a project, a deployer, a state bucket and a token (§2), and no
+  entries.
+- **`name`** is the zone unit's name, and its Scaleway project's. It defaults
+  to the directory's apex, such as `noisypigeon.com`. A project name may hold
+  dots, so it needs no sanitizing.
+- **`prefix`** starts every other resource's name, which can't hold dots. It
+  defaults to `name` with each character outside `[a-z0-9-]` turned into `-`,
+  such as `noisypigeon-com`. Written, it's used as is, such as `npc`, and must
+  match `^[a-z0-9-]+$`.
+- **`suffix`** is what a bucket's name carries after its random code, as in a
+  workload (LIB-0023 §4). It must be written and non-empty.
 - **`workload`** names the one `workloads/<w>/` that may also write records in
   the zone (§3). It's at most one, as LIB-0030 §2's owner was.
 - **`cloudflare.dnsRecord`, `cloudflare.ruleset` and `cloudflare.apexRedirect`**
@@ -80,9 +93,9 @@ cloudflare:
   - **`zone` is refused.** The directory names the zone, so an entry can't
     name another.
   - **`comment` defaults to `zones/<zone>`,** the file that owns the record.
-- **`prefix`, `suffix`, `scaleway.project`, `scaleway.deployer`,
-  `scaleway.state` and `cloudflare.deployer`** override §2's implicit leaves,
-  as they do in a workload.
+- **`scaleway.project`, `scaleway.deployer`, `scaleway.state` and
+  `cloudflare.deployer`** override §2's implicit leaves, as they do in a
+  workload.
 - **The zone resource itself stays outside Terraform,** as LIB-0030 said.
 - **A root `zones.yaml` is refused,** by `resolve-workloads.sh` and root.hcl,
   with a message naming this record. It's a directory and not a map so a zone
@@ -99,11 +112,29 @@ cloudflare:
 - `zones/<zone>/cloudflare/api-token/deployer`;
 - one stub per entry, at `zones/<zone>/cloudflare/<module>/<key>/`.
 
-Their defaults:
+Their names default as below. The example is noisypigeon.com, with
+`prefix: npc` and `suffix: noisypigeon`:
 
-- **`prefix`** is the apex with its dots as dashes, such as `noisypigeon-com`.
-  **`suffix`** is the spoke's. The state bucket is then
-  `<prefix>-<code>-terraform-state`, LIB-0016's shape.
+| Leaf | Name | Example |
+| --- | --- | --- |
+| `scaleway/project/main` | `<name>` | `noisypigeon.com` |
+| `scaleway/terraform-deployer-iam/main` | `<prefix>-<suffix>-zone-deployer` | `npc-noisypigeon-zone-deployer` |
+| `scaleway/bucket/state` | `<prefix>-<code>-zone-terraform-state` | `npc-<code>-zone-terraform-state` |
+| `cloudflare/api-token/deployer` | `<prefix>-<suffix>-zone-cloudflare-deployer` | `npc-noisypigeon-zone-cloudflare-deployer` |
+| `cloudflare/ruleset/<key>` | `<prefix>-<key>-<suffix>` | `npc-<key>-noisypigeon` |
+
+- **`zone-` marks a zone's implicit resources.** A zone and a workload that
+  share a prefix and suffix then never collide on a deployer, a state bucket
+  or a token.
+- **The state bucket takes no `suffix`,** as a workload's doesn't (LIB-0028
+  §2). `zone-terraform-state` is its fixed name after the code, in LIB-0016's
+  `<name>-<code>-<role>` shape. A name over 63 characters is refused before
+  planning.
+- **An entry's resources keep LIB-0030 §4's names,** with no `zone-`: an
+  entry's key already tells it apart.
+
+Their other defaults:
+
 - **`scaleway.state.prefix`** is `zones/<zone>/`, so a zone leaf's key is still
   `path_relative_to_include()`'s (LIB-0001 invariant 4).
 - **The token** holds *Zone Read* and *DNS Write* on this zone alone, plus the
@@ -114,7 +145,8 @@ Their defaults:
   `zones/*/cloudflare/api-token/deployer` as it does for the workload path.
 - **The guards are a workload's.** LIB-0028's versioning, storage-class and
   `ObjectStorageFullAccess` guards, and its reserved `state` bucket key, apply
-  unchanged.
+  unchanged. So do LIB-0023 §4's, which refuse an empty `suffix`; a `prefix`
+  outside `[a-z0-9-]` is refused too.
 
 A zone lands in LIB-0033 §4's five stages: project, deployer, state bucket,
 token, entries. A zone is removed as a workload is (LIB-0028 §7).
@@ -186,7 +218,7 @@ between the import and the merge of the PR that moves the entries.
 1. **The library ships §§1–6.** runway takes those releases, and its garden
    pages are regenerated.
 2. **Bootstrap:** `zones.yaml` gives way to four `zone.yaml` files that hold
-   only `workload`:
+   only `suffix` and `workload`:
    - noisypigeon.com and pigeon.dev and willowgraysen.com name `blog`, so the
      blog keeps every zone it acts on today;
    - noisypigeon.garden names `garden`.
@@ -214,6 +246,8 @@ between the import and the merge of the PR that moves the entries.
 - **A token reaches what its unit owns.** The blog's token reaches
   noisypigeon.com's records only. A zone's token reaches one zone.
 - **A zone with no site is a unit,** not something a workload has to own.
+- **A zone's project reads as its domain** in the Scaleway console, while its
+  buckets and keys carry a short prefix and `zone-`.
 - **runway gains four projects, four buckets and four tokens.** Each is cheap,
   and each zone adds four stages when it's created.
 - **Ownership checks span two files** for any zone with a workload, so a
@@ -242,6 +276,7 @@ between the import and the merge of the PR that moves the entries.
 2. **Ownership holds.** Each is refused by name, before planning:
    - a workload entry in a zone whose `zone.yaml` doesn't name it;
    - a `zone` in a `zone.yaml` entry;
+   - a `zone.yaml` without `suffix`, or with a `prefix` outside `[a-z0-9-]`;
    - a root `zones.yaml`;
    - a workload `ruleset` or `apexRedirect`;
    - a hand-written `terraform/cloudflare/<zone>/` leaf;
