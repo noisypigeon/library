@@ -1,0 +1,34 @@
+# Reusable: reacts 👀 to a `terragrunt apply` or `terragrunt plan` comment as
+# soon as it lands, so whoever wrote it sees it was picked up (LIB-0022 §1).
+#
+# terragrunt-run.yml reacts too, but its job only starts once it holds the
+# PR's concurrency group, terragrunt-pr-<n>, which the caller's run jobs
+# share. A comment made while a plan, apply or re-plan is still running then
+# gets its 👀 only when that run ends, minutes later. This job holds no group,
+# so it doesn't wait. GitHub keeps one reaction per user and content, so the
+# run's own 👀 later is a no-op.
+#
+# The caller gives this job the same `if` as the run job it acknowledges,
+# and no `concurrency`. `github.*` is the caller's context.
+name: Terragrunt ack
+
+on:
+  workflow_call: {}
+
+permissions:
+  pull-requests: write
+
+jobs:
+  ack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: React to the comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: 'eyes',
+            });

@@ -8,6 +8,9 @@
   apply whose plan deferred workload leaves, until a re-plan defers nothing.
 - **Amended 2026-10-23** (see `## Amendments`): a comment-triggered run checks
   out the PR's head commit as the API reports it, not `refs/pull/<n>/head`.
+- **Amended 2026-10-25** (see `## Amendments`): a comment's 👀 comes from a
+  job outside the PR's concurrency group, so it doesn't wait for a run in
+  progress.
 - **Amended 2026-10-22**: LIB-0026 replaces the single, truncated plan or apply
   comment with a summary of one row per leaf, and detail comments of one
   section per leaf, never truncated.
@@ -208,4 +211,24 @@ before anything ran, until a new push made GitHub write it.
   commit it checked out. A push between plan and apply moves the head, finds
   no artifact for it, and refuses, as before.
 - **It ships in `workflows/` v4.10.1.**
+
+### 2026-10-25: the 👀 doesn't wait for the PR's queue
+
+§1's 👀 was the first step of `terragrunt-run.yml`'s job. That job starts only
+once it holds the PR's concurrency group, which the caller's plan, apply and
+re-plan jobs share. So a comment made while one of them was running got its
+👀 only when that run ended. On
+[runway#70](https://github.com/noisypigeon/runway/pull/70), two `terragrunt
+apply` comments, each made while a plan or a staged apply's re-plan
+(LIB-0027) was running, waited 7½ and 3½ minutes for theirs.
+
+- **`terragrunt-ack.yml` reacts at once.** A caller calls it from its own job,
+  with the same `if` as the plan or apply job it acknowledges and no
+  `concurrency`. A re-plan job has no comment of its own, so it gets no ack.
+- **The run's own 👀 stays,** so a spoke that doesn't call the ack job
+  behaves as before. GitHub keeps one reaction per user and content, so a
+  spoke that does call it isn't reacted to twice.
+- **The queue itself is unchanged.** A plan and an apply on one PR still never
+  overlap, and the 👍 or 👎 still comes when the run ends.
+- **It ships in `workflows/` v5.3.0.**
 
