@@ -4,6 +4,30 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [5.4.0] - 2026-10-24
+
+### Announce a staged apply's next-stage plan as it starts
+
+After a staged apply leaves leaves deferred, the automatic re-plan of the next stage (LIB-0027) now says so on the PR as soon as it starts. Until now nothing appeared for the 5–10 minutes it took to plan.
+
+Its first step after resolving the head posts this:
+
+> ### ⏳ Terragrunt plan
+> _The previous stage's apply left leaves deferred, so the next stage of `<sha>` is planning now. Its plan replaces this comment._ [Run](…)
+
+The announcement carries the plan comments' marker. So when the re-plan's result posts, the result step hides it as outdated, along with every earlier plan comment, whether the re-plan succeeded, failed or was cancelled. The PR keeps one live plan comment.
+
+Only a re-plan started by a `terragrunt apply` comment posts it. A `terragrunt plan` comment already gets its 👀, and a push plan has no stage before it. A spoke needs no change beyond the `@workflows/` bump, since its replan job already calls `terragrunt-run.yml`.
+
+LIB-0027 has a 2026-10-25 amendment recording this.
+
+Linted with actionlint. The step's script ran against a stub, and the body above is its output. A comment-triggered run uses the default branch's workflow files, so a spoke sees this only once the bump is on its `main`.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#180](https://github.com/noisypigeon/library/pull/180)
+
 ## [5.3.0] - 2026-10-24
 
 ### Acknowledge a terragrunt comment at once, outside the PR's queue
