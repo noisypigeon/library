@@ -4,6 +4,26 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [5.1.1] - 2026-10-24
+
+### A release regenerates noisypigeon.garden in runway (LIB-0035)
+
+A library release no longer dispatches `garden-pages.yml` in `noisypigeon/garden`. That workflow is gone, because the repo is now the `noisypigeon/noisypigeon.garden` Pages shim. Instead, every release dispatches `garden-generate.yml` in `noisypigeon/runway` (LIB-0035 §4).
+
+That workflow regenerates noisypigeon.garden's module redirect pages, overview pages, theme-version pages, release posts and schemas. It commits them under runway's `workloads/garden/`, and that commit deploys itself through runway's `sites.yml` and the shim. A release that changes no page commits nothing and deploys nothing.
+
+- **The dispatch now runs on every release,** under the same condition as the tagging step. Before, it ran only for module and theme releases. LIB-0035 §4 asks for every release, and generating with nothing to change is a no-op.
+- **The noisypigeon.com dispatch doesn't change:** a theme release still rebuilds the blog's shim.
+- **It still needs `BOT_GITHUB_TOKEN`,** now with `actions: write` on `noisypigeon/runway`, and it still fails loudly without it.
+- **`generate-module-redirects.sh`'s header, `CLAUDE.md`, `README.md`, the `release-pr` skill and the theme README** now say that the generator runs in a spoke's generation, that runway is the one spoke, and that noisypigeon.com and noisypigeon.garden are shims.
+
+This is LIB-0035's step 8. Its merge ends the freeze on library releases that the cutover needed.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#173](https://github.com/noisypigeon/library/pull/173)
+
 ## [5.1.0] - 2026-10-24
 
 ### Reusable site-generate.yml and site-pages.yml (LIB-0035)
