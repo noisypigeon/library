@@ -4,6 +4,28 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [6.0.0] - 2026-10-25
+
+### Refuse zones.yaml, workload rulesets and redirects, and hand-written zone leaves
+
+A zone's `zones/<zone>/zone.yaml` is now the only way to register a zone, and a zone holds its own rulesets and redirects (LIB-0036 §§1, 3–4, and the record's 2026-10-25 amendment). This is the major release the record's minor (`terragrunt/root-hcl` v5.6.0, `workflows/v5.2.0`) prepared for: everything that minor still accepted for the migration is now refused before anything plans, each with a message naming LIB-0036.
+
+- **A root `zones.yaml` is refused.** `resolve-workloads.sh` stops on it, and so does every leaf `root.hcl` is included from. Move each zone into `zones/<zone>/zone.yaml`, naming there the one workload that may also write in it.
+- **A workload's `cloudflare.ruleset` and `cloudflare.apexRedirect` are refused.** Both are zone kinds only now, since a phase has one entrypoint per zone. In the kind table's `units` column they're `z`, in all three copies, and the workload schema at `/schemas/workload/v1.json` no longer lists them. A workload keeps `dnsRecord` and `bucket`.
+- **A workload's Cloudflare token never gets *Dynamic URL Redirects Write*.** Only a zone's token holds it, on its own zone. A workload that declared no ruleset or redirect already went without it, so its token doesn't change.
+- **A hand-written `terraform/cloudflare/<zone>/` leaf is refused.** Declare its entries in that zone's `zone.yaml` and import them, by `docs/runbooks/import-a-leaf-into-a-workload.md`.
+- **Docs:** `terragrunt/root-hcl`'s README gains a v6.0.0 section and marks its `zones.yaml` example as history. The `cloudflare/dns-record`, `ruleset` and `apex-redirect` READMEs describe declaring them in a `zone.yaml` rather than in a hand-written leaf.
+
+A spoke whose zones are all `zone.yaml`s, and whose workloads declare no ruleset or redirect, plans `No changes.` when it bumps. Tested against runway's `main` after its zone entries moved (noisypigeon/runway#72):
+- `resolve-workloads.sh` generates the same 55 stubs, byte for byte, as the version before it;
+- with this `root.hcl`, 8 leaves render exactly as before: both workload tokens, two zone tokens, a zone redirect, a zone record, a Pages CNAME and a state bucket;
+- each refusal fires with its own message: a `zones.yaml`, a workload `ruleset` or `apexRedirect`, a declared workload ruleset's leaf, and a hand-written zone leaf.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#181](https://github.com/noisypigeon/library/pull/181)
+
 ## [5.4.0] - 2026-10-24
 
 ### Announce a staged apply's next-stage plan as it starts

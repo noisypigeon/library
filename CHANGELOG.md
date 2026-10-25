@@ -44,6 +44,11 @@ ADR-0154 and ADR-0084 each made before it.
 
 <!-- entries below; newest first -->
 
+## 2026-10-25
+
+- [workflows] Refuse zones.yaml, workload rulesets and redirects, and hand-written zone leaves ([#181](https://github.com/noisypigeon/library/pull/181))
+- [terragrunt/root-hcl] Refuse zones.yaml, workload rulesets and redirects, and hand-written zone leaves ([#181](https://github.com/noisypigeon/library/pull/181))
+
 ## 2026-10-24
 
 - [workflows] Announce a staged apply's next-stage plan as it starts ([#180](https://github.com/noisypigeon/library/pull/180))
