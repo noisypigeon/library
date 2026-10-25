@@ -231,7 +231,8 @@ between the import and the merge of the PR that moves the entries.
 - **A zone `secrets.yaml`,** as LIB-0025 gives a workload. No zone record is
   secret. A design boundary until one is.
 - **Building §§1–7.** The template, scripts, schema and runway's adoption ship
-  in later PRs that cite this record. Deferred.
+  in later PRs that cite this record. Deferred
+  ([#175](https://github.com/noisypigeon/library/issues/175)).
 
 ## Verification
 
