@@ -276,14 +276,18 @@ runway has blog and garden under zones, and poc with none.
 ## Out of scope
 
 - **A workload with several hosts.** One host is what a Pages site serves.
-  Deferred until a workload needs a second.
-- **Wildcard hosts,** such as `*.example.org`. Deferred.
+  Deferred until a workload needs a second
+  ([#184](https://github.com/noisypigeon/library/issues/184)).
+- **Wildcard hosts,** such as `*.example.org`. Deferred
+  ([#185](https://github.com/noisypigeon/library/issues/185)).
 - **Deployments other than `githubPages`,** under `deployments`. The key is
-  there so they can be added. Deferred.
+  there so they can be added. Deferred
+  ([#186](https://github.com/noisypigeon/library/issues/186)).
 - **Per-bucket isolation inside a shared project.** Scaleway's IAM can't scope
   to one bucket. A design boundary until it can.
 - **Building §§1–7.** The template, scripts, schemas and runway's move ship
-  in later PRs that cite this record. Deferred.
+  in later PRs that cite this record. Deferred
+  ([#187](https://github.com/noisypigeon/library/issues/187)).
 
 ## Verification
 
