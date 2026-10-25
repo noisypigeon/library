@@ -38,9 +38,13 @@ create a duplicate. Tell everyone who can comment `terragrunt apply`.
 
 - Checkouts of both spokes, each after `./fetch-lib.sh` and
   `.lib-src/.github/scripts/resolve-root-hcl.sh`.
-- Their sops age keys, so `root.hcl` can decrypt each spoke's secrets.
-  `sops --decrypt terraform/secrets/terraform.enc >/dev/null` in each checks
-  it, without writing anything.
+- Their sops age keys, so `root.hcl` can decrypt each spoke's secrets. This
+  checks it in each, without writing anything. The `.enc` files are dotenv,
+  which sops doesn't infer from the extension:
+
+  ```bash
+  sops --decrypt --input-type dotenv --output-type dotenv terraform/secrets/terraform.enc >/dev/null
+  ```
 - The unit's bootstrap applied: its project, deployer and state bucket
   (LIB-0028 §6), and for Cloudflare its token. A workload's zones name it in
   their `zone.yaml` (LIB-0036 §3). A zone's token always covers its own zone,
@@ -76,6 +80,13 @@ create a duplicate. Tell everyone who can comment `terragrunt apply`.
       mise exec -- terragrunt state show '<old address>'
       ```
 
+      `state list` also lists the module's data sources, such as
+      `module.this.data.cloudflare_zone.this`. Skip them: a data source
+      can't be imported, the new leaf reads its own on every plan, and the
+      old one goes with the old leaf. In the new leaf, before its first
+      import, `state list` fails with `No state file was found!`. That means
+      it holds nothing yet, not that something is wrong.
+
    2. **Import it into the new leaf.**
 
       ```bash
@@ -83,11 +94,24 @@ create a duplicate. Tell everyone who can comment `terragrunt apply`.
       mise exec -- terragrunt import '<new address>' '<import ID>'
       ```
 
+      Quote every address. `www[0]` unquoted is a shell glob.
+
+      A leaf whose module holds several resources, such as an apex redirect's
+      ruleset, apex record and `www` record, moves as one: import all of
+      them, then plan once, then remove them all from the old leaf in one
+      `state rm`. Planning after only some are imported shows the rest as
+      creates.
+
    3. **Plan the new leaf.** It must show `No changes.`
 
       ```bash
-      mise exec -- terragrunt plan
+      mise exec -- terragrunt plan -detailed-exitcode
       ```
+
+      Exit 0 is no changes, 2 is changes and 1 is an error. A script that
+      checks the plan's text instead must allow for Terragrunt's prefix:
+      each line reads `<time> STDOUT terraform: No changes. ...`, so a
+      pattern anchored at `^No changes` never matches.
 
       If it shows a change, the entry differs from the resource. Fix the
       entry, regenerate the stubs and plan again. Never apply to make it
@@ -110,7 +134,10 @@ create a duplicate. Tell everyone who can comment `terragrunt apply`.
 6. **Delete the old leaf's code** in its own spoke's PR. Its state is empty,
    so its plan shows nothing to destroy. When the old leaf is another unit's
    entry, step 4's PR already removes it from that unit's file, and its
-   generated stub's empty state plans the same empty destroy.
+   generated stub's empty state plans the same empty destroy. The plan comment
+   still marks it `destroy (removed from values.yaml) +0 ~1 -0`: the one
+   change is its module output going to null, and its detail says it changes
+   no real infrastructure. Check that each one's detail says so.
 
 ## Import IDs and addresses
 
