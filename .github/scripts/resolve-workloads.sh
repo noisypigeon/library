@@ -26,6 +26,14 @@
 # zone at its Pages host. An explicit entry under either key is merged over
 # its default, field by field. expand_values applies them before anything
 # reads values.yaml, so every check and stub counts them.
+# A zone is a unit too (LIB-0036): zones/<zone>/zone.yaml becomes stubs at
+# zones/<zone>/<provider>/<module>/<instance>/, the same way. It gets a
+# workload's project, deployer, state bucket and Cloudflare token, and takes
+# only zone kinds: its records, rulesets and redirects, on its own zone. It
+# names at most one workload, which may then write in it too, and the clash
+# checks below run across every unit, so a zone's file and its workload's are
+# checked together. zones.yaml still registers zones beside it, for the
+# migration; a zone in both is refused.
 # Values, defaults and the module version are root.hcl's, at plan time: it
 # writes them into the leaf's generated module block as literals, since a
 # `type = any` variable set through TF_VAR_ arrives as a string.
@@ -36,7 +44,8 @@
 #
 # The stubs are generated, never committed: a workload commits only its
 # values.yaml, and the spoke gitignores /workloads/*/*/ (LIB-0023's second
-# 2026-10-20 amendment). A spoke's terraform-prepare task runs this before
+# 2026-10-20 amendment), and a zone's /zones/*/scaleway/ and
+# /zones/*/cloudflare/. A spoke's terraform-prepare task runs this before
 # terragrunt, and terragrunt-run.yml runs it in CI. Terragrunt's [main...HEAD]
 # filter plans in worktrees holding only tracked files, so it can't see a stub;
 # terragrunt-run.yml selects workload leaves by their values.yaml instead, and
@@ -63,7 +72,7 @@
 #
 # The kind table below has a twin in terragrunt/root-hcl/root.hcl
 # (workload_kinds) and a third copy in generate-module-redirects.sh
-# (workload schema). Change one and change all three.
+# (workload and zone schemas). Change one and change all three.
 #
 # Environment, for tests:
 #   LIB_TAG_REMOTE        where module tags are listed (default: the library on GitHub)
@@ -95,8 +104,8 @@ for tool in yq jq; do
   fi
 done
 
-# YAML path | module | shape | dependencies | credentials | state. The twin
-# of root.hcl's workload_kinds; see the header.
+# YAML path | module | shape | dependencies | credentials | state | units. The
+# twin of root.hcl's workload_kinds; see the header.
 #
 # - shape: a singleton's instance is `main`, a map's is each key, an
 #   implicit kind's is `main` in every workload, with or without an entry
@@ -114,20 +123,22 @@ done
 #   bucket and on the deployer whose key signs in to it.
 # - `buckets` (LIB-0029 §3) stands for one bucket_<key> dependency per entry
 #   in the instance's own `buckets` list, resolved per instance.
+# - units (LIB-0036): `w` if only a workload takes the kind, `wz` if a zone
+#   does too.
 KINDS=(
-  "scaleway.project|scaleway/project|implicit||spoke|spoke"
-  "scaleway.deployer|scaleway/terraform-deployer-iam|implicit|project|spoke|spoke"
-  "scaleway.state|scaleway/bucket|state|project|workload|spoke"
-  "scaleway.iam.application|scaleway/iam-application|singleton||spoke|workload"
-  "scaleway.bucket|scaleway/bucket|map|project|workload|workload"
-  "scaleway.iam.apiKey|scaleway/iam-api-key|singleton|project application|spoke|workload"
-  "backblaze.bucket|backblaze/bucket|map||spoke|workload"
-  "backblaze.apiKey|backblaze/api-key|map|buckets|spoke|workload"
-  "cloudflare.deployer|cloudflare/api-token|cfimplicit||spoke|workload"
-  "cloudflare.bucket|cloudflare/bucket|map||workload|workload"
-  "cloudflare.dnsRecord|cloudflare/dns-record|map||workload|workload"
-  "cloudflare.ruleset|cloudflare/ruleset|map||workload|workload"
-  "cloudflare.apexRedirect|cloudflare/apex-redirect|map||workload|workload"
+  "scaleway.project|scaleway/project|implicit||spoke|spoke|wz"
+  "scaleway.deployer|scaleway/terraform-deployer-iam|implicit|project|spoke|spoke|wz"
+  "scaleway.state|scaleway/bucket|state|project|workload|spoke|wz"
+  "scaleway.iam.application|scaleway/iam-application|singleton||spoke|workload|w"
+  "scaleway.bucket|scaleway/bucket|map|project|workload|workload|w"
+  "scaleway.iam.apiKey|scaleway/iam-api-key|singleton|project application|spoke|workload|w"
+  "backblaze.bucket|backblaze/bucket|map||spoke|workload|w"
+  "backblaze.apiKey|backblaze/api-key|map|buckets|spoke|workload|w"
+  "cloudflare.deployer|cloudflare/api-token|cfimplicit||spoke|workload|wz"
+  "cloudflare.bucket|cloudflare/bucket|map||workload|workload|w"
+  "cloudflare.dnsRecord|cloudflare/dns-record|map||workload|workload|wz"
+  "cloudflare.ruleset|cloudflare/ruleset|map||workload|workload|wz"
+  "cloudflare.apexRedirect|cloudflare/apex-redirect|map||workload|workload|wz"
 )
 
 # A dependency's stub, relative to its workload directory, so a Backblaze
@@ -309,6 +320,19 @@ expand_values() {
     else . end'
 }
 
+# zone.yaml as JSON, read as a workload's file (LIB-0036 §§1-2): `name`
+# defaults to the zone, `prefix` to that name with every character a resource
+# name can't hold turned into a dash, and every zone kind acts on the zone.
+# root.hcl's workload_values is its twin.
+expand_zone() {
+  yq -o=json '.' "$1" | jq -c --arg z "$2" '
+    if type != "object" then . else
+      ((.name // $z) | tostring) as $n |
+      (if has("prefix") then . else .prefix = ($n | gsub("[^a-z0-9-]"; "-")) end) |
+      .cloudflare = ((.cloudflare // {}) | if type == "object" then . + {zone: $z} else . end)
+    end'
+}
+
 EXPECTED_DIR="$(mktemp -d)"
 trap 'rm -rf "$EXPECTED_DIR"' EXIT
 mkdir -p "$EXPECTED_DIR/.cache"
@@ -336,29 +360,88 @@ if [ -f "$SPOKE_DIR/zones.yaml" ]; then
   done < <(jq -r 'objects | .[] | .workload? // empty | select(. != "terraform")' <<<"$ZONES" | sort -u)
 fi
 
-# Each workload, validated and rendered into $EXPECTED_DIR at the path its
-# stubs have in the spoke.
-instances=()   # "<workload>|<module>|<instance>|<jq path>|<declared dependencies>|<credentials>"
 shopt -s nullglob
-for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
-  workload_dir="$(dirname "$values")"
-  workload="$(basename "$workload_dir")"
-  rel="workloads/$workload/values.yaml"
-  if [[ ! "$workload" =~ $KEBAB ]]; then
-    fail "$rel: workload name '$workload' must be kebab-case"
-    continue
+
+# zones/<zone>/zone.yaml (LIB-0036 §1): each registers its zone too, to the
+# workload it names, or to none.
+APEX='^[a-z0-9-]+(\.[a-z0-9-]+)+$'
+for zone_file in "$SPOKE_DIR"/zones/*/zone.yaml; do
+  zone="$(basename "$(dirname "$zone_file")")"
+  [[ "$zone" =~ $APEX ]] || continue
+  if jq -e --arg z "$zone" 'has($z)' <<<"$ZONES" >/dev/null; then
+    fail "$zone is in both zones.yaml and zones/$zone/zone.yaml; a zone has one home (LIB-0036 §1)"
   fi
-  if ! json=$(expand_values "$values"); then
-    fail "$rel: not valid YAML"
-    continue
+  owner=$(yq -o=json '.' "$zone_file" 2>/dev/null | jq -r 'if type == "object" and (.workload | type) == "string" then .workload else "" end') || owner=""
+  ZONES=$(jq -c --arg z "$zone" --arg w "$owner" '.[$z] = {workload: $w, unit: true}' <<<"$ZONES")
+done
+
+# Each unit, a workload's values.yaml or a zone's zone.yaml, validated and
+# rendered into $EXPECTED_DIR at the path its stubs have in the spoke. A
+# unit's expanded file is cached for --check, and its zone entries are
+# collected for the spoke-wide clash checks below.
+instances=()   # "<unit dir>|<unit file>|<module>|<instance>|<jq path>|<declared dependencies>|<credentials>"
+unit_files=()
+for f in "$SPOKE_DIR"/workloads/*/values.yaml "$SPOKE_DIR"/zones/*/zone.yaml; do
+  unit_files+=("${f#"$SPOKE_DIR"/}")
+done
+: >"$EXPECTED_DIR/.cache/clash.jsonl"
+for rel in ${unit_files[@]+"${unit_files[@]}"}; do
+  unit_root="${rel%%/*}"
+  workload="$(basename "$(dirname "$rel")")"
+  unit_dir="$unit_root/$workload"
+  if [ "$unit_root" = zones ]; then
+    unit=zone
+    if [[ ! "$workload" =~ $APEX ]]; then
+      fail "$rel: a zone's directory must be its apex domain (LIB-0036 §1)"
+      continue
+    fi
+    if ! raw=$(yq -o=json '.' "$SPOKE_DIR/$rel"); then
+      fail "$rel: not valid YAML"
+      continue
+    fi
+    # What a zone's file can't say, read before its defaults fill it in.
+    zone_problems=$(jq -r --arg kebab "$KEBAB" '
+      if type != "object" then "the file must be a mapping"
+      else
+        (if has("name") and ((.name | type) != "string" or .name == "") then "name must be a non-empty string (LIB-0036 §1)" else empty end),
+        (if has("prefix") and ((.prefix | type) != "string" or (.prefix | test("^[a-z0-9-]+$") | not)) then "prefix may hold only a-z, 0-9 and - (LIB-0036 §1)" else empty end),
+        (if has("workload") and ((.workload | type) != "string" or (.workload | test($kebab) | not)) then "workload must name one workload (LIB-0036 §1)" else empty end),
+        (.cloudflare // {} | objects |
+          (if has("zone") then "cloudflare.zone can'"'"'t be set; the directory names the zone (LIB-0036 §1)" else empty end),
+          (("dnsRecord", "ruleset", "apexRedirect") as $m | .[$m] // {} | objects | to_entries[]
+            | select(.value | objects | has("zone")) | "cloudflare.\($m).\(.key) can'"'"'t set zone; the directory names it (LIB-0036 §1)"))
+      end' <<<"$raw")
+    owner=$(jq -r --arg kebab "$KEBAB" 'if type == "object" and (.workload | type) == "string" and (.workload | test($kebab)) then .workload else "" end' <<<"$raw")
+    if [ -n "$owner" ] && [ ! -f "$SPOKE_DIR/workloads/$owner/values.yaml" ]; then
+      zone_problems="${zone_problems:+$zone_problems$'\n'}workload $owner has no workloads/$owner/values.yaml (LIB-0036 §1)"
+    fi
+    if [ -e "$SPOKE_DIR/$unit_dir/secrets.yaml" ]; then
+      zone_problems="${zone_problems:+$zone_problems$'\n'}a zone has no secrets.yaml; delete $unit_dir/secrets.yaml (LIB-0036, Out of scope)"
+    fi
+    if [ -n "$zone_problems" ]; then
+      while IFS= read -r msg; do fail "$rel: $msg"; done <<<"$zone_problems"
+      continue
+    fi
+    json=$(expand_zone "$SPOKE_DIR/$rel" "$workload")
+  else
+    unit=workload
+    if [[ ! "$workload" =~ $KEBAB ]]; then
+      fail "$rel: workload name '$workload' must be kebab-case"
+      continue
+    fi
+    if ! json=$(expand_values "$SPOKE_DIR/$rel"); then
+      fail "$rel: not valid YAML"
+      continue
+    fi
   fi
 
-  structural=$(jq -r --arg kebab "$KEBAB" --arg workload "$workload" --argjson zones "$ZONES" '
+  structural=$(jq -r --arg kebab "$KEBAB" --arg workload "$workload" --arg unit "$unit" --argjson zones "$ZONES" '
     def entry_ok($where): if . == null or type == "object" then empty else "\($where) must be a mapping of module inputs" end;
     def keys_in($where; $allowed): (keys - $allowed)[] | "unknown key \($where).\(.); known: \($allowed | join(", "))";
     if type != "object" then "the file must be a mapping"
     else
-      keys_in(""; ["prefix", "suffix", "features", "scaleway", "backblaze", "cloudflare"]),
+      keys_in(""; if $unit == "zone" then ["name", "prefix", "suffix", "workload", "scaleway", "cloudflare"]
+                  else ["prefix", "suffix", "features", "scaleway", "backblaze", "cloudflare"] end),
       # What a workload is for, beyond its kinds (LIB-0034 §1).
       (.features // {} | if type != "object" then "features must be a mapping" else
         keys_in("features"; ["githubPages"]),
@@ -375,7 +458,7 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
       (if (.prefix | type) != "string" or .prefix == "" then "prefix must be a non-empty string" else empty end),
       (if (.suffix | type) != "string" or .suffix == "" then "suffix must be a non-empty string" else empty end),
       (.scaleway // {} | if type != "object" then "scaleway must be a mapping" else
-        keys_in("scaleway"; ["project", "deployer", "state", "bucket", "iam"]),
+        keys_in("scaleway"; if $unit == "zone" then ["project", "deployer", "state"] else ["project", "deployer", "state", "bucket", "iam"] end),
         (.project | entry_ok("scaleway.project")),
         (.deployer | entry_ok("scaleway.deployer")),
         (.state | entry_ok("scaleway.state")),
@@ -428,11 +511,11 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
       end),
       # Cloudflare kinds (LIB-0030 §§1-6).
       (. as $file | .cloudflare // {} | if type != "object" then "cloudflare must be a mapping" else
-        keys_in("cloudflare"; ["zone", "deployer", "bucket", "dnsRecord", "ruleset", "apexRedirect"]),
+        keys_in("cloudflare"; if $unit == "zone" then ["zone", "deployer", "dnsRecord", "ruleset", "apexRedirect"] else ["zone", "deployer", "bucket", "dnsRecord", "ruleset", "apexRedirect"] end),
         (.deployer | entry_ok("cloudflare.deployer")),
         (.deployer // {} | objects | select(has("account_id")) | "cloudflare.deployer cannot set account_id; the account is the spoke one (LIB-0033 §4)"),
         (if has("zone") and ((.zone | type) != "string" or (.zone | test("\\.") | not)) then "cloudflare.zone must be a zone apex domain (LIB-0030 §3)"
-         elif has("zone") and ($zones[.zone].workload // "") != $workload then "cloudflare.zone: \(.zone) is not registered to workload \($workload) in zones.yaml (LIB-0030 §2)"
+         elif $unit == "workload" and has("zone") and ($zones[.zone].workload // "") != $workload then "cloudflare.zone: \(.zone) is not registered to workload \($workload), in zones/\(.zone)/zone.yaml or zones.yaml (LIB-0030 §2, LIB-0036 §3)"
          else empty end),
         (.zone // "") as $dz |
         (("bucket", "dnsRecord", "ruleset", "apexRedirect") as $m | .[$m] // {} |
@@ -448,25 +531,14 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
              else
                (($e | objects | .zone) // $dz) as $z |
                if $z == "" then "cloudflare.\($m).\($k) has no zone, and cloudflare.zone is not set (LIB-0030 §3)"
-               elif ($zones[$z].workload // "") != $workload then "cloudflare.\($m).\($k): zone \($z) is not registered to workload \($workload) in zones.yaml (LIB-0030 §2)"
+               elif $unit == "workload" and ($zones[$z].workload // "") != $workload then "cloudflare.\($m).\($k): zone \($z) is not registered to workload \($workload), in zones/\($z)/zone.yaml or zones.yaml (LIB-0030 §2, LIB-0036 §3)"
                else empty end
              end),
             ({dnsRecord: ["type", "content"], ruleset: ["kind", "phase", "rules"], apexRedirect: ["target_url"]}[$m] // [] | .[] as $r
               | select(($e | objects | has($r)) | not) | "cloudflare.\($m).\($k) needs \($r) (LIB-0030 §4)")
           end),
-        # One entrypoint per zone and phase, one record per name and type (§6).
-        ([.ruleset // {} | to_entries[] | {k: .key, z: ((.value | objects | .zone) // $dz), p: (.value | objects | .phase)}]) as $rs |
-        ([.apexRedirect // {} | to_entries[] | {k: .key, z: ((.value | objects | .zone) // $dz), www: ((.value | objects | .include_www) // true)}]) as $ar |
-        ([.dnsRecord // {} | to_entries[] | {k: .key, z: ((.value | objects | .zone) // $dz), n: ((.value | objects | .name) // .key), t: ((.value | objects | .type) // "" | tostring | ascii_upcase), c: (.value | objects | .content)}]) as $dr |
-        ($rs | group_by([.z, .p])[] | select(length > 1) | "cloudflare.ruleset: \(map(.k) | join(", ")) share zone \(.[0].z) and phase \(.[0].p); a zone has one entrypoint per phase (LIB-0030 §6)"),
-        ($ar | group_by(.z)[] | select(length > 1) | "cloudflare.apexRedirect: \(map(.k) | join(", ")) share zone \(.[0].z) (LIB-0030 §6)"),
-        ($rs[] | select(.p == "http_request_dynamic_redirect") | . as $r | select($ar | any(.z == $r.z)) | "cloudflare.ruleset.\(.k): the http_request_dynamic_redirect entrypoint of \(.z) belongs to its apexRedirect (LIB-0030 §6)"),
-        ($dr | group_by([.z, .n, .t])[] | select(length > 1) | select(([.[0].t] | inside(["MX", "TXT", "CAA", "SRV", "NS"]) | not) or ((map(.c) | unique | length) < length))
-          | "cloudflare.dnsRecord: \(map(.k) | join(", ")) are one record, \(.[0].n) \(.[0].t) in \(.[0].z) (LIB-0030 §6)"),
-        # An apexRedirect holds a placeholder A at @, which an A, AAAA or CNAME
-        # there would clash with, and a CNAME at www, which nothing may share.
-        ($dr[] as $d | $ar[] | select(.z == $d.z and (($d.n == "@" and ([$d.t] | inside(["A", "AAAA", "CNAME"]))) or ($d.n == "www" and .www)))
-          | "cloudflare.dnsRecord.\($d.k): the apexRedirect \(.k) already holds a placeholder \(if $d.n == "@" then "A" else "CNAME" end) record at \($d.n) in \($d.z) (LIB-0030 §6)")
+        # The clash checks (§6) run spoke-wide, after every unit.
+        empty
       end),
       ([.scaleway.project, .scaleway.deployer, .scaleway.state, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?), (.backblaze.bucket // {} | .[]?), (.backblaze.apiKey // {} | .[]?), (.cloudflare.deployer), (.cloudflare // {} | (.bucket, .dnsRecord, .ruleset, .apexRedirect) // {} | .[]?)]
         | .[] | objects | select(has("version")) | .version
@@ -478,9 +550,22 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
     while IFS= read -r msg; do fail "$rel: $msg"; done <<<"$structural"
     continue
   fi
+  printf '%s\n' "$json" >"$EXPECTED_DIR/.cache/unit-$unit_root-$workload.json"
+
+  # Its zone entries, each with its zone, for the clash checks (LIB-0030 §6),
+  # which group them across every unit (LIB-0036 §3).
+  jq -c --arg rel "$rel" '
+    (.cloudflare // {}) as $c | ($c.zone // "") as $dz |
+    def zone_of: (.value | objects | .zone) // $dz;
+    {
+      rs: [$c.ruleset // {} | to_entries[] | {k: "\($rel) cloudflare.ruleset.\(.key)", z: zone_of, p: (.value | objects | .phase)}],
+      ar: [$c.apexRedirect // {} | to_entries[] | {k: "\($rel) cloudflare.apexRedirect.\(.key)", z: zone_of, www: ((.value | objects | .include_www) // true)}],
+      dr: [$c.dnsRecord // {} | to_entries[] | {k: "\($rel) cloudflare.dnsRecord.\(.key)", z: zone_of, n: ((.value | objects | .name) // .key), t: ((.value | objects | .type) // "" | tostring | ascii_upcase), c: (.value | objects | .content)}]
+    }' <<<"$json" >>"$EXPECTED_DIR/.cache/clash.jsonl"
 
   for kind in "${KINDS[@]}"; do
-    IFS='|' read -r yaml_path module shape deps credentials state <<<"$kind"
+    IFS='|' read -r yaml_path module shape deps credentials state units <<<"$kind"
+    [ "$unit" = zone ] && [[ "$units" != *z* ]] && continue
     jq_path=".${yaml_path}"
     if [ "$credentials" = workload ]; then
       case "$module" in
@@ -494,6 +579,8 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
       names=$(jq -r "$jq_path // {} | keys[]" <<<"$json")
     elif [ "$shape" = implicit ]; then
       names=main
+    elif [ "$shape" = cfimplicit ] && [ "$unit" = zone ]; then
+      names=deployer
     elif [ "$shape" = cfimplicit ]; then
       names=$(jq -r --arg w "$workload" --argjson zones "$ZONES" '
         if ([$zones | to_entries[] | select(.value.workload? == $w)] | length) > 0
@@ -514,7 +601,7 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
     done
 
     while IFS= read -r name; do
-      stub="workloads/$workload/$module/$name"
+      stub="$unit_dir/$module/$name"
       # `buckets` becomes this instance's own bucket_<key> dependencies.
       instance_deps=()
       for dep in ${declared[@]+"${declared[@]}"}; do
@@ -529,29 +616,47 @@ for values in "$SPOKE_DIR"/workloads/*/values.yaml; do
       mkdir -p "$EXPECTED_DIR/$stub"
       stub_content "$module" "$credentials" "$state" ${instance_deps[@]+"${instance_deps[@]}"} >"$EXPECTED_DIR/$stub/terragrunt.hcl"
       if [ "$shape" = map ]; then
-        instances+=("$workload|$module|$name|${jq_path}[\"$name\"]|${instance_deps[*]-}|$credentials")
+        instances+=("$unit_dir|$rel|$module|$name|${jq_path}[\"$name\"]|${instance_deps[*]-}|$credentials")
       else
-        instances+=("$workload|$module|$name|$jq_path|${instance_deps[*]-}|$credentials")
+        instances+=("$unit_dir|$rel|$module|$name|$jq_path|${instance_deps[*]-}|$credentials")
       fi
     done <<<"$names"
   done
 done
 
+# One entrypoint per zone and phase, one record per name and type (LIB-0030
+# §6), across every unit: a zone's own file and its workload's (LIB-0036 §3).
+clashes=$(jq -rs '
+  (map(.rs) | add // []) as $rs | (map(.ar) | add // []) as $ar | (map(.dr) | add // []) as $dr |
+  ($rs | group_by([.z, .p])[] | select(length > 1) | "\(map(.k) | join(", ")) share zone \(.[0].z) and phase \(.[0].p); a zone has one entrypoint per phase (LIB-0030 §6)"),
+  ($ar | group_by(.z)[] | select(length > 1) | "\(map(.k) | join(", ")) share zone \(.[0].z) (LIB-0030 §6)"),
+  ($rs[] | select(.p == "http_request_dynamic_redirect") | . as $r | select($ar | any(.z == $r.z)) | "\(.k): the http_request_dynamic_redirect entrypoint of \(.z) belongs to its apexRedirect (LIB-0030 §6)"),
+  ($dr | group_by([.z, .n, .t])[] | select(length > 1) | select(([.[0].t] | inside(["MX", "TXT", "CAA", "SRV", "NS"]) | not) or ((map(.c) | unique | length) < length))
+    | "\(map(.k) | join(", ")) are one record, \(.[0].n) \(.[0].t) in \(.[0].z) (LIB-0030 §6)"),
+  # An apexRedirect holds a placeholder A at @, which an A, AAAA or CNAME
+  # there would clash with, and a CNAME at www, which nothing may share.
+  ($dr[] as $d | $ar[] | select(.z == $d.z and (($d.n == "@" and ([$d.t] | inside(["A", "AAAA", "CNAME"]))) or ($d.n == "www" and .www)))
+    | "\($d.k): the apexRedirect \(.k) already holds a placeholder \(if $d.n == "@" then "A" else "CNAME" end) record at \($d.n) in \($d.z) (LIB-0030 §6)")
+' "$EXPECTED_DIR/.cache/clash.jsonl")
+while IFS= read -r msg; do [ -n "$msg" ] && fail "$msg"; done <<<"$clashes"
+
 if [ "$errors" -gt 0 ]; then
-  echo "::error::$errors problem(s) in values.yaml; nothing written" >&2
+  echo "::error::$errors problem(s) in values.yaml or zone.yaml; nothing written" >&2
   exit 1
 fi
 
 # Every generated stub on disk, by its GENERATED header.
 generated_stubs() {
-  [ -d "$SPOKE_DIR/workloads" ] || return 0
-  (cd "$SPOKE_DIR" && find workloads -mindepth 5 -maxdepth 5 -name terragrunt.hcl -type f) |
+  local roots=()
+  for r in workloads zones; do [ -d "$SPOKE_DIR/$r" ] && roots+=("$r"); done
+  [ ${#roots[@]} -gt 0 ] || return 0
+  (cd "$SPOKE_DIR" && find "${roots[@]}" -mindepth 5 -maxdepth 5 -name terragrunt.hcl -type f) |
     while IFS= read -r f; do
       if [ "$(head -n1 "$SPOKE_DIR/$f")" = "$HEADER" ]; then echo "$f"; fi
     done | LC_ALL=C sort
 }
 expected_stubs() {
-  (cd "$EXPECTED_DIR" && find workloads -name terragrunt.hcl -type f 2>/dev/null) | LC_ALL=C sort
+  (cd "$EXPECTED_DIR" && find workloads zones -name terragrunt.hcl -type f 2>/dev/null) | LC_ALL=C sort
 }
 
 if [ "$LIST" = true ]; then
@@ -563,8 +668,8 @@ if [ "$CHECK" = true ]; then
   if git -C "$SPOKE_DIR" rev-parse --git-dir >/dev/null 2>&1; then
     while IFS= read -r f; do
       [ -z "$f" ] && continue
-      fail "$f is committed, but stubs are generated, never committed (LIB-0023); git rm --cached it and gitignore /workloads/*/*/"
-    done < <(git -C "$SPOKE_DIR" ls-files -- 'workloads/*/*/*/*/terragrunt.hcl')
+      fail "$f is committed, but stubs are generated, never committed (LIB-0023); git rm --cached it and gitignore /workloads/*/*/ and /zones/*/*/"
+    done < <(git -C "$SPOKE_DIR" ls-files -- 'workloads/*/*/*/*/terragrunt.hcl' 'zones/*/*/*/*/terragrunt.hcl')
   fi
 
   # Each secrets.yaml's shape, by its clear-text keys (LIB-0025 §2).
@@ -622,10 +727,9 @@ if [ "$CHECK" = true ]; then
   done
 
   for inst in ${instances[@]+"${instances[@]}"}; do
-    IFS='|' read -r workload module name jq_path declared_deps credentials <<<"$inst"
-    values="$SPOKE_DIR/workloads/$workload/values.yaml"
-    secrets="$SPOKE_DIR/workloads/$workload/secrets.yaml"
-    entry=$(expand_values "$values" | jq -c "$jq_path // {}")
+    IFS='|' read -r unit_dir rel module name jq_path declared_deps credentials <<<"$inst"
+    secrets="$SPOKE_DIR/$unit_dir/secrets.yaml"
+    entry=$(jq -c "$jq_path // {}" "$EXPECTED_DIR/.cache/unit-${unit_dir%%/*}-${unit_dir#*/}.json")
     # scaleway.state.prefix is the stub's state key, not a module input
     # (LIB-0028 §3).
     if [ "$jq_path" = .scaleway.state ]; then entry=$(jq -c 'del(.prefix)' <<<"$entry"); fi
@@ -640,15 +744,15 @@ if [ "$CHECK" = true ]; then
     fi
     both=$(jq -r --argjson s "$sentry" 'del(.version) | keys - (keys - ($s | keys)) | join(", ")' <<<"$entry")
     if [ -n "$both" ]; then
-      fail "workloads/$workload: $module/$name sets $both in both values.yaml and secrets.yaml; keep each input in one"
+      fail "$unit_dir: $module/$name sets $both in both values.yaml and secrets.yaml; keep each input in one"
     fi
     refs=$(jq -r --argjson env "$env_names" 'to_entries[] | select((.value | type) == "object" and (.value | has("secretRef"))) | .value.secretRef | select(. as $n | $env | index($n) | not)' <<<"$entry")
     while IFS= read -r ref; do
-      [ -n "$ref" ] && fail "workloads/$workload/values.yaml: $module/$name has secretRef $ref, which secrets.yaml's env doesn't have"
+      [ -n "$ref" ] && fail "$rel: $module/$name has secretRef $ref, which secrets.yaml's env doesn't have"
     done <<<"$refs"
     entry=$(jq -c --argjson s "$sentry" '. + $s' <<<"$entry")
     pin=$(jq -r '.version // empty' <<<"$entry")
-    where="workloads/$workload: $module/$name"
+    where="$unit_dir: $module/$name"
     if ! version=$(resolve_version "$module" "$pin"); then
       fail "$where: no terraform/$module tag matches version '${pin:-<newest>}'"
       continue
@@ -697,7 +801,7 @@ if [ "$CHECK" = true ]; then
   if [ "$errors" -gt 0 ]; then
     exit 1
   fi
-  echo "Workload values.yaml files are valid"
+  echo "Workload values.yaml and zone.yaml files are valid"
   exit 0
 fi
 
@@ -718,9 +822,9 @@ while IFS= read -r f; do
   rm -f "$SPOKE_DIR/$f"
   rm -rf "$dir/.terragrunt-cache"
   # Remove the instance directory and any provider/module directories it
-  # leaves empty, never the workload directory itself.
-  while [ "$dir" != "$SPOKE_DIR/workloads" ] && [ -z "$(ls -A "$dir")" ] && [ "$(dirname "$(dirname "$dir")")" != "$SPOKE_DIR" ]; do
-    [ -f "$dir/values.yaml" ] && break
+  # leaves empty, never the unit directory itself.
+  while [ "$dir" != "$SPOKE_DIR/workloads" ] && [ "$dir" != "$SPOKE_DIR/zones" ] && [ -z "$(ls -A "$dir")" ] && [ "$(dirname "$(dirname "$dir")")" != "$SPOKE_DIR" ]; do
+    [ -f "$dir/values.yaml" ] || [ -f "$dir/zone.yaml" ] && break
     rmdir "$dir"
     dir="$(dirname "$dir")"
   done

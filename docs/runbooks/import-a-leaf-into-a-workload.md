@@ -1,15 +1,21 @@
-# Import a leaf into a workload
+# Import a leaf into a workload or zone
 
-Moves the resources of a hand-written leaf, `terraform/<provider>/...` in some
-spoke, into the leaves of a workload, `workloads/<w>/<provider>/<module>/<key>/`,
-without recreating them ([LIB-0032](../adr/LIB-0032-move-the-blog-into-runway.md)
-§3). The old leaf and the workload may be in different spokes.
+Moves the resources of one leaf into the leaves of a unit, without recreating
+them ([LIB-0032](../adr/LIB-0032-move-the-blog-into-runway.md) §3). The old
+leaf is hand-written, `terraform/<provider>/...` in some spoke, or another
+unit's. The unit is a workload, `workloads/<w>/<provider>/<module>/<key>/`, or
+a zone, `zones/<zone>/cloudflare/<module>/<key>/`
+([LIB-0036](../adr/LIB-0036-zones-are-units-of-their-own.md) §7). The old leaf
+and the unit may be in different spokes.
+
+Below, `<unit>` is `workloads/<w>` or `zones/<zone>`, and the unit's file is
+its `values.yaml` or its `zone.yaml`.
 
 A plain state copy doesn't work, because the leaves change shape:
 
 - a hand-written leaf often calls a module with `for_each`, so a resource's
   address is `module.dns_record["mx_primary"].cloudflare_dns_record.this`;
-- a workload leaf calls one module instance, so the same resource is
+- a unit leaf calls one module instance, so the same resource is
   `module.this.cloudflare_dns_record.this`, in a different leaf's state.
 
 So each resource is imported into its new address by its provider ID, and
@@ -35,9 +41,11 @@ create a duplicate. Tell everyone who can comment `terragrunt apply`.
 - Their sops age keys, so `root.hcl` can decrypt each spoke's secrets.
   `sops --decrypt terraform/secrets/terraform.enc >/dev/null` in each checks
   it, without writing anything.
-- The workload's bootstrap applied: its project, deployer and state bucket
-  (LIB-0028 §6). Its zones registered to it in `zones.yaml`, for Cloudflare
-  (LIB-0030 §2).
+- The unit's bootstrap applied: its project, deployer and state bucket
+  (LIB-0028 §6), and for Cloudflare its token. A workload's zones name it in
+  their `zone.yaml` (LIB-0036 §3). A zone's token always covers its own zone,
+  redirects included (LIB-0036's 2026-10-25 amendment, item 2), so it can
+  import them.
 
 ## Steps
 
@@ -45,11 +53,13 @@ create a duplicate. Tell everyone who can comment `terragrunt apply`.
    <type>` for every record, and `curl -sI` for every redirect, into a file
    outside both checkouts. You'll compare against it at the end.
 
-2. **Write the entries, locally.** Add one `values.yaml` entry per resource
-   group, copying every input the old leaf sets, including the ones a
-   workload would otherwise default. A DNS record's `comment` is the usual
-   one: the workload default, `workloads/<w>`, differs from the old comment,
-   so leaving it out plans an update. Then generate the stubs and check them:
+2. **Write the entries, locally.** Add one entry per resource group to the
+   unit's file, copying every input the old leaf sets, including the ones a
+   unit would otherwise default. A DNS record's `comment` is the usual one:
+   the unit default, `<unit>` (`workloads/<w>` or `zones/<zone>`), differs
+   from the old comment, so leaving it out plans an update. A record moving
+   between units keeps its old comment the same way, or plans that update.
+   Then generate the stubs and check them:
 
    ```bash
    .lib-src/.github/scripts/resolve-workloads.sh
@@ -61,7 +71,7 @@ create a duplicate. Tell everyone who can comment `terragrunt apply`.
    1. **Read its IDs from the old leaf.**
 
       ```bash
-      cd <old spoke>/terraform/<provider>/<...leaf>
+      cd <old spoke>/<old leaf>
       mise exec -- terragrunt state list
       mise exec -- terragrunt state show '<old address>'
       ```
@@ -69,7 +79,7 @@ create a duplicate. Tell everyone who can comment `terragrunt apply`.
    2. **Import it into the new leaf.**
 
       ```bash
-      cd <new spoke>/workloads/<w>/<provider>/<module>/<key>
+      cd <new spoke>/<unit>/<provider>/<module>/<key>
       mise exec -- terragrunt import '<new address>' '<import ID>'
       ```
 
@@ -87,7 +97,7 @@ create a duplicate. Tell everyone who can comment `terragrunt apply`.
    4. **Remove it from the old leaf.**
 
       ```bash
-      cd <old spoke>/terraform/<provider>/<...leaf>
+      cd <old spoke>/<old leaf>
       mise exec -- terragrunt state rm '<old address>'
       ```
 
@@ -98,7 +108,9 @@ create a duplicate. Tell everyone who can comment `terragrunt apply`.
 5. **Compare against step 1's snapshot.** Nothing may differ.
 
 6. **Delete the old leaf's code** in its own spoke's PR. Its state is empty,
-   so its plan shows nothing to destroy.
+   so its plan shows nothing to destroy. When the old leaf is another unit's
+   entry, step 4's PR already removes it from that unit's file, and its
+   generated stub's empty state plans the same empty destroy.
 
 ## Import IDs and addresses
 

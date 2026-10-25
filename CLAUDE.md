@@ -33,7 +33,11 @@ nothing that is deployed:
   only those leaves then read that provider's credentials, and the state
   backend's when it's the same provider, from
   `terraform/secrets/<provider>_breakglass.enc`, a hand-made key Terraform
-  never manages (LIB-0014). `.github/scripts/split-secrets.sh` is the one-time v3→v4
+  never manages (LIB-0014). It also builds every unit leaf's module block:
+  a workload's from `workloads/<w>/values.yaml`, and a zone's from
+  `zones/<zone>/zone.yaml`, which names the one workload that may also write
+  in that zone (LIB-0036; `.github/scripts/resolve-workloads.sh` generates
+  both kinds of stub). `.github/scripts/split-secrets.sh` is the one-time v3→v4
   migration a spoke's owner runs. The spoke
   **commits** those generated copies, because
   Terragrunt's git filter plans inside worktrees where only tracked files exist,

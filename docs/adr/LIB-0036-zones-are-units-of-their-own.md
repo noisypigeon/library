@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-25.
-- **Status**: Proposed. Amends:
+- **Status**: Proposed; amended 2026-10-25 (see `## Amendments`). Amends:
   - LIB-0030, whose root `zones.yaml` (§2) becomes one `zones/<zone>/zone.yaml`
     per zone, whose `cloudflare.zone` (§3) checks against it, and whose
     `ruleset` and `apexRedirect` kinds leave workloads;
@@ -286,3 +286,41 @@ between the import and the merge of the PR that moves the entries.
 4. **Tokens are scoped.** Each zone's token lists only its zone. After step 4,
    the blog's token lists only noisypigeon.com, without the ruleset groups.
 5. **It converges.** A re-plan of every leaf in runway shows `No changes.`
+
+## Amendments
+
+### 2026-10-25: what building it changed
+
+§§1–5 ship first in `terragrunt/root-hcl` v5.6.0 and `workflows/v5.2.0`.
+Building them changed four things.
+
+1. **The library releases twice: a minor, then a major.** §6 has runway adopt
+   one major that refuses workload redirects, but blog's redirects only move in
+   §7's step 4, so that major would refuse runway's own bootstrap.
+   - The **minor** adds zone units beside `zones.yaml`. A zone in both places
+     is refused, and everything a spoke has today plans as before.
+   - The **major** then refuses `zones.yaml`, a workload `ruleset` or
+     `apexRedirect`, and a hand-written zone leaf. runway takes it last, after
+     step 4, and its plan must show `No changes.` (Verification 5).
+2. **A zone's token always holds the redirect group,** *Dynamic URL Redirects
+   Write*, on its own zone. If it followed the zone's entries, the token would
+   lack it when step 3 imports a redirect, and the import would fail. Its
+   scope is still one zone.
+3. **A workload's token holds that group only if the workload declares a
+   `ruleset` or an `apexRedirect`.** This ships in the minor, so garden's token
+   loses it at runway's bump, updated in place. blog's loses it in step 4,
+   with its two zones.
+4. **§6's schema note was wrong.** `resolve-workloads.sh --check` fetches each
+   module's `inputs.schema.json` only, never the workload or zone schema. The
+   zone schema only feeds editors, through a file's `$schema` line, so it can
+   follow runway's first regeneration rather than precede it.
+
+Two smaller things settled on the way:
+
+- **The kind table's fourth axis is a `units` column,** `workload`, `zone` or
+  both, in all three copies. root.hcl refuses a leaf whose kind its unit
+  doesn't take.
+- **The clash checks (LIB-0030 §6) run once per spoke,** across every unit,
+  rather than once per file, so a zone's records and its workload's are
+  checked together.
+
