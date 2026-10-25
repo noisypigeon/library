@@ -522,7 +522,7 @@ jobs:
           fi
 
       - name: Pack saved plan
-        if: inputs.command == 'plan' && steps.run.outputs.exit_code == '0'
+        if: inputs.command == 'plan' && steps.run.outcome == 'success' && steps.run.outputs.exit_code == '0'
         env:
           SCRIPTS_DIR: ${{ inputs.scripts_dir }}
         run: |
@@ -530,7 +530,7 @@ jobs:
           "$SCRIPTS_DIR/plan-archive.sh" pack "$PLAN_DIR" "$RUNNER_TEMP/units.txt" "$RUNNER_TEMP/upload/plan.enc"
 
       - name: Upload saved plan
-        if: inputs.command == 'plan' && steps.run.outputs.exit_code == '0'
+        if: inputs.command == 'plan' && steps.run.outcome == 'success' && steps.run.outputs.exit_code == '0'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.head.outputs.artifact }}
@@ -769,9 +769,14 @@ jobs:
       # one (LIB-0027 §2): GITHUB_TOKEN can't merge under the callers'
       # contents: read, and a merge it made would start none of the workflows
       # that follow a merge. Its own step, since github-token is per step.
+      #
+      # Every check of exit_code first requires that the run step ran: a
+      # skipped step's outputs are null, and an expression's loose equality
+      # makes null == '0' true. Without it, an apply refused for a missing or
+      # mismatched saved plan merged its PR with nothing applied.
       - name: Auto-merge
         if: >
-          (inputs.command == 'apply' && steps.run.outputs.exit_code == '0' && steps.run.outputs.deferred != 'true') ||
+          (inputs.command == 'apply' && steps.run.outcome == 'success' && steps.run.outputs.exit_code == '0' && steps.run.outputs.deferred != 'true') ||
           (inputs.command == 'plan' && steps.comment.outputs.settled == 'true')
         uses: actions/github-script@v7
         env:
