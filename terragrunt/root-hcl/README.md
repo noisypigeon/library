@@ -613,7 +613,10 @@ hosts:
   `<username>/<shim>`, and a shim passes `site-pages.yml` the workload as
   `<zone>/<workload>`.
 
-A spoke gitignores `/workloads/*/*/*/` and adds
+A spoke gitignores each provider's stub directory, `/workloads/*/*/scaleway/`,
+`/workloads/*/*/cloudflare/` and `/workloads/*/*/backblaze/`, never
+`/workloads/*/*/*/`, which would also hide a site's `content/`, `static/` and
+`templates/`. It adds
 `^workloads/[^/]+/[^/]+/(workload|secrets\.workload)\.yaml$` to its
 `leaf_pattern` if it overrides it, and
 `^workloads/[^/]+/[^/]+/secrets\.workload\.yaml$` to its `.sops.yaml`.

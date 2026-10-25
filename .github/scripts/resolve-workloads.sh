@@ -54,7 +54,9 @@
 # The stubs are generated, never committed: a workload commits only its
 # values.yaml, and the spoke gitignores /workloads/*/*/ (LIB-0023's second
 # 2026-10-20 amendment), and a zone's /zones/*/scaleway/ and
-# /zones/*/cloudflare/. A spoke's terraform-prepare task runs this before
+# /zones/*/cloudflare/. A workload in its zone (LIB-0037) is ignored by
+# provider, /workloads/*/*/scaleway/ and the like, never /workloads/*/*/*/,
+# which would hide a site's content/ too. A spoke's terraform-prepare task runs this before
 # terragrunt, and terragrunt-run.yml runs it in CI. Terragrunt's [main...HEAD]
 # filter plans in worktrees holding only tracked files, so it can't see a stub;
 # terragrunt-run.yml selects workload leaves by their values.yaml instead, and
@@ -855,7 +857,7 @@ if [ "$CHECK" = true ]; then
   if git -C "$SPOKE_DIR" rev-parse --git-dir >/dev/null 2>&1; then
     while IFS= read -r f; do
       [ -z "$f" ] && continue
-      fail "$f is committed, but stubs are generated, never committed (LIB-0023); git rm --cached it and gitignore /workloads/*/*/ and /zones/*/*/"
+      fail "$f is committed, but stubs are generated, never committed (LIB-0023); git rm --cached it and gitignore its provider's stub directory, e.g. /workloads/*/scaleway/, /workloads/*/*/scaleway/ or /zones/*/scaleway/"
     done < <(git -C "$SPOKE_DIR" ls-files -- 'workloads/*/*/*/*/terragrunt.hcl' 'zones/*/*/*/*/terragrunt.hcl')
   fi
 
