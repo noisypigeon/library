@@ -106,6 +106,11 @@
 # `zone-`, and holds the zone's own records, rulesets and redirects. It names
 # at most one workload, which may then write records in it too. zones.yaml
 # still works beside it, for the migration; a zone in both is refused.
+#
+# Since v6.0.0 (LIB-0036) a zone.yaml is the only way to register a zone. A
+# root zones.yaml is refused, and so is a workload's ruleset or apexRedirect,
+# which are a zone's alone, and a hand-written terraform/cloudflare/<zone>/
+# leaf. A workload's token no longer gets the redirect group.
 
 locals {
   # The spoke's instance values. Missing spoke.hcl is a hard error, which is
@@ -377,25 +382,14 @@ locals {
   )
   cloudflare_zone = local.is_zone_leaf ? local.path_segments[2] : ""
 
-  # zones.yaml (LIB-0030 §2): each zone's apex and its one owner, a workload
-  # or `terraform`. Read only by workload and zone leaves, through the for's
-  # filter, so a change re-plans exactly those; a spoke without the file has
-  # no zones a workload may use.
-  zones_file = "${get_parent_terragrunt_dir()}/zones.yaml"
-  zones_legacy = merge({}, [
-    for f in [local.zones_file] : try(yamldecode(file(mark_as_read(f))), {})
-    if(local.is_zone_leaf || local.is_workload_leaf) && fileexists(f)
-  ]...)
-  # Each zones/<zone>/zone.yaml (LIB-0036 §1) registers its zone too, to the
+  # Each zones/<zone>/zone.yaml (LIB-0036 §1) registers its zone to the
   # workload it names, or to none. Unit leaves are selected by
   # terragrunt-run.yml rather than the git filter, so these need no
-  # mark_as_read; a hand-written zone leaf reads them to be refused.
-  zones_units = {
-    for f in(local.is_zone_leaf || local.is_workload_leaf ? fileset(get_parent_terragrunt_dir(), "zones/*/zone.yaml") : []) :
-    split("/", f)[1] => { workload = try(tostring(yamldecode(file("${get_parent_terragrunt_dir()}/${f}")).workload), ""), unit = true }
+  # mark_as_read. A root zones.yaml is only looked for, to be refused.
+  zones = {
+    for f in(local.is_workload_leaf ? fileset(get_parent_terragrunt_dir(), "zones/*/zone.yaml") : []) :
+    split("/", f)[1] => { workload = try(tostring(yamldecode(file("${get_parent_terragrunt_dir()}/${f}")).workload), "") }
   }
-  zones_in_both = sort(setintersection(keys(local.zones_legacy), keys(local.zones_units)))
-  zones         = merge(local.zones_legacy, local.zones_units)
 
   # Workload leaves (LIB-0023). HCL evaluates both arms of a conditional, so
   # every expression below runs for every leaf and is written to be harmless
@@ -490,18 +484,16 @@ locals {
   workload_cf_zone_set  = { for k, v in { zone = local.workload_cf_zone } : k => v if v != "" }
   # The zone a zone kind acts on: its own, or the workload's default.
   workload_zone = try(tostring(local.workload_cf_entry.zone), local.workload_cf_zone)
-  # The workload's own Cloudflare token (LIB-0033 §4): it exists when the
-  # workload owns a zone or declares an R2 bucket, and reaches only those.
-  # A zone's token always has one, its own zone (LIB-0036 §2). The redirect
-  # group goes to a zone always, since it owns its entrypoints and its token
-  # must read a redirect it imports, and to a workload only if it declares a
-  # ruleset or an apexRedirect (LIB-0036's amendment).
+  # The workload's own Cloudflare token (LIB-0033 §4): it exists when a
+  # zone.yaml names the workload or it declares an R2 bucket, and reaches only
+  # those. A zone's token always has one, its own zone (LIB-0036 §2), and only
+  # a zone's gets the redirect group, since it alone holds entrypoints
+  # (LIB-0036 §3).
   workload_cf_owned    = local.is_zone_unit ? [local.workload] : sort([for z, v in local.zones : z if try(v.workload, "") == local.workload])
   workload_cf_buckets  = length(try(keys(local.workload_cloudflare.bucket), [])) > 0
   workload_cf_deployer = local.is_zone_unit || length(local.workload_cf_owned) > 0 || local.workload_cf_buckets
-  workload_cf_entries  = local.is_zone_unit || length(try(keys(local.workload_cloudflare.ruleset), [])) + length(try(keys(local.workload_cloudflare.apexRedirect), [])) > 0
   workload_cf_policies = concat(
-    [for z in [local.workload_cf_owned] : { permission_groups = concat(["Zone Read", "DNS Write"], local.workload_cf_entries ? ["Dynamic URL Redirects Write"] : []), zones = z } if length(z) > 0],
+    [for z in [local.workload_cf_owned] : { permission_groups = concat(["Zone Read", "DNS Write"], local.is_zone_unit ? ["Dynamic URL Redirects Write"] : []), zones = z } if length(z) > 0],
     [for b in [local.workload_cf_buckets] : { permission_groups = ["Workers R2 Storage Write"], account = true } if b],
   )
   # Each kind also says where its state lives (LIB-0028 §4): `spoke` in the
@@ -664,7 +656,7 @@ locals {
       sensitive   = false
       credentials = "workload"
       state       = "workload"
-      units       = ["workload", "zone"]
+      units       = ["zone"]
     }
     "cloudflare/apex-redirect" = {
       declared    = local.workload_cf_declared
@@ -675,7 +667,7 @@ locals {
       sensitive   = false
       credentials = "workload"
       state       = "workload"
-      units       = ["workload", "zone"]
+      units       = ["zone"]
     }
   }
   workload_kind_key = (
@@ -769,11 +761,10 @@ locals {
   guard_workload_cf_on    = local.is_workload_leaf && try(local.path_segments[2], "") == "cloudflare" && !contains(keys(local.providers), "cloudflare") ? file("${path_relative_to_include()} is a Cloudflare workload leaf, but spoke.hcl's providers map has no cloudflare (LIB-0030 §1)") : true
   guard_workload_cf_spoke = local.is_workload_leaf && try(local.path_segments[2], "") == "cloudflare" && (can(local.workload_cf_entry.account_id) || can(local.workload_cf_entry.zone_id) || can(local.workload_cf_secrets.account_id) || can(local.workload_cf_secrets.zone_id)) ? file("${local.workload_file}: cloudflare.${try(local.workload_cf_yaml[local.workload_module], "")}.${local.workload_instance} can't set account_id or zone_id; the account is the spoke's, and a zone is named (LIB-0030 §§4-5)") : true
   guard_workload_cf_zone  = local.is_workload_leaf && local.workload_cf_zone_kind && local.workload_zone == "" ? file("${local.workload_file}: cloudflare.${try(local.workload_cf_yaml[local.workload_module], "")}.${local.workload_instance} has no zone, and the workload sets no cloudflare.zone (LIB-0030 §3)") : true
-  guard_workload_cf_owner = local.is_workload_leaf && !local.is_zone_unit && local.workload_cf_zone_kind && local.workload_zone != "" && try(local.zones[local.workload_zone].workload, "") != local.workload ? file("${local.workload_file}: zone ${local.workload_zone} isn't registered to workload ${local.workload}, in zones/${local.workload_zone}/zone.yaml or zones.yaml (LIB-0030 §2, LIB-0036 §3)") : true
-  guard_zone_leaf_owner   = local.is_zone_leaf && try(local.zones[local.cloudflare_zone].workload, "terraform") != "terraform" ? file("${path_relative_to_include()} is a hand-written leaf in zone ${local.cloudflare_zone}, which ${try(local.zones[local.cloudflare_zone].unit, false) ? "zones/${local.cloudflare_zone}/zone.yaml makes a unit" : "zones.yaml registers to workload ${try(local.zones[local.cloudflare_zone].workload, "")}"} (LIB-0030 §2, LIB-0036 §4)") : true
-  guard_zones_shape       = alltrue([for z, v in local.zones_legacy : can(tostring(v.workload)) && length(regexall("\\.", z)) > 0]) ? true : file("zones.yaml: every key must be a zone's apex domain, and every value a mapping with a `workload` (LIB-0030 §2)")
-  # Zone units (LIB-0036 §§1-3).
-  guard_zones_both    = length(local.zones_in_both) > 0 ? file("${join(", ", local.zones_in_both)} is in both zones.yaml and zones/<zone>/zone.yaml; a zone has one home (LIB-0036 §1)") : true
+  guard_workload_cf_owner = local.is_workload_leaf && !local.is_zone_unit && local.workload_cf_zone_kind && local.workload_zone != "" && try(local.zones[local.workload_zone].workload, "") != local.workload ? file("${local.workload_file}: zone ${local.workload_zone} isn't registered to workload ${local.workload}, in zones/${local.workload_zone}/zone.yaml (LIB-0036 §3)") : true
+  # Zone units (LIB-0036 §§1-4).
+  guard_zones_file    = fileexists("${get_parent_terragrunt_dir()}/zones.yaml") ? file("zones.yaml is refused: each zone is zones/<zone>/zone.yaml, naming the workload that may write in it (LIB-0036 §1)") : true
+  guard_zone_leaf     = local.is_zone_leaf ? file("${path_relative_to_include()} is a hand-written zone leaf, and those are retired: declare its entries in zones/${local.cloudflare_zone}/zone.yaml (LIB-0036 §4)") : true
   guard_zone_apex     = local.is_zone_unit && length(regexall("^[a-z0-9-]+(\\.[a-z0-9-]+)+$", local.workload)) == 0 ? file("zones/${local.workload}/: a zone's directory must be its apex domain (LIB-0036 §1)") : true
   guard_zone_prefix   = local.is_zone_unit && length(regexall("^[a-z0-9-]+$", local.workload_prefix)) == 0 ? file("${local.workload_file}: prefix \"${local.workload_prefix}\" may hold only a-z, 0-9 and - (LIB-0036 §1)") : true
   guard_zone_own_zone = local.is_zone_unit && (can(local.workload_raw.cloudflare.zone) || can(local.workload_raw.cloudflare[local.workload_cf_yaml[local.workload_module]][local.workload_instance].zone)) ? file("${local.workload_file}: a zone's entries can't set zone; the directory names it (LIB-0036 §1)") : true

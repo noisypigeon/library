@@ -13,10 +13,12 @@ A thin wrapper around a single `cloudflare_ruleset`. It adds no behaviour: the
 `null` stays unset. It exists so that a leaf managing a ruleset calls a
 library module (LIB-0004).
 
-It's **zone-scoped**: a leaf calling it lives at
-`terraform/cloudflare/<zone>/ruleset/<instance>/`, where `<zone>` is the zone's
-apex domain. `terragrunt/root-hcl` v2.2.0 then gives the leaf
-`local.cloudflare_zone_id` for that zone (LIB-0008).
+It's **zone-scoped**: a spoke declares it as `cloudflare.ruleset.<instance>` in
+`zones/<zone>/zone.yaml`, and `resolve-workloads.sh` generates its leaf at
+`zones/<zone>/cloudflare/ruleset/<instance>/` (LIB-0036). Only a zone takes it,
+since a phase has one entrypoint per zone. The hand-written
+`terraform/cloudflare/<zone>/ruleset/<instance>/` leaves LIB-0008 described are
+refused since `terragrunt/root-hcl` v6.0.0.
 
 ## Usage
 
