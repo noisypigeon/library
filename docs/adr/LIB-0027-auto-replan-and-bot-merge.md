@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-22.
-- **Status**: Accepted; amended 2026-10-22 (see `## Amendments`). Amends LIB-0022's apply, and LIB-0024's staged
+- **Status**: Accepted; amended 2026-10-22 and 2026-10-25 (see `## Amendments`). Amends LIB-0022's apply, and LIB-0024's staged
   applies.
 
 ## Context
@@ -133,3 +133,20 @@ still needed one more `terragrunt apply` to land. That apply did nothing.
 - Its summary ends "Nothing left to apply: merging."
 
 This ships as `workflows/v4.8.0`. Callers change nothing.
+
+### 2026-10-25: the re-plan says it's planning
+
+§1's re-plan posted nothing until its result, so for the 5–10 minutes it
+took, the PR showed only the apply's comment. That comment says the next stage
+plans by itself, but it gives no sign the re-plan has started.
+
+- **The re-plan announces itself.** Its first step after resolving the head
+  posts "⏳ Terragrunt plan: the next stage of `<sha>` is planning now", with a
+  link to its run. Only a re-plan started by a `terragrunt apply` comment does
+  this; a `terragrunt plan` comment already gets its 👀 (LIB-0022's
+  2026-10-25 amendment), and a push plan has no stage before it.
+- **Its result replaces it.** The announcement carries the plan comments'
+  marker, so the result step hides it as outdated along with every earlier
+  plan comment, whether the re-plan succeeds, fails or is cancelled.
+- **It ships in `workflows/` v5.4.0,** with no caller change.
+
