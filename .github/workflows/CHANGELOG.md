@@ -4,6 +4,33 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [5.3.0] - 2026-10-24
+
+### Acknowledge a terragrunt comment at once, outside the PR's queue
+
+A `terragrunt apply` or `terragrunt plan` comment can now get its 👀 right away, even while another plan or apply is running on the same PR.
+
+The 👀 used to come only from `terragrunt-run.yml`'s first step, and that job doesn't start until it holds the PR's concurrency group, `terragrunt-pr-<n>`, which a spoke's plan, apply and re-plan jobs share. A comment made while one of them was running got its 👀 only when that run finished. On noisypigeon/runway#70, two apply comments made during a plan and during a staged apply's re-plan waited 7½ and 3½ minutes. The workflow hadn't changed; the staged bootstrap's automatic re-plans just made it common.
+
+The new reusable `terragrunt-ack.yml` only reacts 👀 to the triggering comment. To use it, a spoke adds one job per comment-triggered run job. That job gets the same `if` as the run job and no `concurrency`:
+
+```yaml
+  ack:
+    if: <the apply or plan job's comment gate>
+    uses: noisypigeon/library/.github/workflows/terragrunt-ack.yml@workflows/v5.3.0
+```
+
+A re-plan job has no comment of its own, so it needs no ack. `terragrunt-run.yml` still reacts 👀 itself, so a spoke that doesn't add the job behaves exactly as before. GitHub keeps one reaction per user and content, so a spoke that adds it isn't reacted to twice. The 👍 or 👎 still comes when the run ends, and plans and applies still queue as before.
+
+LIB-0022 has a 2026-10-25 amendment recording this.
+
+Linted with actionlint. A comment event always runs the default branch's workflow files, so this can't be exercised from a branch. It gets tested in runway once a spoke calls it.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#179](https://github.com/noisypigeon/library/pull/179)
+
 ## [5.2.2] - 2026-10-24
 
 ### Auto-merge only after an apply that ran and succeeded
