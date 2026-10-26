@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-26.
-- **Status**: Proposed. Amends:
+- **Status**: Proposed; amended 2026-10-26 (see `## Amendments`). Amends:
   - LIB-0023 §2 and LIB-0028 §4, whose kind table loses
     `scaleway/terraform-deployer-iam` and `cloudflare/apex-redirect` and gains
     three `deployer` kinds;
@@ -343,3 +343,57 @@ runway's teardown PR.
    its old leaf was emptied, and no key's ID or expiry changed.
 5. **It converges.** A re-plan of every leaf in runway shows `No changes.`,
    and DNS and both redirects answer as before.
+
+## Amendments
+
+### 2026-10-26: what moving runway found
+
+runway moved under §7, in two PRs: noisypigeon/runway#81 took
+`workflows/v7.0.0` alone, and noisypigeon/runway#82 took `root_hcl_version`
+7.0.0 and committed the move. The Verification held:
+
+1. **Names don't change.** Every leaf runway kept renders byte-identically
+   under 7.0.0 and 6.1.0. Each new leaf's inputs give its application,
+   policy, key, records and ruleset the bundle's names, comments and rules.
+2. **Wiring holds.** Each `workload`-state leaf signs in with
+   `iam-api-key/deployer`'s outputs, in its `remote_state` and in its
+   provider.
+3. **Each is refused by name, before planning,** in both
+   `resolve-workloads.sh` and root.hcl: every case §1, §3, §4 and LIB-0037 §6
+   lists, on a copy of runway.
+4. **State moved, not recreated.** Each of the 27 new leaves planned
+   `No changes.` before its old leaf was emptied. Those are the 21 deployer
+   leaves, including the spoke deployer's three, and the six redirect leaves.
+   No key's ID or expiry changed.
+5. **It converges.** runway#82's plan shows 88 leaves with no changes,
+   none failed and none deferred. Both zones' apex and `www` still redirect
+   with `301`.
+
+Moving it changed four things about §5 and §6:
+
+1. **A pushed state keeps the old leaf's outputs.** Terragrunt reads a
+   dependency's outputs from its state, so a leaf that depends on a new leaf
+   fails until that leaf's outputs are what its configuration computes.
+   Rewrite each new leaf's outputs after the push, dependencies first: take
+   their values from a `-refresh=false` plan's `planned_values`. Each output's
+   `sensitive` must match its `output` block too. A plan of the state
+   otherwise reports an output change, and LIB-0027 doesn't count that leaf as
+   settled.
+2. **§5's emptiness check can't run on a dependent leaf.** `state list` and
+   `state pull` evaluate its dependencies first. A zone's project keeps its
+   state behind the zone deployer's key, so `iam-policy/deployer` and
+   `iam-api-key/deployer` fail before the new deployer holds state. Check them
+   from a scratch copy whose stubs carry no `dependency` blocks; the backend
+   key is the same.
+3. **Split the backup before the push, not after.** Filtering each new leaf's
+   resources and renaming its addresses in the backup, then pushing the
+   result, does what §5's push-then-`state rm`-and-`state mv` does. It never
+   leaves a backend holding another leaf's resources, even for a moment.
+4. **garden regenerates between the pins and the move.** The move's
+   `resolve-workloads.sh --check` fetches `scaleway/iam-policy`'s
+   `inputs.schema.json`, which only a regeneration at `workflows/v7.0.0`
+   publishes. Merging the pins dispatches nothing, so dispatch
+   `garden-generate.yml` once they merge.
+
+The spoke deployer pins `scaleway/iam-api-key` v0.2.0. Its old bundle never
+rotated, and v0.3.0 would add `terraform_data.rotation` to the plan.
