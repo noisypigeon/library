@@ -672,6 +672,11 @@ zone:
   two SPF or two DMARC policies at one name.
 - **An unwrapped file still reads as before** until v8.0.0, which refuses it.
 
+Since v8.0.0 (LIB-0039 §4), with `workflows/v8.0.0` or later, an unwrapped
+`zone.yaml`, `workload.yaml` or `secrets.workload.yaml` is refused before
+planning, by `resolve-workloads.sh` and by this template. A spoke whose files
+are all wrapped plans `No changes.` on the bump.
+
 A workload may also have a `workloads/<workload>/secrets.yaml` (v4.5.0,
 LIB-0025), encrypted with sops as YAML. Its rule in the spoke's `.sops.yaml` is
 `^workloads/[^/]+/secrets\.yaml$`. It holds secret inputs under the same kind

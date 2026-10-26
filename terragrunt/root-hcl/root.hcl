@@ -129,6 +129,9 @@
 # or `workload`, with its records at `dnsRecords` directly under it, in place
 # of cloudflare.dnsRecord. A wrapped zone.yaml may name `services`, each of
 # which implies its provider's records. An unwrapped file is read as before.
+#
+# v8.0.0 (LIB-0039 §4) refuses an unwrapped zone.yaml, workload.yaml or
+# secrets.workload.yaml, before planning.
 
 locals {
   # The spoke's instance values. Missing spoke.hcl is a hard error, which is
@@ -420,7 +423,7 @@ locals {
   zones = {
     for f in(local.is_workload_leaf ? fileset(get_parent_terragrunt_dir(), "zones/*/zone.yaml") : []) :
     split("/", f)[1] => {
-      hosts = try({ for h, w in try(yamldecode(file("${get_parent_terragrunt_dir()}/${f}")).zone.hosts, yamldecode(file("${get_parent_terragrunt_dir()}/${f}")).hosts) : h => tostring(w) }, {})
+      hosts = try({ for h, w in yamldecode(file("${get_parent_terragrunt_dir()}/${f}")).zone.hosts : h => tostring(w) }, {})
     }
   }
   # An old-layout workload (LIB-0037 §6), looked for only to be refused.
@@ -436,18 +439,19 @@ locals {
   unit_dir          = local.is_nested_workload ? "workloads/${local.workload_parent}/${local.workload}" : "zones/${local.workload}"
   workload_file     = local.is_nested_workload ? "${local.unit_dir}/workload.yaml" : "zones/${local.workload}/zone.yaml"
   workload_doc      = try(yamldecode(file(mark_as_read("${get_parent_terragrunt_dir()}/${local.workload_file}"))), null)
-  # A unit file's content may sit under one key, `zone` or `workload`, with
-  # its records at dnsRecords (LIB-0039 §§1-2). Everything below reads it
-  # unwrapped, with dnsRecords at cloudflare.dnsRecord, the kind table's path.
-  # resolve-workloads.sh's unwrap is its twin.
+  # A unit file's content sits under one key, `zone` or `workload`, with its
+  # records at dnsRecords (LIB-0039 §§1-2). Everything below reads it
+  # unwrapped, with dnsRecords at cloudflare.dnsRecord, the kind table's path;
+  # a file without its key reads as empty, and guard_workload_shape refuses
+  # it. resolve-workloads.sh's unwrap is its twin.
   workload_wrapper = local.is_nested_workload ? "workload" : "zone"
   workload_wrapped = can(local.workload_doc[local.workload_wrapper])
-  workload_in      = try(local.workload_doc[local.workload_wrapper], local.workload_doc)
+  workload_in      = try(local.workload_doc[local.workload_wrapper], local.workload_doc == null ? null : {})
   workload_raw = try(merge(
     { for k, v in local.workload_in : k => v if k != "dnsRecords" },
     { for k, v in { cloudflare = merge({}, try(local.workload_in.cloudflare, null), { dnsRecord = try(local.workload_in.dnsRecords, null) }) } : k => v if can(local.workload_in.dnsRecords) },
   ), null)
-  workload_dns_path = local.workload_wrapped ? "dnsRecords" : "cloudflare.dnsRecord"
+  workload_dns_path = "dnsRecords"
   # A zone's file, read as a workload's (LIB-0036 §§1-2): its name defaults to
   # its directory, its prefix to that name with every character a resource
   # name can't hold turned into a dash, and every zone kind acts on the
@@ -459,7 +463,7 @@ locals {
   # its zone's; its zone from the directory; and a project entry only when
   # it has its own project. resolve-workloads.sh's expand_workload is its twin.
   workload_zone_doc     = local.is_nested_workload && !local.is_private_workload ? try(yamldecode(file("${get_parent_terragrunt_dir()}/zones/${local.workload_parent}/zone.yaml")), null) : null
-  workload_zone_raw     = try(local.workload_zone_doc.zone, local.workload_zone_doc)
+  workload_zone_raw     = try(local.workload_zone_doc.zone, null)
   workload_zone_prefix  = try(tostring(local.workload_zone_raw.prefix), replace(try(tostring(local.workload_zone_raw.name), local.workload_parent), "/[^a-z0-9-]/", "-"))
   workload_project      = merge({}, try(local.workload_raw.deployments.scaleway.project, null))
   workload_own_project  = local.is_nested_workload && (local.is_private_workload || length(setintersection(keys(local.workload_project), ["name", "prefix", "suffix"])) > 0)
@@ -493,7 +497,7 @@ locals {
     if local.is_workload_leaf && !local.is_zone_unit && fileexists(f)
   ]...)
   # Wrapped as its workload.yaml is (LIB-0039 §1).
-  workload_secrets_in = try(merge({}, local.workload_secrets_doc.workload), local.workload_secrets_doc)
+  workload_secrets_in = try(merge({}, local.workload_secrets_doc.workload), {})
   workload_secrets = merge(
     { for k, v in local.workload_secrets_in : k => v if k != "dnsRecords" },
     { for k, v in { cloudflare = merge({}, try(local.workload_secrets_in.cloudflare, null), { dnsRecord = try(local.workload_secrets_in.dnsRecords, null) }) } : k => v if can(local.workload_secrets_in.dnsRecords) },
@@ -1020,12 +1024,14 @@ locals {
   )])
   guard_zone_redirect = length(local.zone_redirect_problems) > 0 ? file("${local.workload_file}: ${join("; ", local.zone_redirect_problems)}") : true
   # A unit file's shape (LIB-0039 §§1-2): its wrapper alone at the top, its
-  # records at dnsRecords, and services and dnsRecords only in a wrapped file.
+  # records at dnsRecords, and secrets.workload.yaml's the same way.
   workload_shape_problems = local.is_workload_leaf ? compact(concat(
     [for k in try(keys(local.workload_doc), []) : "${k} sits beside ${local.workload_wrapper}; everything goes under ${local.workload_wrapper} (LIB-0039 §1)" if local.workload_wrapped && k != local.workload_wrapper],
     [local.workload_wrapped && can(local.workload_in.cloudflare.dnsRecord) ? "${local.workload_wrapper}.cloudflare.dnsRecord moves to ${local.workload_wrapper}.dnsRecords (LIB-0039 §2)" : ""],
     [local.workload_wrapped && local.is_nested_workload && can(local.workload_in.services) ? "services is a zone's alone; declare a workload's records in workload.dnsRecords (LIB-0039 §3)" : ""],
-    [!local.workload_wrapped && (can(local.workload_doc.services) || can(local.workload_doc.dnsRecords)) ? "services and dnsRecords are read only in a wrapped file; move the file's keys under ${local.workload_wrapper} (LIB-0039 §§1-3)" : ""],
+    [local.workload_doc != null && !local.workload_wrapped ? "everything goes under one key, ${local.workload_wrapper}; move every key of the file under it (LIB-0039 §§1, 4)" : ""],
+    [length(local.workload_secrets_doc) > 0 && !can(local.workload_secrets_doc.workload) ? "its secrets.workload.yaml puts everything under one key, workload, too (LIB-0039 §§1, 4)" : ""],
+    [for k in keys(local.workload_secrets_doc) : "secrets.workload.yaml: ${k} sits beside workload; everything goes under workload (LIB-0039 §1)" if can(local.workload_secrets_doc.workload) && k != "workload"],
   )) : []
   guard_workload_shape = length(local.workload_shape_problems) > 0 ? file("${local.workload_file}: ${join("; ", local.workload_shape_problems)}") : true
   # A zone's services (LIB-0039 §3): the four, each with its own keys, an
