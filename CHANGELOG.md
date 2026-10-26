@@ -44,6 +44,10 @@ ADR-0154 and ADR-0084 each made before it.
 
 <!-- entries below; newest first -->
 
+## 2026-10-26
+
+- [adr] Record LIB-0038: compose deployers and redirects from single-resource modules ([#193](https://github.com/noisypigeon/library/pull/193))
+
 ## 2026-10-25
 
 - [workflows] Read workloads that live in their zone (LIB-0037) ([#189](https://github.com/noisypigeon/library/pull/189))
