@@ -45,8 +45,11 @@
 # its v2 for a workload.yaml (LIB-0037), and the zone schema at
 # schemas/zone/v1.json (LIB-0036). Since LIB-0038 the current ones are
 # schemas/workload/v3.json and schemas/zone/v2.json, whose deployer is three
-# entries and whose apexRedirect is a shorthand; the older ones stay
-# published, unchanged, for files still pinned to them.
+# entries and whose apexRedirect is a shorthand. Since LIB-0039 they are
+# schemas/workload/v4.json and schemas/zone/v3.json, each file's content under
+# one key (workload or zone), its records at dnsRecords, and a zone's
+# services. The older ones stay published, unchanged, for files still pinned
+# to them.
 # Without it, nothing under static/ is touched.
 #
 # Regenerate-all semantics: every run wipes and rewrites every generated page
@@ -252,7 +255,7 @@ if [ -n "$STATIC_ROOT" ]; then
     exit 2
   fi
   find "$STATIC_ROOT/terraform" \( -name inputs.schema.json -o -name state.schema.json -o -name workload.schema.json \) -type f -delete 2>/dev/null || true
-  rm -f "$STATIC_ROOT/schemas/workload/v1.json" "$STATIC_ROOT/schemas/workload/v2.json" "$STATIC_ROOT/schemas/workload/v3.json" "$STATIC_ROOT/schemas/zone/v1.json" "$STATIC_ROOT/schemas/zone/v2.json"
+  rm -f "$STATIC_ROOT/schemas/workload/v1.json" "$STATIC_ROOT/schemas/workload/v2.json" "$STATIC_ROOT/schemas/workload/v3.json" "$STATIC_ROOT/schemas/workload/v4.json" "$STATIC_ROOT/schemas/zone/v1.json" "$STATIC_ROOT/schemas/zone/v2.json" "$STATIC_ROOT/schemas/zone/v3.json"
 
   kinds_json='{}'
   schema_count=0
@@ -548,6 +551,73 @@ if [ -n "$STATIC_ROOT" ]; then
         }
       }
   ' "$STATIC_ROOT/schemas/zone/v1.json" >"$STATIC_ROOT/schemas/zone/v2.json"
+
+  # LIB-0039: a file's content sits under one key (§1), its records at
+  # dnsRecords directly under it (§2), and a zone's services imply their
+  # provider's records (§3). The services table is the third twin of
+  # resolve-workloads.sh's service_dns and root.hcl's workload_cf_service_dns.
+  # shellcheck disable=SC2016 # a jq program, expanded by jq
+  wrap_jq='
+    def wrapped($key; $id; $title):
+      (.properties.cloudflare.properties.dnsRecord) as $dns
+      | del(."$schema", ."$id", .title, .properties.cloudflare.properties.dnsRecord)
+      | .properties.dnsRecords = $dns
+      | {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "$id": $id,
+          title: $title,
+          type: "object",
+          additionalProperties: false,
+          required: [$key],
+          properties: {($key): .}
+        };'
+  jq --arg base "$SCHEMA_BASE_URL" "$wrap_jq"'
+    wrapped("workload"; "\($base)/schemas/workload/v4.json"; "Workload workload.yaml (LIB-0023, LIB-0028, LIB-0029, LIB-0030, LIB-0033, LIB-0037, LIB-0038, LIB-0039)")
+  ' "$STATIC_ROOT/schemas/workload/v3.json" >"$STATIC_ROOT/schemas/workload/v4.json"
+  jq --arg base "$SCHEMA_BASE_URL" "$wrap_jq"'
+    def dmarc: {
+      type: ["boolean", "string"],
+      pattern: "^v=DMARC1;",
+      description: "true (the default) implies the policy v=DMARC1; p=quarantine; pct=100; adkim=s; aspf=s at _dmarc, a string implies that policy instead, and false implies none (LIB-0039 §3)"
+    };
+    def service($desc; $props; $required):
+      {
+        type: ["object", "null"],
+        additionalProperties: false,
+        description: $desc,
+        properties: ({enabled: {type: "boolean", description: "Whether its records are implied. Default: false"}} + $props),
+        if: {required: ["enabled"], properties: {enabled: {const: true}}},
+        then: {required: $required}
+      };
+    (.properties.cloudflare.properties.apexRedirect.description |= sub("cloudflare\\.dnsRecord\\."; "dnsRecords."))
+    | .properties.services = {
+        type: ["object", "null"],
+        additionalProperties: false,
+        description: "Mail and identity providers. Each enabled one implies its records in dnsRecords, keyed <service>-<record>, which an entry of the same key overrides field by field. proton and fastmail are never both enabled (LIB-0039 §3)",
+        properties: {
+          proton: service("Proton Pass aliases: MX, DKIM, SPF, DMARC and the two verification records"; {
+            verification: {
+              type: "object",
+              additionalProperties: false,
+              required: ["pm", "protonmail"],
+              properties: {
+                pm: {type: "string", minLength: 1, description: "The pm-verification= value"},
+                protonmail: {type: "string", minLength: 1, description: "The protonmail-verification= value"}
+              }
+            },
+            dmarc: dmarc
+          }; ["verification"]),
+          fastmail: service("Fastmail: MX, DKIM, SPF and DMARC"; {dmarc: dmarc}; []),
+          googleSearch: service("Google Search Console site verification"; {
+            verification: {type: "string", minLength: 1, description: "The google-site-verification= value"}
+          }; ["verification"]),
+          bluesky: service("A Bluesky handle at the zone apex"; {
+            did: {type: "string", pattern: "^did:", description: "The account DID, served at _atproto"}
+          }; ["did"])
+        }
+      }
+    | wrapped("zone"; "\($base)/schemas/zone/v3.json"; "Zone zone.yaml (LIB-0036, LIB-0037, LIB-0038, LIB-0039)")
+  ' "$STATIC_ROOT/schemas/zone/v2.json" >"$STATIC_ROOT/schemas/zone/v3.json"
 
   echo "Generated ${schema_count} module inputs schema(s), and the workload and zone schemas, under ${STATIC_ROOT}."
 fi
