@@ -46,6 +46,8 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-26
 
+- [workflows] Refuse unwrapped unit files (LIB-0039) ([#203](https://github.com/noisypigeon/library/pull/203))
+- [terragrunt/root-hcl] Refuse unwrapped unit files (LIB-0039) ([#203](https://github.com/noisypigeon/library/pull/203))
 - [workflows] Wrapped unit files, dnsRecords and zone services (LIB-0039) ([#202](https://github.com/noisypigeon/library/pull/202))
 - [terragrunt/root-hcl] Wrapped unit files, dnsRecords and zone services (LIB-0039) ([#202](https://github.com/noisypigeon/library/pull/202))
 - [adr] docs: LIB-0039, mail and identity services in zone.yaml, and wrapped unit files ([#201](https://github.com/noisypigeon/library/pull/201))

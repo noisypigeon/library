@@ -4,6 +4,21 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [8.0.0] - 2026-10-26
+
+### Refuse unwrapped unit files (LIB-0039)
+
+LIB-0039's second release. Every unit file must now hold its content under one key: `zone:` in zone.yaml, and `workload:` in workload.yaml and secrets.workload.yaml. An unwrapped file is refused before planning, by `resolve-workloads.sh` and by the template, with a message naming the file and the key its content belongs under. That also refuses `cloudflare.dnsRecord` at the top of a file: records live at `dnsRecords` under the wrapper, as they have since v7.1.0.
+
+Nothing else changes. A spoke whose files are all wrapped, as v7.1.0 allowed, generates the same leaves and plans `No changes.` on the bump. Take `workflows/v8.0.0` first, then `root_hcl_version` 8.0.0.
+
+`site-dispatch.yml` now reads only the wrapped shape. The older `zone/v1`, `zone/v2`, `workload/v1`, `workload/v2` and `workload/v3` schemas stay published for editors, though this release refuses a file shaped by them.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#203](https://github.com/noisypigeon/library/pull/203)
+
 ## [7.1.0] - 2026-10-26
 
 ### Wrapped unit files, dnsRecords and zone services (LIB-0039)
