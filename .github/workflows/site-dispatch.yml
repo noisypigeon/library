@@ -110,19 +110,19 @@ jobs:
             [ -f "$u/config.toml" ] || continue
             if [ -f "$u/workload.yaml" ]; then
               zone=$(cut -d/ -f2 <<<"$u"); w=$(cut -d/ -f3 <<<"$u")
-              if [ "$(yq '(.workload // .) | .deployments | has("githubPages")' "$u/workload.yaml" 2>/dev/null)" != true ]; then
+              if [ "$(yq '.workload | .deployments | has("githubPages")' "$u/workload.yaml" 2>/dev/null)" != true ]; then
                 echo "::error::$u is a site but its workload.yaml sets no deployments.githubPages, so it can never deploy (LIB-0037 §4)"
                 failed=1
                 continue
               fi
-              host=$(W="$w" yq '(.zone // .) | .hosts // {} | to_entries | map(select(.value == strenv(W))) | .[0].key // ""' "zones/$zone/zone.yaml" 2>/dev/null || true)
+              host=$(W="$w" yq '.zone | .hosts // {} | to_entries | map(select(.value == strenv(W))) | .[0].key // ""' "zones/$zone/zone.yaml" 2>/dev/null || true)
               case "$host" in
                 "") default_shim="" ;;
                 "@") default_shim="$zone" ;;
                 *) default_shim="$host.$zone" ;;
               esac
-              user=$(yq '(.workload // .) | .deployments.githubPages.username // ""' "$u/workload.yaml")
-              name=$(D="$default_shim" yq '(.workload // .) | .deployments.githubPages.shim // strenv(D)' "$u/workload.yaml")
+              user=$(yq '.workload | .deployments.githubPages.username // ""' "$u/workload.yaml")
+              name=$(D="$default_shim" yq '.workload | .deployments.githubPages.shim // strenv(D)' "$u/workload.yaml")
               if [ -z "$name" ]; then
                 echo "::error::$u is a site with no host in zones/$zone/zone.yaml, so it has no shim to deploy it (LIB-0037 §4)"
                 failed=1

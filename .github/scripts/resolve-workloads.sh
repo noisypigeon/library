@@ -29,11 +29,11 @@
 # records only at its host, and its deployments.githubPages implies its
 # Pages CNAMEs (LIB-0037 §§3-4). The clash checks below run across every
 # unit, so a zone's file and its workloads' are checked together.
-# Since LIB-0039 a unit file may hold its content under one key, `zone` or
-# `workload`, with its records at `dnsRecords` directly under it; unwrap reads
-# either into the shape below, records at cloudflare.dnsRecord, and relabel
-# names them back in messages. A wrapped zone's `services` each imply their
-# provider's records (service_dns), beside apexRedirect's.
+# A unit file holds its content under one key, `zone` or `workload`, with
+# its records at `dnsRecords` directly under it (LIB-0039); unwrap reads it
+# into the shape below, records at cloudflare.dnsRecord, and relabel names
+# them back in messages. A zone's `services` each imply their provider's
+# records (service_dns), beside apexRedirect's.
 # A zoned workload has no project of its own unless
 # deployments.scaleway.project names one, and its deployer and state bucket
 # then depend on the zone's project (LIB-0037 §2).
@@ -209,8 +209,8 @@ fail() { echo "::error::$*" >&2; errors=$((errors + 1)); }
 # A unit file's shape (LIB-0039): its content under one key, `zone` or
 # `workload`, with `dnsRecords` directly under it. Each check below reads the
 # file unwrapped, with dnsRecords at cloudflare.dnsRecord, the path the kind
-# table and root.hcl use. An unwrapped file is read as before, until the
-# major that refuses it. root.hcl's workload_raw is unwrap's twin.
+# table and root.hcl use. Since v8.0.0 an unwrapped file is refused
+# (LIB-0039 §4). root.hcl's workload_raw is unwrap's twin.
 # shape_problems names what a file can't say about its shape; services,
 # services_problems and service_dns are LIB-0039 §3's services, whose twin
 # is root.hcl's workload_cf_service_dns.
@@ -230,8 +230,7 @@ UNIT_JQ='
         (.cloudflare // {} | objects | select(has("dnsRecord")) | "\($w).cloudflare.dnsRecord moves to \($w).dnsRecords (LIB-0039 §2)"),
         (if $w == "workload" and has("services") then "services is a zone'"'"'s alone; declare a workload'"'"'s records in workload.dnsRecords (LIB-0039 §3)" else empty end)
       end)
-    else
-      (("services", "dnsRecords") as $k | select(has($k)) | "\($k) is read only in a wrapped file; move the file'"'"'s keys under \($w) (LIB-0039 §§1-3)")
+    else "everything goes under one key, \($w); move every key of the file under it (LIB-0039 §§1, 4)"
     end;
   def services_known: {proton: ["enabled", "verification", "dmarc"], fastmail: ["enabled", "dmarc"], googleSearch: ["enabled", "verification"], bluesky: ["enabled", "did"]};
   def services_problems:
@@ -292,12 +291,12 @@ UNIT_JQ='
     } else {} end);
 '
 
-# relabel <wrapped> reads messages and names a wrapped file's records by its
-# own key, dnsRecords, where the checks read them at cloudflare.dnsRecord. A
-# path that is already the wrapper's, zone.cloudflare.dnsRecord, is the file's
-# own and stays.
+# relabel reads messages and names a file's records by its own key,
+# dnsRecords, where the checks read them at cloudflare.dnsRecord. A path that
+# is already the wrapper's, zone.cloudflare.dnsRecord, is the file's own and
+# stays.
 relabel() {
-  if [ "$1" = true ]; then sed -E 's/(^|[^.])cloudflare\.dnsRecord([^s]|$)/\1dnsRecords\2/g'; else cat; fi
+  sed -E 's/(^|[^.])cloudflare\.dnsRecord([^s]|$)/\1dnsRecords\2/g'
 }
 
 # stub_content <module> <credentials> <state> <declared dependencies...>
@@ -570,7 +569,6 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
     fi
     # Its shape (LIB-0039 §1), then the file unwrapped.
     shape_msgs=$(jq -r "$UNIT_JQ"' shape_problems("zone")' <<<"$raw")
-    wrapped=$(jq -r 'type == "object" and has("zone")' <<<"$raw")
     raw=$(jq -c "$UNIT_JQ"' unwrap("zone")' <<<"$raw")
     # What a zone's file can't say, read before its defaults fill it in.
     zone_problems=$(jq -r --arg kebab "$KEBAB" "$UNIT_JQ"'
@@ -617,7 +615,7 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
       zone_problems="${zone_problems:+$zone_problems$'\n'}a zone has no secrets.yaml; delete $unit_dir/secrets.yaml (LIB-0036, Out of scope)"
     fi
     if [ -n "$zone_problems" ]; then
-      while IFS= read -r msg; do fail "$rel: $msg"; done < <(relabel "$wrapped" <<<"$zone_problems")
+      while IFS= read -r msg; do fail "$rel: $msg"; done < <(relabel <<<"$zone_problems")
       continue
     fi
     json=$(expand_zone "$raw" "$workload")
@@ -637,7 +635,6 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
     fi
     # Its shape (LIB-0039 §1), then the file unwrapped, and its zone's.
     shape_msgs=$(jq -r "$UNIT_JQ"' shape_problems("workload")' <<<"$raw")
-    wrapped=$(jq -r 'type == "object" and has("workload")' <<<"$raw")
     raw=$(jq -c "$UNIT_JQ"' unwrap("workload")' <<<"$raw")
     if [ "$parent" = private ]; then zf='{}'; else zf=$(yq -o=json '. // {}' "$SPOKE_DIR/zones/$parent/zone.yaml" 2>/dev/null | jq -c "$UNIT_JQ"' unwrap("zone") | objects') || zf='{}'; [ -n "$zf" ] || zf='{}'; fi
     host=$(jq -r --arg z "$parent" --arg w "$workload" '.[$z].hosts // {} | to_entries[] | select(.value == $w) | .key' <<<"$ZONES" | head -n1)
@@ -682,7 +679,7 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
     fi
     workload_problems="${shape_msgs:+$shape_msgs${workload_problems:+$'\n'}}$workload_problems"
     if [ -n "$workload_problems" ]; then
-      while IFS= read -r msg; do fail "$rel: $msg"; done < <(relabel "$wrapped" <<<"$workload_problems")
+      while IFS= read -r msg; do fail "$rel: $msg"; done < <(relabel <<<"$workload_problems")
       continue
     fi
     user=""
@@ -815,7 +812,7 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
     end
   ' <<<"$json")
   if [ -n "$structural" ]; then
-    while IFS= read -r msg; do fail "$rel: $msg"; done < <(relabel "$wrapped" <<<"$structural")
+    while IFS= read -r msg; do fail "$rel: $msg"; done < <(relabel <<<"$structural")
     continue
   fi
   printf '%s\n' "$json" >"$(unit_cache "$unit_dir")"
@@ -824,8 +821,7 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
   # which group them across every unit (LIB-0036 §3).
   # An apexRedirect's own placeholders (LIB-0038 §3) are marked, so only
   # someone else's record beside them is a clash.
-  if [ "$wrapped" = true ]; then dns_path=dnsRecords; else dns_path=cloudflare.dnsRecord; fi
-  jq -c --arg rel "$rel" --arg dp "$dns_path" '
+  jq -c --arg rel "$rel" --arg dp dnsRecords '
     (.cloudflare // {}) as $c | ($c.zone // "") as $dz |
     def zone_of: (.value | objects | .zone) // $dz;
     ([$c.apexRedirect // {} | objects | keys[] | "\(.)-apex", "\(.)-www"]) as $implied |
@@ -975,8 +971,7 @@ if [ "$CHECK" = true ]; then
     fi
     # Wrapped like its workload.yaml (LIB-0039 §1), with sops beside the
     # wrapper, since sops writes its metadata at the root.
-    swrapped=$(jq -r 'type == "object" and has("workload")' <<<"$sjson")
-    while IFS= read -r msg; do [ -n "$msg" ] && fail "$rel: $msg"; done < <(jq -r "$UNIT_JQ"' del(.sops?) | shape_problems("workload")' <<<"$sjson" | relabel "$swrapped")
+    while IFS= read -r msg; do [ -n "$msg" ] && fail "$rel: $msg"; done < <(jq -r "$UNIT_JQ"' del(.sops?) | shape_problems("workload")' <<<"$sjson" | relabel)
     sjson=$(jq -c "$UNIT_JQ"' (.sops?) as $m | unwrap("workload") | if type == "object" and $m != null then . + {sops: $m} else . end' <<<"$sjson")
     # A unit that failed above has no cache, and its failure already stands.
     [ -f "$(unit_cache "$unit_dir")" ] || continue
@@ -1019,7 +1014,7 @@ if [ "$CHECK" = true ]; then
       end
     ' <<<"$sjson")
     if [ -n "$problems" ]; then
-      while IFS= read -r msg; do fail "$rel: $msg"; done < <(relabel "$swrapped" <<<"$problems")
+      while IFS= read -r msg; do fail "$rel: $msg"; done < <(relabel <<<"$problems")
     fi
   done
 
