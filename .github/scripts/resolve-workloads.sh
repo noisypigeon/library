@@ -29,6 +29,11 @@
 # records only at its host, and its deployments.githubPages implies its
 # Pages CNAMEs (LIB-0037 §§3-4). The clash checks below run across every
 # unit, so a zone's file and its workloads' are checked together.
+# Since LIB-0039 a unit file may hold its content under one key, `zone` or
+# `workload`, with its records at `dnsRecords` directly under it; unwrap reads
+# either into the shape below, records at cloudflare.dnsRecord, and relabel
+# names them back in messages. A wrapped zone's `services` each imply their
+# provider's records (service_dns), beside apexRedirect's.
 # A zoned workload has no project of its own unless
 # deployments.scaleway.project names one, and its deployer and state bucket
 # then depend on the zone's project (LIB-0037 §2).
@@ -201,6 +206,100 @@ KEBAB='^[a-z0-9]+(-[a-z0-9]+)*$'
 errors=0
 fail() { echo "::error::$*" >&2; errors=$((errors + 1)); }
 
+# A unit file's shape (LIB-0039): its content under one key, `zone` or
+# `workload`, with `dnsRecords` directly under it. Each check below reads the
+# file unwrapped, with dnsRecords at cloudflare.dnsRecord, the path the kind
+# table and root.hcl use. An unwrapped file is read as before, until the
+# major that refuses it. root.hcl's workload_raw is unwrap's twin.
+# shape_problems names what a file can't say about its shape; services,
+# services_problems and service_dns are LIB-0039 §3's services, whose twin
+# is root.hcl's workload_cf_service_dns.
+# shellcheck disable=SC2016 # a jq program, expanded by jq
+UNIT_JQ='
+  def unwrap($w):
+    if type == "object" and has($w) then .[$w] |
+      if type == "object" and has("dnsRecords") then .dnsRecords as $d | del(.dnsRecords)
+        | .cloudflare = ((.cloudflare // {}) | if type == "object" then . + {dnsRecord: $d} else . end)
+      else . end
+    else . end;
+  def shape_problems($w):
+    if type != "object" then empty
+    elif has($w) then
+      ((keys - [$w])[] | "\(.) sits beside \($w); everything goes under \($w) (LIB-0039 §1)"),
+      (.[$w] | if type != "object" then "\($w) must be a mapping (LIB-0039 §1)" else
+        (.cloudflare // {} | objects | select(has("dnsRecord")) | "\($w).cloudflare.dnsRecord moves to \($w).dnsRecords (LIB-0039 §2)"),
+        (if $w == "workload" and has("services") then "services is a zone'"'"'s alone; declare a workload'"'"'s records in workload.dnsRecords (LIB-0039 §3)" else empty end)
+      end)
+    else
+      (("services", "dnsRecords") as $k | select(has($k)) | "\($k) is read only in a wrapped file; move the file'"'"'s keys under \($w) (LIB-0039 §§1-3)")
+    end;
+  def services_known: {proton: ["enabled", "verification", "dmarc"], fastmail: ["enabled", "dmarc"], googleSearch: ["enabled", "verification"], bluesky: ["enabled", "did"]};
+  def services_problems:
+    (.services // {}) as $s |
+    if ($s | type) != "object" then "services must be a mapping of service names (LIB-0039 §3)" else
+      ($s | to_entries[] | .key as $n | .value as $v |
+        if (services_known | has($n) | not) then "services.\($n) isn'"'"'t a service; known: \(services_known | keys_unsorted | join(", ")) (LIB-0039 §3)"
+        elif ($v | type) != "object" then "services.\($n) must be a mapping (LIB-0039 §3)"
+        else
+          services_known[$n] as $allowed |
+          ((($v | keys) - $allowed)[] | "services.\($n).\(.) isn'"'"'t one of \($allowed | join(", ")) (LIB-0039 §3)"),
+          (if ($v | has("enabled")) and (($v.enabled | type) != "boolean") then "services.\($n).enabled must be true or false (LIB-0039 §3)" else empty end),
+          (if ($v | has("dmarc")) and (($v.dmarc | type) != "boolean") and (($v.dmarc | type) != "string" or ($v.dmarc | startswith("v=DMARC1") | not)) then "services.\($n).dmarc must be true, false or a DMARC policy (LIB-0039 §3)" else empty end),
+          (if $v.enabled != true then empty
+           elif $n == "proton" then
+             (if ($v.verification | type) != "object" then "services.proton.verification must hold pm and protonmail (LIB-0039 §3)"
+              else
+                ((($v.verification | keys) - ["pm", "protonmail"])[] | "services.proton.verification.\(.) isn'"'"'t one of pm, protonmail (LIB-0039 §3)"),
+                (("pm", "protonmail") as $r | select(($v.verification[$r] | type) != "string" or $v.verification[$r] == "") | "services.proton.verification.\($r) must be a non-empty string (LIB-0039 §3)")
+              end)
+           elif $n == "googleSearch" then
+             (if ($v.verification | type) != "string" or $v.verification == "" then "services.googleSearch.verification must be a non-empty string (LIB-0039 §3)" else empty end)
+           elif $n == "bluesky" then
+             (if ($v.did | type) != "string" or $v.did == "" then "services.bluesky.did must be a non-empty string (LIB-0039 §3)" else empty end)
+           else empty end)
+        end),
+      (if ($s.proton | objects | .enabled) == true and ($s.fastmail | objects | .enabled) == true then "services.proton and services.fastmail are both enabled, and both claim MX and SPF at @; enable one (LIB-0039 §3)" else empty end)
+    end;
+  def service_on($s; $n): ($s | type) == "object" and ($s[$n] | type) == "object" and $s[$n].enabled == true;
+  def service_dmarc($s; $n):
+    (if ($s[$n] | has("dmarc")) then $s[$n].dmarc else true end) as $d |
+    if $d == false then null elif ($d | type) == "string" then $d else "v=DMARC1; p=quarantine; pct=100; adkim=s; aspf=s" end;
+  def service_dns($z):
+    (.services // {}) as $s |
+    (if service_on($s; "proton") then {
+      "proton-mx-primary": {name: "@", type: "MX", content: "mx1.alias.proton.me", priority: 10, ttl: 1, comment: "proton primary mx"},
+      "proton-mx-secondary": {name: "@", type: "MX", content: "mx2.alias.proton.me", priority: 20, ttl: 1, comment: "proton secondary mx"},
+      "proton-dkim-primary": {name: "dkim._domainkey", type: "CNAME", content: "dkim._domainkey.alias.proton.me", ttl: 1, proxied: false, comment: "proton primary dkim"},
+      "proton-dkim-secondary": {name: "dkim02._domainkey", type: "CNAME", content: "dkim02._domainkey.alias.proton.me", ttl: 1, proxied: false, comment: "proton secondary dkim"},
+      "proton-dkim-tertiary": {name: "dkim03._domainkey", type: "CNAME", content: "dkim03._domainkey.alias.proton.me", ttl: 1, proxied: false, comment: "proton tertiary dkim"},
+      "proton-spf": {name: "@", type: "TXT", content: "v=spf1 include:alias.proton.me ~all", ttl: 1, comment: "proton spf"},
+      "proton-pm-verification": {name: "@", type: "TXT", content: "pm-verification=\($s.proton.verification.pm)", ttl: 1, comment: "proton pm verification"},
+      "proton-protonmail-verification": {name: "@", type: "TXT", content: "protonmail-verification=\($s.proton.verification.protonmail)", ttl: 1, comment: "proton protonmail verification"}
+    } + (service_dmarc($s; "proton") | if . == null then {} else {"proton-dmarc": {name: "_dmarc", type: "TXT", content: ., ttl: 1, comment: "proton dmarc"}} end) else {} end)
+    + (if service_on($s; "fastmail") then {
+      "fastmail-mx-primary": {name: "@", type: "MX", content: "in1-smtp.messagingengine.com", priority: 10, ttl: 1, comment: "fastmail primary mx"},
+      "fastmail-mx-secondary": {name: "@", type: "MX", content: "in2-smtp.messagingengine.com", priority: 20, ttl: 1, comment: "fastmail secondary mx"},
+      "fastmail-dkim-fm1": {name: "fm1._domainkey", type: "CNAME", content: "fm1.\($z).dkim.fmhosted.com", ttl: 1, proxied: false, comment: "fastmail primary dkim"},
+      "fastmail-dkim-fm2": {name: "fm2._domainkey", type: "CNAME", content: "fm2.\($z).dkim.fmhosted.com", ttl: 1, proxied: false, comment: "fastmail secondary dkim"},
+      "fastmail-dkim-fm3": {name: "fm3._domainkey", type: "CNAME", content: "fm3.\($z).dkim.fmhosted.com", ttl: 1, proxied: false, comment: "fastmail tertiary dkim"},
+      "fastmail-spf": {name: "@", type: "TXT", content: "\"v=spf1 include:spf.messagingengine.com ?all\"", ttl: 1, comment: "fastmail spf"}
+    } + (service_dmarc($s; "fastmail") | if . == null then {} else {"fastmail-dmarc": {name: "_dmarc", type: "TXT", content: ., ttl: 1, comment: "fastmail dmarc"}} end) else {} end)
+    + (if service_on($s; "googleSearch") then {
+      "googlesearch-site-verification": {name: "@", type: "TXT", content: "\"google-site-verification=\($s.googleSearch.verification)\"", ttl: 1, comment: "google search site verification"}
+    } else {} end)
+    + (if service_on($s; "bluesky") then {
+      "bluesky-did": {name: "_atproto", type: "TXT", content: "did=\($s.bluesky.did)", ttl: 1, comment: "bluesky domain handle"}
+    } else {} end);
+'
+
+# relabel <wrapped> reads messages and names a wrapped file's records by its
+# own key, dnsRecords, where the checks read them at cloudflare.dnsRecord. A
+# path that is already the wrapper's, zone.cloudflare.dnsRecord, is the file's
+# own and stays.
+relabel() {
+  if [ "$1" = true ]; then sed -E 's/(^|[^.])cloudflare\.dnsRecord([^s]|$)/\1dnsRecords\2/g'; else cat; fi
+}
+
 # stub_content <module> <credentials> <state> <declared dependencies...>
 stub_content() {
   local module="$1" credentials="$2" state="$3"; shift 3
@@ -311,17 +410,18 @@ schema_properties() {
   cat "$cache"
 }
 
-# zone.yaml as JSON, read as a workload's file (LIB-0036 §§1-2): `name`
+# A zone's file, unwrapped, read as a workload's (LIB-0036 §§1-2): `name`
 # defaults to the zone, `prefix` to that name with every character a resource
 # name can't hold turned into a dash, and every zone kind acts on the zone.
-# Each apexRedirect <key> (LIB-0038 §3) implies dnsRecord <key>-apex and, with
+# Each enabled service implies its records (LIB-0039 §3), and each apexRedirect <key> (LIB-0038 §3) implies dnsRecord <key>-apex and, with
 # include_www, <key>-www, and ruleset <key>, with the strings
 # cloudflare/apex-redirect generated, each under any explicit entry of the
 # same key, field by field. An entry that isn't a mapping is passed through,
 # for the structural check to name. root.hcl's workload_values,
 # workload_cf_dns and workload_cf_rulesets are its twins.
+# expand_zone <unwrapped JSON> <zone>
 expand_zone() {
-  yq -o=json '.' "$1" | jq -c --arg z "$2" '
+  jq -c --arg z "$2" "$UNIT_JQ"'
     def merge_under($d): (. // {}) as $e |
       if ($e | type) != "object" then $e
       else $e + ($d | with_entries(.value += (($e[.key] // {}) | if type == "object" then . else {} end))) end;
@@ -329,6 +429,9 @@ expand_zone() {
       ((.name // $z) | tostring) as $n |
       (if has("prefix") then . else .prefix = ($n | gsub("[^a-z0-9-]"; "-")) end) |
       .cloudflare = ((.cloudflare // {}) | if type == "object" then . + {zone: $z} else . end) |
+      service_dns($z) as $sdns |
+      (if ($sdns | length) > 0 and (.cloudflare | type) == "object" then .cloudflare.dnsRecord = (.cloudflare.dnsRecord | merge_under($sdns)) else . end) |
+      del(.services) |
       ((.cloudflare.apexRedirect? // {}) | if type == "object" then with_entries(select(.value | type == "object" and (.target_url | type) == "string" and (.target_url | test("^[a-zA-Z][a-zA-Z0-9+.-]*://.")))) else {} end) as $r |
       if ($r | length) == 0 or (.cloudflare | type) != "object" then . else
         ($r | with_entries(.value |= (.target_url | capture("^[a-zA-Z][a-zA-Z0-9+.-]*://(?<h>.*)$").h | sub("/$"; "")))) as $host |
@@ -347,7 +450,7 @@ expand_zone() {
         .cloudflare.dnsRecord = (.cloudflare.dnsRecord | merge_under($dns)) |
         .cloudflare.ruleset = (.cloudflare.ruleset | merge_under($rs))
       end
-    end'
+    end' <<<"$1"
 }
 
 # workload.yaml as JSON, read as a values.yaml (LIB-0037 §§1-4): `prefix`
@@ -355,9 +458,9 @@ expand_zone() {
 # from the directory; a project entry only when the workload has its own; and
 # the Pages records its host implies, under any explicit entry of the same key.
 # root.hcl's workload_values is its twin.
-# expand_workload <file> <zone or private> <zone file JSON> <host> <username>
+# expand_workload <unwrapped JSON> <zone or private> <zone file JSON> <host> <username>
 expand_workload() {
-  yq -o=json '.' "$1" | jq -c --arg z "$2" --argjson zf "$3" --arg host "$4" --arg user "$5" '
+  jq -c --arg z "$2" --argjson zf "$3" --arg host "$4" --arg user "$5" '
     if type != "object" then . else
       ((.deployments.scaleway.project? // {}) | if type == "object" then . else {} end) as $p |
       ($z == "private" or ($p | has("name") or has("prefix") or has("suffix"))) as $own |
@@ -380,7 +483,7 @@ expand_workload() {
           else $e + ($d | with_entries(.value += (($e[.key] // {}) | if type == "object" then . else {} end))) end))
        else . end) |
       del(.name, .deployments)
-    end'
+    end' <<<"$1"
 }
 
 # The spoke repo's owner, githubPages' default username (LIB-0037 §4): CI's
@@ -414,7 +517,7 @@ LABEL='^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
 for zone_file in "$SPOKE_DIR"/zones/*/zone.yaml; do
   zone="$(basename "$(dirname "$zone_file")")"
   [[ "$zone" =~ $APEX ]] || continue
-  entry=$(yq -o=json '.' "$zone_file" 2>/dev/null | jq -c '
+  entry=$(yq -o=json '.' "$zone_file" 2>/dev/null | jq -c "$UNIT_JQ"' unwrap("zone") |
     if type != "object" then {hosts: {}} else
       {hosts: (if (.hosts | type) == "object" then (.hosts | with_entries(select(.value | type == "string"))) else {} end)}
     end') || entry='{"hosts":{}}'
@@ -465,10 +568,15 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
       fail "$rel: not valid YAML"
       continue
     fi
+    # Its shape (LIB-0039 §1), then the file unwrapped.
+    shape_msgs=$(jq -r "$UNIT_JQ"' shape_problems("zone")' <<<"$raw")
+    wrapped=$(jq -r 'type == "object" and has("zone")' <<<"$raw")
+    raw=$(jq -c "$UNIT_JQ"' unwrap("zone")' <<<"$raw")
     # What a zone's file can't say, read before its defaults fill it in.
-    zone_problems=$(jq -r --arg kebab "$KEBAB" '
+    zone_problems=$(jq -r --arg kebab "$KEBAB" "$UNIT_JQ"'
       if type != "object" then "the file must be a mapping"
       else
+        services_problems,
         (if has("name") and ((.name | type) != "string" or .name == "") then "name must be a non-empty string (LIB-0036 §1)" else empty end),
         (if has("prefix") and ((.prefix | type) != "string" or (.prefix | test("^[a-z0-9-]+$") | not)) then "prefix may hold only a-z, 0-9 and - (LIB-0036 §1)" else empty end),
         (if has("workload") then "workload is refused since workflows/v7.0.0; hosts names the workloads under workloads/<zone>/ (LIB-0037 §§3, 6)" else empty end),
@@ -504,14 +612,15 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
       [ -f "$SPOKE_DIR/workloads/$workload/$h/workload.yaml" ] || host_problems="${host_problems:+$host_problems$'\n'}a host names workload $h, which has no workloads/$workload/$h/workload.yaml (LIB-0037 §3)"
     done < <(jq -r --arg kebab "$KEBAB" 'objects | .hosts? // {} | objects | .[] | strings | select(test($kebab))' <<<"$raw" | sort -u)
     zone_problems="${zone_problems:+$zone_problems${host_problems:+$'\n'}}$host_problems"
+    zone_problems="${shape_msgs:+$shape_msgs${zone_problems:+$'\n'}}$zone_problems"
     if [ -e "$SPOKE_DIR/$unit_dir/secrets.yaml" ]; then
       zone_problems="${zone_problems:+$zone_problems$'\n'}a zone has no secrets.yaml; delete $unit_dir/secrets.yaml (LIB-0036, Out of scope)"
     fi
     if [ -n "$zone_problems" ]; then
-      while IFS= read -r msg; do fail "$rel: $msg"; done <<<"$zone_problems"
+      while IFS= read -r msg; do fail "$rel: $msg"; done < <(relabel "$wrapped" <<<"$zone_problems")
       continue
     fi
-    json=$(expand_zone "$SPOKE_DIR/$rel" "$workload")
+    json=$(expand_zone "$raw" "$workload")
   elif [ "$nested" = true ]; then
     unit=workload
     if [[ ! "$workload" =~ $KEBAB ]]; then
@@ -526,7 +635,11 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
       fail "$rel: not valid YAML"
       continue
     fi
-    if [ "$parent" = private ]; then zf='{}'; else zf=$(yq -o=json '. // {}' "$SPOKE_DIR/zones/$parent/zone.yaml" 2>/dev/null | jq -c 'objects') || zf='{}'; [ -n "$zf" ] || zf='{}'; fi
+    # Its shape (LIB-0039 §1), then the file unwrapped, and its zone's.
+    shape_msgs=$(jq -r "$UNIT_JQ"' shape_problems("workload")' <<<"$raw")
+    wrapped=$(jq -r 'type == "object" and has("workload")' <<<"$raw")
+    raw=$(jq -c "$UNIT_JQ"' unwrap("workload")' <<<"$raw")
+    if [ "$parent" = private ]; then zf='{}'; else zf=$(yq -o=json '. // {}' "$SPOKE_DIR/zones/$parent/zone.yaml" 2>/dev/null | jq -c "$UNIT_JQ"' unwrap("zone") | objects') || zf='{}'; [ -n "$zf" ] || zf='{}'; fi
     host=$(jq -r --arg z "$parent" --arg w "$workload" '.[$z].hosts // {} | to_entries[] | select(.value == $w) | .key' <<<"$ZONES" | head -n1)
     # What a workload.yaml can't say, read before its defaults fill it in.
     workload_problems=$(jq -r --arg kebab "$KEBAB" --arg z "$parent" --arg host "$host" '
@@ -535,7 +648,7 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
       else
         (if has("features") then "features is refused since workflows/v7.0.0; githubPages moves to deployments.githubPages (LIB-0037 §§4, 6)" else empty end),
         ((["prefix", "suffix"] - (keys - ["prefix", "suffix"]))[] as $k | select(has($k)) | "\($k) moves to deployments.scaleway.project.\($k) (LIB-0037 §2)"),
-        ((keys - ["name", "deployments", "scaleway", "backblaze", "cloudflare", "features", "prefix", "suffix"])[] | "unknown key \(.); known: name, deployments, scaleway, backblaze, cloudflare"),
+        ((keys - ["name", "deployments", "scaleway", "backblaze", "cloudflare", "features", "prefix", "suffix", "services"])[] | "unknown key \(.); known: name, deployments, scaleway, backblaze, cloudflare"),
         (if has("name") and ((.name | type) != "string" or (.name | test($kebab) | not)) then "name must be kebab-case (LIB-0037 §1)"
          elif .name == "zone" then "name can'"'"'t be zone, which a zone'"'"'s own resources carry (LIB-0036 §2, LIB-0037 §1)" else empty end),
         (.scaleway // {} | objects | select(has("project")) | "scaleway.project moves to deployments.scaleway.project (LIB-0037 §2)"),
@@ -567,8 +680,9 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
     if [ -e "$SPOKE_DIR/$unit_dir/secrets.yaml" ]; then
       workload_problems="${workload_problems:+$workload_problems$'\n'}secrets.yaml is refused; rename it secrets.workload.yaml (LIB-0037 §§1, 6)"
     fi
+    workload_problems="${shape_msgs:+$shape_msgs${workload_problems:+$'\n'}}$workload_problems"
     if [ -n "$workload_problems" ]; then
-      while IFS= read -r msg; do fail "$rel: $msg"; done <<<"$workload_problems"
+      while IFS= read -r msg; do fail "$rel: $msg"; done < <(relabel "$wrapped" <<<"$workload_problems")
       continue
     fi
     user=""
@@ -584,7 +698,7 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
       ZONE_PROJECT="$parent"
     fi
     name=$(jq -r --arg w "$workload" '.name // $w' <<<"$raw")
-    json=$(expand_workload "$SPOKE_DIR/$rel" "$parent" "$zf" "$host" "$user")
+    json=$(expand_workload "$raw" "$parent" "$zf" "$host" "$user")
   fi
   # A nested workload's names carry its name (LIB-0037 §2).
   if [ "$nested" = true ]; then tag="-$name"; else tag=""; fi
@@ -701,7 +815,7 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
     end
   ' <<<"$json")
   if [ -n "$structural" ]; then
-    while IFS= read -r msg; do fail "$rel: $msg"; done <<<"$structural"
+    while IFS= read -r msg; do fail "$rel: $msg"; done < <(relabel "$wrapped" <<<"$structural")
     continue
   fi
   printf '%s\n' "$json" >"$(unit_cache "$unit_dir")"
@@ -710,14 +824,15 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
   # which group them across every unit (LIB-0036 §3).
   # An apexRedirect's own placeholders (LIB-0038 §3) are marked, so only
   # someone else's record beside them is a clash.
-  jq -c --arg rel "$rel" '
+  if [ "$wrapped" = true ]; then dns_path=dnsRecords; else dns_path=cloudflare.dnsRecord; fi
+  jq -c --arg rel "$rel" --arg dp "$dns_path" '
     (.cloudflare // {}) as $c | ($c.zone // "") as $dz |
     def zone_of: (.value | objects | .zone) // $dz;
     ([$c.apexRedirect // {} | objects | keys[] | "\(.)-apex", "\(.)-www"]) as $implied |
     {
       rs: [$c.ruleset // {} | to_entries[] | {k: "\($rel) cloudflare.ruleset.\(.key)", z: zone_of, p: (.value | objects | .phase)}],
       ar: [$c.apexRedirect // {} | to_entries[] | {k: "\($rel) cloudflare.apexRedirect.\(.key)", z: zone_of, www: ((.value | objects | .include_www) // true)}],
-      dr: [$c.dnsRecord // {} | to_entries[] | {k: "\($rel) cloudflare.dnsRecord.\(.key)", z: zone_of, n: ((.value | objects | .name) // .key), t: ((.value | objects | .type) // "" | tostring | ascii_upcase), c: (.value | objects | .content), own: (.key as $k | $implied | index($k) != null)}]
+      dr: [$c.dnsRecord // {} | to_entries[] | {k: "\($rel) \($dp).\(.key)", z: zone_of, n: ((.value | objects | .name) // .key), t: ((.value | objects | .type) // "" | tostring | ascii_upcase), c: (.value | objects | .content), own: (.key as $k | $implied | index($k) != null)}]
     }' <<<"$json" >>"$EXPECTED_DIR/.cache/clash.jsonl"
 
   for kind in "${KINDS[@]}"; do
@@ -795,6 +910,11 @@ clashes=$(jq -rs '
   ($rs | group_by([.z, .p])[] | select(length > 1) | "\(map(.k) | join(", ")) share zone \(.[0].z) and phase \(.[0].p); a zone has one entrypoint per phase (LIB-0030 §6)"),
   ($dr | group_by([.z, .n, .t])[] | select(length > 1) | select(([.[0].t] | inside(["MX", "TXT", "CAA", "SRV", "NS"]) | not) or ((map(.c) | unique | length) < length))
     | "\(map(.k) | join(", ")) are one record, \(.[0].n) \(.[0].t) in \(.[0].z) (LIB-0030 §6)"),
+  # A name holds one SPF and one DMARC policy, so a service'"'"'s record and a
+  # hand-written one can'"'"'t both set it (LIB-0039 §3).
+  (("v=spf1", "v=DMARC1") as $p | $dr | map(select(.t == "TXT" and ((.c // "") | tostring | ltrimstr("\"") | startswith($p))))
+    | group_by([.z, .n])[] | select(length > 1)
+    | "\(map(.k) | join(", ")) are each a \($p) policy at \(.[0].n) in \(.[0].z), which holds one (LIB-0039 §3)"),
   # An apexRedirect holds a placeholder A at @, which an A, AAAA or CNAME
   # there would clash with, and a CNAME at www, which nothing may share.
   (($dr[] | select(.own | not)) as $d | $ar[] | select(.z == $d.z and (($d.n == "@" and ([$d.t] | inside(["A", "AAAA", "CNAME"]))) or ($d.n == "www" and .www)))
@@ -853,6 +973,11 @@ if [ "$CHECK" = true ]; then
       fail "$rel: not valid YAML"
       continue
     fi
+    # Wrapped like its workload.yaml (LIB-0039 §1), with sops beside the
+    # wrapper, since sops writes its metadata at the root.
+    swrapped=$(jq -r 'type == "object" and has("workload")' <<<"$sjson")
+    while IFS= read -r msg; do [ -n "$msg" ] && fail "$rel: $msg"; done < <(jq -r "$UNIT_JQ"' del(.sops?) | shape_problems("workload")' <<<"$sjson" | relabel "$swrapped")
+    sjson=$(jq -c "$UNIT_JQ"' (.sops?) as $m | unwrap("workload") | if type == "object" and $m != null then . + {sops: $m} else . end' <<<"$sjson")
     # A unit that failed above has no cache, and its failure already stands.
     [ -f "$(unit_cache "$unit_dir")" ] || continue
     vjson=$(cat "$(unit_cache "$unit_dir")")
@@ -885,7 +1010,7 @@ if [ "$CHECK" = true ]; then
           if $k.key == "deployer" then
             ($k.value // {} | objects | select(has("account_id")) | "cloudflare.deployer cannot set account_id (LIB-0033 §4)")
           elif ($k.key | IN("bucket", "dnsRecord", "ruleset")) then
-            ($k.value // {} | keys[] as $i | select($v.cloudflare[$k.key] // {} | has($i) | not) | "cloudflare.\($k.key).\($i): values.yaml declares no such entry"),
+            ($k.value // {} | keys[] as $i | select($v.cloudflare[$k.key] // {} | has($i) | not) | "cloudflare.\($k.key).\($i): workload.yaml declares no such entry"),
             ($k.value // {} | to_entries[] | select(.value | objects | has("account_id") or has("zone_id")) | "cloudflare.\($k.key).\(.key) cannot set account_id or zone_id (LIB-0030 §§4-5)")
           else "unknown key cloudflare.\($k.key)" end),
         ([.scaleway.project, (.scaleway.deployer // {} | objects | .application, .policy, .apiKey), .scaleway.state, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?), (.backblaze.bucket // {} | .[]?), (.backblaze.apiKey // {} | .[]?), (.cloudflare // {} | (.bucket, .dnsRecord, .ruleset) // {} | .[]?)]
@@ -894,7 +1019,7 @@ if [ "$CHECK" = true ]; then
       end
     ' <<<"$sjson")
     if [ -n "$problems" ]; then
-      while IFS= read -r msg; do fail "$rel: $msg"; done <<<"$problems"
+      while IFS= read -r msg; do fail "$rel: $msg"; done < <(relabel "$swrapped" <<<"$problems")
     fi
   done
 
@@ -911,8 +1036,8 @@ if [ "$CHECK" = true ]; then
     sentry='{}'
     env_names='[]'
     if [ -f "$secrets" ]; then
-      sentry=$(yq -o=json '.' "$secrets" | jq -c "$jq_path // {}")
-      env_names=$(yq -o=json '.' "$secrets" | jq -c '.env // {} | keys')
+      sentry=$(yq -o=json '.' "$secrets" | jq -c "$UNIT_JQ"' unwrap("workload") | '"$jq_path // {}")
+      env_names=$(yq -o=json '.' "$secrets" | jq -c "$UNIT_JQ"' unwrap("workload") | .env // {} | keys')
     fi
     both=$(jq -r --argjson s "$sentry" 'del(.version) | keys - (keys - ($s | keys)) | join(", ")' <<<"$entry")
     if [ -n "$both" ]; then

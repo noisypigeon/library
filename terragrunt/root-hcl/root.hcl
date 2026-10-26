@@ -124,6 +124,11 @@
 # The old layout of LIB-0037 §6 is refused: a workloads/<w>/values.yaml, a
 # leaf at its depth, a workload's secrets.yaml, zone.yaml's `workload`,
 # `features` and a workload's cloudflare.zone.
+#
+# Since v7.1.0 (LIB-0039) a unit file's content may sit under one key, `zone`
+# or `workload`, with its records at `dnsRecords` directly under it, in place
+# of cloudflare.dnsRecord. A wrapped zone.yaml may name `services`, each of
+# which implies its provider's records. An unwrapped file is read as before.
 
 locals {
   # The spoke's instance values. Missing spoke.hcl is a hard error, which is
@@ -415,7 +420,7 @@ locals {
   zones = {
     for f in(local.is_workload_leaf ? fileset(get_parent_terragrunt_dir(), "zones/*/zone.yaml") : []) :
     split("/", f)[1] => {
-      hosts = try({ for h, w in yamldecode(file("${get_parent_terragrunt_dir()}/${f}")).hosts : h => tostring(w) }, {})
+      hosts = try({ for h, w in try(yamldecode(file("${get_parent_terragrunt_dir()}/${f}")).zone.hosts, yamldecode(file("${get_parent_terragrunt_dir()}/${f}")).hosts) : h => tostring(w) }, {})
     }
   }
   # An old-layout workload (LIB-0037 §6), looked for only to be refused.
@@ -430,7 +435,19 @@ locals {
   workload_instance = try(local.path_segments[4 + local.unit_offset], "")
   unit_dir          = local.is_nested_workload ? "workloads/${local.workload_parent}/${local.workload}" : "zones/${local.workload}"
   workload_file     = local.is_nested_workload ? "${local.unit_dir}/workload.yaml" : "zones/${local.workload}/zone.yaml"
-  workload_raw      = try(yamldecode(file(mark_as_read("${get_parent_terragrunt_dir()}/${local.workload_file}"))), null)
+  workload_doc      = try(yamldecode(file(mark_as_read("${get_parent_terragrunt_dir()}/${local.workload_file}"))), null)
+  # A unit file's content may sit under one key, `zone` or `workload`, with
+  # its records at dnsRecords (LIB-0039 §§1-2). Everything below reads it
+  # unwrapped, with dnsRecords at cloudflare.dnsRecord, the kind table's path.
+  # resolve-workloads.sh's unwrap is its twin.
+  workload_wrapper = local.is_nested_workload ? "workload" : "zone"
+  workload_wrapped = can(local.workload_doc[local.workload_wrapper])
+  workload_in      = try(local.workload_doc[local.workload_wrapper], local.workload_doc)
+  workload_raw = try(merge(
+    { for k, v in local.workload_in : k => v if k != "dnsRecords" },
+    { for k, v in { cloudflare = merge({}, try(local.workload_in.cloudflare, null), { dnsRecord = try(local.workload_in.dnsRecords, null) }) } : k => v if can(local.workload_in.dnsRecords) },
+  ), null)
+  workload_dns_path = local.workload_wrapped ? "dnsRecords" : "cloudflare.dnsRecord"
   # A zone's file, read as a workload's (LIB-0036 §§1-2): its name defaults to
   # its directory, its prefix to that name with every character a resource
   # name can't hold turned into a dash, and every zone kind acts on the
@@ -441,7 +458,8 @@ locals {
   # §§1-2): `prefix` and `suffix` from deployments.scaleway.project, else
   # its zone's; its zone from the directory; and a project entry only when
   # it has its own project. resolve-workloads.sh's expand_workload is its twin.
-  workload_zone_raw     = local.is_nested_workload && !local.is_private_workload ? try(yamldecode(file("${get_parent_terragrunt_dir()}/zones/${local.workload_parent}/zone.yaml")), null) : null
+  workload_zone_doc     = local.is_nested_workload && !local.is_private_workload ? try(yamldecode(file("${get_parent_terragrunt_dir()}/zones/${local.workload_parent}/zone.yaml")), null) : null
+  workload_zone_raw     = try(local.workload_zone_doc.zone, local.workload_zone_doc)
   workload_zone_prefix  = try(tostring(local.workload_zone_raw.prefix), replace(try(tostring(local.workload_zone_raw.name), local.workload_parent), "/[^a-z0-9-]/", "-"))
   workload_project      = merge({}, try(local.workload_raw.deployments.scaleway.project, null))
   workload_own_project  = local.is_nested_workload && (local.is_private_workload || length(setintersection(keys(local.workload_project), ["name", "prefix", "suffix"])) > 0)
@@ -469,11 +487,17 @@ locals {
   # hand-written leaf or a workload without one. A file that won't decrypt
   # fails the run.
   workload_secrets_file = local.is_nested_workload ? "${local.unit_dir}/secrets.workload.yaml" : "${local.unit_root}/${local.workload}/secrets.yaml"
-  workload_secrets = merge({}, [
+  workload_secrets_doc = merge({}, [
     for f in ["${get_parent_terragrunt_dir()}/${local.workload_secrets_file}"] :
     jsondecode(run_cmd("--terragrunt-quiet", "sops", "--decrypt", "--output-type", "json", mark_as_read(f)))
     if local.is_workload_leaf && !local.is_zone_unit && fileexists(f)
   ]...)
+  # Wrapped as its workload.yaml is (LIB-0039 §1).
+  workload_secrets_in = try(merge({}, local.workload_secrets_doc.workload), local.workload_secrets_doc)
+  workload_secrets = merge(
+    { for k, v in local.workload_secrets_in : k => v if k != "dnsRecords" },
+    { for k, v in { cloudflare = merge({}, try(local.workload_secrets_in.cloudflare, null), { dnsRecord = try(local.workload_secrets_in.dnsRecords, null) }) } : k => v if can(local.workload_secrets_in.dnsRecords) },
+  )
   workload_secrets_scaleway = try(local.workload_secrets.scaleway, null)
   workload_env              = { for k, v in try(local.workload_secrets.env, {}) : k => tostring(v) }
 
@@ -574,7 +598,60 @@ locals {
       }]
     }
   }
-  workload_cf_implied = merge(local.workload_pages_dns, local.workload_cf_redirect_dns)
+  zone_services_all = try({ for n, v in local.workload_raw.services : n => v if local.is_zone_unit }, {})
+  # A zone's services (LIB-0039 §3): each enabled one implies its provider's
+  # records, under any explicit entry of the same key, as the Pages records
+  # are. resolve-workloads.sh's service_dns is its twin.
+  workload_services = { for n, v in local.zone_services_all : n => v if try(v.enabled, false) == true }
+  workload_service_dmarc = { for n, v in local.workload_services : n => (
+    !can(v.dmarc) || try(v.dmarc == true, false) ? "v=DMARC1; p=quarantine; pct=100; adkim=s; aspf=s" :
+    try(v.dmarc == false, false) ? "" : try(startswith(v.dmarc, "v=DMARC1") ? tostring(v.dmarc) : null, null)
+  ) }
+  workload_cf_service_dns = merge(
+    {
+      for k, v in {
+        "proton-mx-primary"              = { name = "@", type = "MX", content = "mx1.alias.proton.me", priority = 10, ttl = 1, comment = "proton primary mx" }
+        "proton-mx-secondary"            = { name = "@", type = "MX", content = "mx2.alias.proton.me", priority = 20, ttl = 1, comment = "proton secondary mx" }
+        "proton-dkim-primary"            = { name = "dkim._domainkey", type = "CNAME", content = "dkim._domainkey.alias.proton.me", ttl = 1, proxied = false, comment = "proton primary dkim" }
+        "proton-dkim-secondary"          = { name = "dkim02._domainkey", type = "CNAME", content = "dkim02._domainkey.alias.proton.me", ttl = 1, proxied = false, comment = "proton secondary dkim" }
+        "proton-dkim-tertiary"           = { name = "dkim03._domainkey", type = "CNAME", content = "dkim03._domainkey.alias.proton.me", ttl = 1, proxied = false, comment = "proton tertiary dkim" }
+        "proton-spf"                     = { name = "@", type = "TXT", content = "v=spf1 include:alias.proton.me ~all", ttl = 1, comment = "proton spf" }
+        "proton-pm-verification"         = { name = "@", type = "TXT", content = "pm-verification=${try(tostring(local.workload_services.proton.verification.pm), "")}", ttl = 1, comment = "proton pm verification" }
+        "proton-protonmail-verification" = { name = "@", type = "TXT", content = "protonmail-verification=${try(tostring(local.workload_services.proton.verification.protonmail), "")}", ttl = 1, comment = "proton protonmail verification" }
+      } : k => v if contains(keys(local.workload_services), "proton")
+    },
+    {
+      for k, v in {
+        "proton-dmarc" = { name = "_dmarc", type = "TXT", content = try(local.workload_service_dmarc.proton, ""), ttl = 1, comment = "proton dmarc" }
+      } : k => v if try(local.workload_service_dmarc.proton, "") != ""
+    },
+    {
+      for k, v in {
+        "fastmail-mx-primary"   = { name = "@", type = "MX", content = "in1-smtp.messagingengine.com", priority = 10, ttl = 1, comment = "fastmail primary mx" }
+        "fastmail-mx-secondary" = { name = "@", type = "MX", content = "in2-smtp.messagingengine.com", priority = 20, ttl = 1, comment = "fastmail secondary mx" }
+        "fastmail-dkim-fm1"     = { name = "fm1._domainkey", type = "CNAME", content = "fm1.${local.workload}.dkim.fmhosted.com", ttl = 1, proxied = false, comment = "fastmail primary dkim" }
+        "fastmail-dkim-fm2"     = { name = "fm2._domainkey", type = "CNAME", content = "fm2.${local.workload}.dkim.fmhosted.com", ttl = 1, proxied = false, comment = "fastmail secondary dkim" }
+        "fastmail-dkim-fm3"     = { name = "fm3._domainkey", type = "CNAME", content = "fm3.${local.workload}.dkim.fmhosted.com", ttl = 1, proxied = false, comment = "fastmail tertiary dkim" }
+        "fastmail-spf"          = { name = "@", type = "TXT", content = "\"v=spf1 include:spf.messagingengine.com ?all\"", ttl = 1, comment = "fastmail spf" }
+      } : k => v if contains(keys(local.workload_services), "fastmail")
+    },
+    {
+      for k, v in {
+        "fastmail-dmarc" = { name = "_dmarc", type = "TXT", content = try(local.workload_service_dmarc.fastmail, ""), ttl = 1, comment = "fastmail dmarc" }
+      } : k => v if try(local.workload_service_dmarc.fastmail, "") != ""
+    },
+    {
+      for k, v in {
+        "googlesearch-site-verification" = { name = "@", type = "TXT", content = "\"google-site-verification=${try(tostring(local.workload_services.googleSearch.verification), "")}\"", ttl = 1, comment = "google search site verification" }
+      } : k => v if contains(keys(local.workload_services), "googleSearch")
+    },
+    {
+      for k, v in {
+        "bluesky-did" = { name = "_atproto", type = "TXT", content = "did=${try(tostring(local.workload_services.bluesky.did), "")}", ttl = 1, comment = "bluesky domain handle" }
+      } : k => v if contains(keys(local.workload_services), "bluesky")
+    },
+  )
+  workload_cf_implied = merge(local.workload_pages_dns, local.workload_cf_redirect_dns, local.workload_cf_service_dns)
   workload_cf_dns = merge(local.workload_cf_implied, {
     for k, v in merge({}, try(local.workload_cloudflare.dnsRecord, null)) :
     k => merge(lookup(local.workload_cf_implied, k, {}), merge({}, v))
@@ -597,7 +674,10 @@ locals {
   workload_cf_declared  = contains(try(keys(local.workload_cf_maps[local.workload_module]), []), local.workload_instance)
   workload_cf_secrets   = try(local.workload_secrets.cloudflare[local.workload_cf_yaml[local.workload_module]][local.workload_instance], null)
   workload_cf_zone_kind = contains(["cloudflare/dns-record", "cloudflare/ruleset"], local.workload_module)
-  workload_cf_zone_set  = { for k, v in { zone = local.workload_cf_zone } : k => v if v != "" }
+  # An entry's path in its file, for messages: a wrapped file's records are
+  # at dnsRecords (LIB-0039 §2).
+  workload_cf_path     = local.workload_module == "cloudflare/dns-record" ? local.workload_dns_path : "cloudflare.${try(local.workload_cf_yaml[local.workload_module], "")}"
+  workload_cf_zone_set = { for k, v in { zone = local.workload_cf_zone } : k => v if v != "" }
   # The zone a zone kind acts on: its own, or the workload's default.
   workload_zone = try(tostring(local.workload_cf_entry.zone), local.workload_cf_zone)
   # The workload's own Cloudflare token (LIB-0033 §4): it exists when a
@@ -900,8 +980,8 @@ locals {
   guard_workload_b2_known = local.is_workload_leaf && local.workload_module == "backblaze/api-key" && length(setsubtract(try(tolist(local.workload_b2_key_entry.buckets), []), try(keys(local.workload_b2_buckets), []))) > 0 ? file("${local.workload_file}: backblaze.apiKey.${local.workload_instance}.buckets names a bucket this workload's backblaze.bucket doesn't have (LIB-0029 §3)") : true
   guard_workload_b2_ids   = local.is_workload_leaf && local.workload_module == "backblaze/api-key" && (can(local.workload_b2_key_entry.bucket_ids) || can(local.workload_secrets.backblaze.apiKey[local.workload_instance].bucket_ids)) ? file("${local.workload_file}: backblaze.apiKey.${local.workload_instance}.bucket_ids can't be set; list the buckets in buckets instead (LIB-0029 §3)") : true
   guard_workload_cf_on    = local.is_workload_leaf && local.leaf_provider == "cloudflare" && !contains(keys(local.providers), "cloudflare") ? file("${path_relative_to_include()} is a Cloudflare workload leaf, but spoke.hcl's providers map has no cloudflare (LIB-0030 §1)") : true
-  guard_workload_cf_spoke = local.is_workload_leaf && local.leaf_provider == "cloudflare" && (can(local.workload_cf_entry.account_id) || can(local.workload_cf_entry.zone_id) || can(local.workload_cf_secrets.account_id) || can(local.workload_cf_secrets.zone_id)) ? file("${local.workload_file}: cloudflare.${try(local.workload_cf_yaml[local.workload_module], "")}.${local.workload_instance} can't set account_id or zone_id; the account is the spoke's, and a zone is named (LIB-0030 §§4-5)") : true
-  guard_workload_cf_zone  = local.is_workload_leaf && local.workload_cf_zone_kind && local.workload_zone == "" ? file("${local.workload_file}: cloudflare.${try(local.workload_cf_yaml[local.workload_module], "")}.${local.workload_instance} has no zone, and the workload sets no cloudflare.zone (LIB-0030 §3)") : true
+  guard_workload_cf_spoke = local.is_workload_leaf && local.leaf_provider == "cloudflare" && (can(local.workload_cf_entry.account_id) || can(local.workload_cf_entry.zone_id) || can(local.workload_cf_secrets.account_id) || can(local.workload_cf_secrets.zone_id)) ? file("${local.workload_file}: ${local.workload_cf_path}.${local.workload_instance} can't set account_id or zone_id; the account is the spoke's, and a zone is named (LIB-0030 §§4-5)") : true
+  guard_workload_cf_zone  = local.is_workload_leaf && local.workload_cf_zone_kind && local.workload_zone == "" ? file("${local.workload_file}: ${local.workload_cf_path}.${local.workload_instance} has no zone, and the workload sets no cloudflare.zone (LIB-0030 §3)") : true
   # Nested workloads (LIB-0037 §§1-4): what a workload.yaml can't say, read
   # before its defaults fill it in, then what its host allows.
   workload_record_name = try(tostring(local.workload_cf_entry.name), local.workload_instance)
@@ -916,11 +996,11 @@ locals {
     local.workload_pages_on && local.is_private_workload ? "deployments.githubPages needs a host, which a private workload never has (LIB-0037 §§1, 4)" : "",
     local.workload_pages_on && !local.is_private_workload && local.workload_host == "" ? "deployments.githubPages needs a host; give this workload one in zones/${local.workload_parent}/zone.yaml (LIB-0037 §4)" : "",
     local.workload_pages_on && local.workload_host != "" && local.workload_pages_user == "" ? "deployments.githubPages.username defaults to the spoke repo's owner, but neither GITHUB_REPOSITORY_OWNER nor origin's URL gives one (LIB-0037 §4)" : "",
-    local.workload_cf_zone_kind && local.workload_host == "" && !local.is_private_workload ? "cloudflare.${try(local.workload_cf_yaml[local.workload_module], "")}.${local.workload_instance}: this workload has no host in zones/${local.workload_parent}/zone.yaml, so it can't write records (LIB-0037 §3)" : "",
+    local.workload_cf_zone_kind && local.workload_host == "" && !local.is_private_workload ? "${local.workload_cf_path}.${local.workload_instance}: this workload has no host in zones/${local.workload_parent}/zone.yaml, so it can't write records (LIB-0037 §3)" : "",
     local.workload_cf_zone_kind && local.workload_host != "" && !(
       local.workload_host == "@" ? (contains(["@", "www"], local.workload_record_name) || can(regex("^_[^.]+(\\.www)?$", local.workload_record_name))) :
       (local.workload_record_name == local.workload_host || endswith(local.workload_record_name, ".${local.workload_host}"))
-    ) ? "cloudflare.${try(local.workload_cf_yaml[local.workload_module], "")}.${local.workload_instance}: ${local.workload_record_name} is outside this workload's host, ${local.workload_host}, in zones/${local.workload_parent}/zone.yaml (LIB-0037 §3)" : "",
+    ) ? "${local.workload_cf_path}.${local.workload_instance}: ${local.workload_record_name} is outside this workload's host, ${local.workload_host}, in zones/${local.workload_parent}/zone.yaml (LIB-0037 §3)" : "",
   ]) : []
   guard_workload_nested = length(local.workload_nested_problems) > 0 ? file("${local.workload_file}: ${join("; ", local.workload_nested_problems)}") : true
 
@@ -939,6 +1019,28 @@ locals {
     local.workload_cf_redirect_host[k] == "" ? ["cloudflare.apexRedirect.${k}.target_url must be an absolute http:// or https:// URL (LIB-0038 §3)"] : [],
   )])
   guard_zone_redirect = length(local.zone_redirect_problems) > 0 ? file("${local.workload_file}: ${join("; ", local.zone_redirect_problems)}") : true
+  # A unit file's shape (LIB-0039 §§1-2): its wrapper alone at the top, its
+  # records at dnsRecords, and services and dnsRecords only in a wrapped file.
+  workload_shape_problems = local.is_workload_leaf ? compact(concat(
+    [for k in try(keys(local.workload_doc), []) : "${k} sits beside ${local.workload_wrapper}; everything goes under ${local.workload_wrapper} (LIB-0039 §1)" if local.workload_wrapped && k != local.workload_wrapper],
+    [local.workload_wrapped && can(local.workload_in.cloudflare.dnsRecord) ? "${local.workload_wrapper}.cloudflare.dnsRecord moves to ${local.workload_wrapper}.dnsRecords (LIB-0039 §2)" : ""],
+    [local.workload_wrapped && local.is_nested_workload && can(local.workload_in.services) ? "services is a zone's alone; declare a workload's records in workload.dnsRecords (LIB-0039 §3)" : ""],
+    [!local.workload_wrapped && (can(local.workload_doc.services) || can(local.workload_doc.dnsRecords)) ? "services and dnsRecords are read only in a wrapped file; move the file's keys under ${local.workload_wrapper} (LIB-0039 §§1-3)" : ""],
+  )) : []
+  guard_workload_shape = length(local.workload_shape_problems) > 0 ? file("${local.workload_file}: ${join("; ", local.workload_shape_problems)}") : true
+  # A zone's services (LIB-0039 §3): the four, each with its own keys, an
+  # enabled one with its inputs, and one mail provider.
+  zone_service_known = { proton = ["enabled", "verification", "dmarc"], fastmail = ["enabled", "dmarc"], googleSearch = ["enabled", "verification"], bluesky = ["enabled", "did"] }
+  zone_service_problems = flatten([
+    [for n, v in local.zone_services_all : "services.${n} isn't a service; known: proton, fastmail, googleSearch, bluesky (LIB-0039 §3)" if !contains(keys(local.zone_service_known), n)],
+    [for n, v in local.zone_services_all : [for x in sort(setsubtract(try(keys(v), []), local.zone_service_known[n])) : "services.${n}.${x} isn't one of ${join(", ", local.zone_service_known[n])} (LIB-0039 §3)"] if contains(keys(local.zone_service_known), n)],
+    contains(keys(local.workload_services), "proton") && (try(tostring(local.workload_services.proton.verification.pm), "") == "" || try(tostring(local.workload_services.proton.verification.protonmail), "") == "") ? ["services.proton.verification needs pm and protonmail (LIB-0039 §3)"] : [],
+    contains(keys(local.workload_services), "googleSearch") && try(tostring(local.workload_services.googleSearch.verification), "") == "" ? ["services.googleSearch.verification must be a non-empty string (LIB-0039 §3)"] : [],
+    contains(keys(local.workload_services), "bluesky") && try(tostring(local.workload_services.bluesky.did), "") == "" ? ["services.bluesky.did must be a non-empty string (LIB-0039 §3)"] : [],
+    contains(keys(local.workload_services), "proton") && contains(keys(local.workload_services), "fastmail") ? ["services.proton and services.fastmail are both enabled, and both claim MX and SPF at @; enable one (LIB-0039 §3)"] : [],
+    [for n, d in local.workload_service_dmarc : "services.${n}.dmarc must be true, false or a DMARC policy (LIB-0039 §3)" if d == null],
+  ])
+  guard_zone_services = length(local.zone_service_problems) > 0 ? file("${local.workload_file}: ${join("; ", local.zone_service_problems)}") : true
   # A zone's hosts (LIB-0037 §3): each names a workload in workloads/<zone>/,
   # and a host's names are its workload's, not the zone's.
   zone_hosts        = local.is_zone_unit ? try(local.zones[local.workload].hosts, {}) : {}
@@ -948,7 +1050,7 @@ locals {
   guard_zone_host_record = local.is_zone_unit && local.workload_module == "cloudflare/dns-record" && (
     anytrue([for h, w in local.zone_hosts : h != "@" && (local.workload_record_name == h || endswith(local.workload_record_name, ".${h}"))]) ||
     (contains(keys(local.zone_hosts), "@") && (local.workload_record_name == "www" || endswith(local.workload_record_name, ".www") || (local.workload_record_name == "@" && contains(["A", "AAAA", "CNAME"], local.zone_record_type))))
-  ) ? file("${local.workload_file}: cloudflare.dnsRecord.${local.workload_instance}: ${local.workload_record_name} is a host's, in hosts (LIB-0037 §3)") : true
+  ) ? file("${local.workload_file}: ${local.workload_dns_path}.${local.workload_instance}: ${local.workload_record_name} is a host's, in hosts (LIB-0037 §3)") : true
 
   # The leaf's module call. Inputs are written as literals -- JSON is HCL
   # expression syntax -- with template sequences escaped, since a `type = any`

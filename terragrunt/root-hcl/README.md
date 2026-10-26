@@ -627,6 +627,51 @@ Moving an existing record into a zone is an import, never a recreate:
 adds `^zones/[^/]+/zone\.yaml$` to `terragrunt-detect.yml`'s `leaf_pattern`
 if it overrides it.
 
+Since v7.1.0 (LIB-0039), with `workflows/v7.1.0` or later, each unit file has
+one root key, its records sit at `dnsRecords` directly under it, and a zone
+names the mail and identity providers it uses:
+
+```yaml
+# zones/example.org/zone.yaml
+# yaml-language-server: $schema=https://noisypigeon.garden/schemas/zone/v3.json
+zone:
+  suffix: example
+  services:
+    proton:
+      enabled: true          # default false
+      verification:
+        pm: <token>
+        protonmail: <token>
+      # dmarc: true          # the default policy; a string, or false for none
+    bluesky:
+      enabled: true
+      did: did:plc:<id>
+  dnsRecords:
+    proton-spf:
+      comment: overridden    # an entry of an implied key overrides it field by field
+    status:
+      name: status
+      type: CNAME
+      content: status.example.net
+```
+
+- **`zone:` and `workload:`.** zone.yaml's content goes under `zone`,
+  workload.yaml's and secrets.workload.yaml's under `workload`. A key beside
+  the wrapper is refused, and so is `cloudflare.dnsRecord` inside it: it's
+  `dnsRecords` now. The leaves are unchanged, `cloudflare/dns-record/<key>`.
+- **`services`** is a zone's alone, and only in a wrapped file. Each of
+  `proton` (Proton Pass aliases), `fastmail`, `googleSearch` and `bluesky`
+  implies its records, keyed `<service>-<record>` with ttl 1 and a fixed
+  comment, when `enabled: true`. Inputs are only what's the zone's own:
+  `proton.verification.pm` and `.protonmail`, `googleSearch.verification` and
+  `bluesky.did`. A mail service's `dmarc` is `true` by default
+  (`v=DMARC1; p=quarantine; pct=100; adkim=s; aspf=s` at `_dmarc`), a policy
+  string, or `false`.
+- **Refused before planning, by name:** an unknown service or key, an
+  enabled service missing an input, `proton` and `fastmail` both enabled, and
+  two SPF or two DMARC policies at one name.
+- **An unwrapped file still reads as before** until v8.0.0, which refuses it.
+
 A workload may also have a `workloads/<workload>/secrets.yaml` (v4.5.0,
 LIB-0025), encrypted with sops as YAML. Its rule in the spoke's `.sops.yaml` is
 `^workloads/[^/]+/secrets\.yaml$`. It holds secret inputs under the same kind

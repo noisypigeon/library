@@ -40,7 +40,10 @@ nothing that is deployed:
   both kinds of stub). Since LIB-0037 a workload may also live in its zone,
   as `workloads/<zone>/<w>/workload.yaml` (or `workloads/private/<w>/` with
   no zone), in the zone's project, writing only at the host the zone's
-  `hosts` gives it; both layouts are read until the major that drops the old. `.github/scripts/split-secrets.sh` is the one-time v3→v4
+  `hosts` gives it; both layouts are read until the major that drops the old. Since LIB-0039 each
+  file's content sits under one key, `zone:` or `workload:`, with its records
+  at `dnsRecords`, and a zone's `services` imply its mail and identity
+  records. `.github/scripts/split-secrets.sh` is the one-time v3→v4
   migration a spoke's owner runs. The spoke
   **commits** those generated copies, because
   Terragrunt's git filter plans inside worktrees where only tracked files exist,
