@@ -1,5 +1,7 @@
 # terraform-deployer-iam
 
+> **Deprecated** ([LIB-0038](../../../docs/adr/LIB-0038-compose-deployers-and-redirects-from-single-resource-modules.md)). No further releases; its tags and short URLs still resolve. Compose [`iam-application`](../iam-application), [`iam-policy`](../iam-policy) and [`iam-api-key`](../iam-api-key) instead, as a unit's deployer does since root.hcl v7.0.0. `iam-api-key` takes this module's `rotation_days`, at the same resource addresses.
+
 A spoke's Terraform deployer identity in one call: a `scaleway_iam_application`, its `scaleway_iam_policy`, and a `scaleway_iam_api_key` for it (LIB-0014). It rolls up `iam-application`, `iam-policy` and `iam-api-key` with the same inputs, inlined rather than nested so the resource addresses are fixed and a short URL can't break underneath it.
 
 The leaf that calls it manages the key every other leaf deploys with, so it must not authenticate with that key itself. Allowlist the leaf for the spoke's Scaleway breakglass credential in `spoke.hcl` (`providers.scaleway.breakglass.leaves`, root.hcl v4.1.0+).

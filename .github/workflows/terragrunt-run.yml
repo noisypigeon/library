@@ -52,7 +52,8 @@
 # its stub at the PR's base. Since v5.2.0 a zone's leaves (LIB-0036) are
 # generated and selected the same way, from zones/<zone>/zone.yaml, and since
 # v6.1.0 a workload in its zone's (LIB-0037), from
-# workloads/<zone>/<workload>/workload.yaml.
+# workloads/<zone>/<workload>/workload.yaml. Since v7.0.0 that is the only
+# workload layout: resolve-workloads.sh refuses a values.yaml (LIB-0037 §6).
 #
 # secrets_files and prepare_cmd exist for spokes (LIB-0003). A spoke keeps its
 # secrets in one sops file per concern under terraform/secrets/ (LIB-0012), and
@@ -263,10 +264,9 @@ jobs:
       # in worktrees of tracked files. A spoke with a workloads/ or zones/
       # excludes them from the git filter -- deleting a committed stub must not
       # plan its destroy -- and selects them here instead, by unit: every leaf
-      # of a workload whose values.yaml or workload.yaml changed, of a zone
-      # whose zone.yaml changed and of the workload it names before or after
-      # and every workload under workloads/<zone>/, whose hosts it gives, and
-      # of every unit when root.hcl, spoke.hcl, zones.yaml or a secret
+      # of a workload whose workload.yaml changed, of a zone whose zone.yaml
+      # changed and of every workload under workloads/<zone>/, whose hosts it
+      # gives, and of every unit when root.hcl, spoke.hcl or a secret
       # changed. An instance its unit file no longer has is planned as a destroy
       # from its stub as of the PR's base (`git merge-base main HEAD`, which
       # moves only when the head does), generated in a worktree of that base.
@@ -316,22 +316,18 @@ jobs:
             resolver="$GITHUB_WORKSPACE/$SCRIPTS_DIR/resolve-workloads.sh"
             "$resolver"
             changed=$(git diff --name-only "$base" HEAD)
-            # Each a unit directory, workloads/<w> or zones/<z>.
-            if grep -qE '^(root\.hcl|spoke\.hcl|zones\.yaml|terraform/secrets/)' <<<"$changed"; then
-              names=$(for f in workloads/*/values.yaml workloads/*/*/workload.yaml zones/*/zone.yaml; do if [ -f "$f" ]; then dirname "$f"; fi; done)
+            # Each a unit directory, workloads/<zone>/<w> or zones/<z>.
+            if grep -qE '^(root\.hcl|spoke\.hcl|terraform/secrets/)' <<<"$changed"; then
+              names=$(for f in workloads/*/*/workload.yaml zones/*/zone.yaml; do if [ -f "$f" ]; then dirname "$f"; fi; done)
             else
-              names=$(grep -E '^workloads/[^/]+/(values|secrets)\.yaml$' <<<"$changed" | cut -d/ -f1-2 || true)
-              names="$names"$'\n'"$(grep -E '^workloads/[^/]+/[^/]+/(workload|secrets\.workload)\.yaml$' <<<"$changed" | cut -d/ -f1-3 || true)"
-              # A zone, the workload it names at the base and at the head, and
-              # the workloads in it, whose hosts it gives (LIB-0037 §3).
+              names=$(grep -E '^workloads/[^/]+/[^/]+/(workload|secrets\.workload)\.yaml$' <<<"$changed" | cut -d/ -f1-3 || true)
+              # A zone, and the workloads in it, whose hosts it gives (LIB-0037
+              # §3).
               while IFS= read -r zf; do
                 [ -z "$zf" ] && continue
                 names="$names"$'\n'"$(dirname "$zf")"
                 for wf in "workloads/$(basename "$(dirname "$zf")")"/*/workload.yaml; do
                   [ -f "$wf" ] && names="$names"$'\n'"$(dirname "$wf")"
-                done
-                for owner in "$( { git show "$base:$zf" 2>/dev/null || true; } | yq '.workload // ""')" "$( { cat "$zf" 2>/dev/null || true; } | yq '.workload // ""')"; do
-                  [ -n "$owner" ] && [ -f "workloads/$owner/values.yaml" ] && names="$names"$'\n'"workloads/$owner"
                 done
               done < <(grep -E '^zones/[^/]+/zone\.yaml$' <<<"$changed" || true)
               names=$(sort -u <<<"$names")

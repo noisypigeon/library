@@ -1,7 +1,6 @@
 # Reusable: a Pages shim repo's whole deploy (LIB-0031 §5, LIB-0035 §3). It
-# builds one site workload, <spoke>/workloads/<workload> (since LIB-0037
-# <spoke>/workloads/<zone>/<workload>), at the spoke's
-# current main, and deploys it to the calling shim's own Pages site. A shim's
+# builds one site workload, <spoke>/workloads/<zone>/<workload> (LIB-0037),
+# at the spoke's current main, and deploys it to the calling shim's own Pages site. A shim's
 # pages.yml (LIB-0034 §4) then names only its spoke and its workload.
 #
 # The site's generated files, if it has any, are already committed in the
@@ -19,7 +18,7 @@ on:
         type: string
         required: true
       workload:
-        description: "The workload's path under the spoke's workloads/: <zone>/<workload> for one in its zone (LIB-0037), e.g. noisypigeon.com/blog, or <workload> in the old layout, e.g. blog."
+        description: "The workload's path under the spoke's workloads/, <zone>/<workload> (LIB-0037), e.g. noisypigeon.com/blog."
         type: string
         required: true
 
@@ -29,7 +28,21 @@ permissions:
   id-token: write
 
 jobs:
+  # Since v7.0.0 a bare <workload>, the old layout, is refused (LIB-0037 §6).
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the workload's path
+        env:
+          WORKLOAD: ${{ inputs.workload }}
+        run: |
+          if [[ ! "$WORKLOAD" =~ ^[^/]+/[^/]+$ ]]; then
+            echo "::error::workload \"$WORKLOAD\" must be <zone>/<workload>; workloads/<workload>/ is the old layout, refused since workflows/v7.0.0 (LIB-0037 §6)"
+            exit 1
+          fi
+
   deploy:
+    needs: check
     uses: ./.github/workflows/zola-site-pages.yml
     with:
       repository: ${{ inputs.spoke }}

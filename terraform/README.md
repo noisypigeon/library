@@ -29,7 +29,8 @@ This directory holds only module source — it has no root provider/backend conf
 | `scaleway/compute-instance-config` | Renders a `pigeon-cli` cloud-init document (keyring, rclone remotes, Cockpit/Alloy, post-provision systemd unit, optional self-delete trap and static ffmpeg) for `compute-instance`'s `cloud_init` input. Creates no resources — its only output is the rendered string. |
 | `scaleway/iam-application` | A thin wrapper around `scaleway_iam_application`. |
 | `scaleway/iam-policy` | A Scaleway `scaleway_iam_policy` wrapper granting organization/project permission-set rules to an existing IAM application. |
-| `scaleway/iam-api-key` | A thin wrapper around `scaleway_iam_api_key`, defaulting `expires_at` to 30 days after first creation. |
+| `scaleway/iam-api-key` | A thin wrapper around `scaleway_iam_api_key`, defaulting `expires_at` to 30 days after first creation, with optional `rotation_days` (LIB-0038). |
+| `scaleway/terraform-deployer-iam` | **Deprecated** (LIB-0038): no further releases, tags still resolve. Compose `iam-application`, `iam-policy` and `iam-api-key` instead. |
 | `scaleway/block-volume` | A Scaleway Block Storage volume (`scaleway_block_volume`) with a randomized name suffix; minimal interface — `size` (renamed from `size_in_gb`), `iops` (defaults to `15000`). |
 | `scaleway/cockpit-observability` | A Scaleway Cockpit (`scaleway_cockpit_source`/`scaleway_cockpit_token`) wrapper that creates a metrics and/or logs source plus a shared push token, each individually toggleable via `enable_metrics`/`enable_logs`. |
 | `scaleway/compute-cluster` | A cluster of `pigeon-cli` job instances: one shared Private Network and Public Gateway, an optional debug bastion, and per job an instance, IAM application/policy/API keys, optional block volume, IP and private NIC. The composing layer for every `compute-instance` concern (ADR-0153). |
@@ -37,8 +38,8 @@ This directory holds only module source — it has no root provider/backend conf
 | `backblaze/api-key` | A thin wrapper around `b2_application_key`, defaulting `valid_duration_in_seconds` to 30 days. |
 | `cloudflare/bucket` | A thin wrapper around a single Cloudflare R2 bucket (`cloudflare_r2_bucket`), named like `backblaze/bucket` and `scaleway/bucket`: a randomized name suffix, or `exact_name`. |
 | `cloudflare/dns-record` | A thin wrapper around a single `cloudflare_dns_record`. Zone-scoped: takes the zone's apex domain as `zone` and looks its ID up (LIB-0011). |
-| `cloudflare/apex-redirect` | Redirects a zone's apex, and `www`, to one URL: proxied placeholder records plus one `http_request_dynamic_redirect` ruleset, with names generated so existing redirects import with no diff (LIB-0011). |
-| `cloudflare/ruleset` | **End-of-life** (LIB-0011): no further releases, tags still resolve. Use `cloudflare/apex-redirect` for redirects. |
+| `cloudflare/ruleset` | A thin wrapper around a single `cloudflare_ruleset`, its zone named by apex (LIB-0030). A zone's `apexRedirect` expands into one, beside two `dns-record` placeholders (LIB-0038). |
+| `cloudflare/apex-redirect` | **Deprecated** (LIB-0038): no further releases, tags still resolve. Compose `cloudflare/dns-record` and `cloudflare/ruleset` instead. |
 | `scaleway/object-bucket` | **Renamed** to `scaleway/bucket` (LIB-0020): no further releases, tags still resolve. |
 | `scaleway/pigeon-cluster` | **Renamed** to `scaleway/compute-cluster` (LIB-0020): no further releases, tags still resolve. |
 | `grafana/dashboard` | A `grafana_folder`/`grafana_dashboard` wrapper that creates a Grafana folder and provisions a set of dashboards into it from JSON dashboard models or tag URLs. Formerly `scaleway/grafana-dashboard`. |
