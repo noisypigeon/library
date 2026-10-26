@@ -11,7 +11,7 @@ module "iam_api_key" {
 }
 ```
 
-Pass an explicit `expires_at` for any credential that needs to outlive the 30-day default (e.g. a deployer identity, or a long-running job).
+Pass an explicit `expires_at` for any credential that needs to outlive the 30-day default (e.g. a deployer identity, or a long-running job), or `rotation_days` to have Terraform replace the key on a schedule (LIB-0038 §2). A rotated key is created before the old one is destroyed, and expires a week after each scheduled rotation.
 
 <!-- BEGIN_TF_DOCS -->
 ## Inputs

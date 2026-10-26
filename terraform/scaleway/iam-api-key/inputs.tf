@@ -20,3 +20,14 @@ variable "default_project_id" {
   description = "Default project ID to use for Object Storage operations with this key (defaults to the provider's own project when unset)"
   default     = null
 }
+
+variable "rotation_days" {
+  type        = number
+  description = "Replace the API key every this many days, expiring it a week after each scheduled rotation (LIB-0038). Unset, the key expires 30 days after it was first created and is never replaced."
+  default     = null
+
+  validation {
+    condition     = var.rotation_days == null || try(var.rotation_days > 0, false)
+    error_message = "rotation_days must be a positive number of days."
+  }
+}
