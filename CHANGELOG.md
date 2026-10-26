@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-26
 
+- [adr] docs: LIB-0039, mail and identity services in zone.yaml, and wrapped unit files ([#201](https://github.com/noisypigeon/library/pull/201))
 - [adr] docs: LIB-0038 amendment, what moving runway found ([#196](https://github.com/noisypigeon/library/pull/196))
 - [workflows] Compose deployers and redirects from single-resource modules (LIB-0038) ([#195](https://github.com/noisypigeon/library/pull/195))
 - [terragrunt/root-hcl] Compose deployers and redirects from single-resource modules (LIB-0038) ([#195](https://github.com/noisypigeon/library/pull/195))
