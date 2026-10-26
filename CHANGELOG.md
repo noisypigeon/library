@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-26
 
+- [adr] docs: LIB-0038 amendment, what moving runway found ([#196](https://github.com/noisypigeon/library/pull/196))
 - [workflows] Compose deployers and redirects from single-resource modules (LIB-0038) ([#195](https://github.com/noisypigeon/library/pull/195))
 - [terragrunt/root-hcl] Compose deployers and redirects from single-resource modules (LIB-0038) ([#195](https://github.com/noisypigeon/library/pull/195))
 - [scaleway/iam-api-key] Add rotation_days to iam-api-key ([#194](https://github.com/noisypigeon/library/pull/194))
