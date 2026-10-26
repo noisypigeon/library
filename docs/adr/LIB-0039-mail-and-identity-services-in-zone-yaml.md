@@ -205,7 +205,7 @@ a file runway hasn't rewritten yet.
    - check the new backend is empty;
    - push the state to the new leaf;
    - rewrite its outputs;
-   - plan `No changes.`;
+   - plan only step 3's in-place update for that leaf;
    - empty the old leaf.
 3. **Commit:**
    - `root_hcl_version` 7.1.0 and the regenerated `root.hcl`;
@@ -266,8 +266,8 @@ a file runway hasn't rewritten yet.
    from §5's normalizations.
 2. **Each is refused by name, before planning,** in both
    `resolve-workloads.sh` and root.hcl: every case §§1–4 lists.
-3. **State moved, not recreated.** Both renamed leaves planned `No changes.`
-   before their old leaves were emptied.
+3. **State moved, not recreated.** Both renamed leaves planned only §5's
+   in-place updates before their old leaves were emptied.
 4. **runway's move plans only §5's updates,** and after v8 a re-plan of every
    leaf shows `No changes.`
 5. **DNS answers as before.** That means MX, SPF, DKIM and DMARC for both mail
