@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-26
 
+- [scaleway/iam-api-key] Add rotation_days to iam-api-key ([#194](https://github.com/noisypigeon/library/pull/194))
 - [adr] Record LIB-0038: compose deployers and redirects from single-resource modules ([#193](https://github.com/noisypigeon/library/pull/193))
 
 ## 2026-10-25
