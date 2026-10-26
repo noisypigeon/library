@@ -43,7 +43,10 @@
 # module version a workload can use, beside that version's redirect page, and
 # the workload schema at schemas/workload/v1.json that ties them together,
 # its v2 for a workload.yaml (LIB-0037), and the zone schema at
-# schemas/zone/v1.json (LIB-0036).
+# schemas/zone/v1.json (LIB-0036). Since LIB-0038 the current ones are
+# schemas/workload/v3.json and schemas/zone/v2.json, whose deployer is three
+# entries and whose apexRedirect is a shorthand; the older ones stay
+# published, unchanged, for files still pinned to them.
 # Without it, nothing under static/ is touched.
 #
 # Regenerate-all semantics: every run wipes and rewrites every generated page
@@ -249,11 +252,11 @@ if [ -n "$STATIC_ROOT" ]; then
     exit 2
   fi
   find "$STATIC_ROOT/terraform" \( -name inputs.schema.json -o -name state.schema.json -o -name workload.schema.json \) -type f -delete 2>/dev/null || true
-  rm -f "$STATIC_ROOT/schemas/workload/v1.json" "$STATIC_ROOT/schemas/workload/v2.json" "$STATIC_ROOT/schemas/zone/v1.json"
+  rm -f "$STATIC_ROOT/schemas/workload/v1.json" "$STATIC_ROOT/schemas/workload/v2.json" "$STATIC_ROOT/schemas/workload/v3.json" "$STATIC_ROOT/schemas/zone/v1.json" "$STATIC_ROOT/schemas/zone/v2.json"
 
   kinds_json='{}'
   schema_count=0
-  for wmodule in scaleway/project scaleway/iam-application scaleway/terraform-deployer-iam scaleway/bucket scaleway/iam-api-key backblaze/bucket backblaze/api-key cloudflare/bucket cloudflare/dns-record cloudflare/ruleset cloudflare/apex-redirect cloudflare/api-token; do
+  for wmodule in scaleway/project scaleway/iam-application scaleway/iam-policy scaleway/terraform-deployer-iam scaleway/bucket scaleway/iam-api-key backblaze/bucket backblaze/api-key cloudflare/bucket cloudflare/dns-record cloudflare/ruleset cloudflare/apex-redirect cloudflare/api-token; do
     wversions="$(templates_tags "terraform/${wmodule}/v*" \
       | sed -nE 's#.*/v([0-9]+\.[0-9]+\.[0-9]+)$#\1#p' \
       | sort -t. -k1,1n -k2,2n -k3,3n -u)"
@@ -504,6 +507,47 @@ if [ -n "$STATIC_ROOT" ]; then
       }
     }
   }' <<<"$kinds_json" >"$STATIC_ROOT/schemas/zone/v1.json"
+
+  # LIB-0038: the deployer is three entries (§1), one per module, and a
+  # zone's apexRedirect is a shorthand with the old module's four inputs (§3).
+  # v1 and v2 above keep the bundles, for files pinned to them.
+  deployer_schema="$(jq -c '. as $k | {
+    type: ["object", "null"],
+    additionalProperties: false,
+    description: "The unit'"'"'s deployer: an IAM application, its policy on the unit'"'"'s project and its API key, each at the instance deployer (LIB-0038 §1)",
+    properties: {
+      application: ($k["scaleway/iam-application"] // {}),
+      policy: ($k["scaleway/iam-policy"] // {}),
+      apiKey: ($k["scaleway/iam-api-key"] // {})
+    }
+  }' <<<"$kinds_json")"
+  jq --arg base "$SCHEMA_BASE_URL" --argjson deployer "$deployer_schema" '
+    ."$id" = "\($base)/schemas/workload/v3.json"
+    | .title = "Workload workload.yaml (LIB-0023, LIB-0028, LIB-0029, LIB-0030, LIB-0033, LIB-0037, LIB-0038)"
+    | .properties.scaleway.properties.deployer = $deployer
+  ' "$STATIC_ROOT/schemas/workload/v2.json" >"$STATIC_ROOT/schemas/workload/v3.json"
+  jq --arg base "$SCHEMA_BASE_URL" --argjson deployer "$deployer_schema" '
+    ."$id" = "\($base)/schemas/zone/v2.json"
+    | .title = "Zone zone.yaml (LIB-0036, LIB-0037, LIB-0038)"
+    | del(.properties.workload)
+    | .properties.scaleway.properties.deployer = $deployer
+    | .properties.cloudflare.properties.apexRedirect = {
+        type: ["object", "null"],
+        propertyNames: {pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"},
+        description: "A redirect of the apex, and by default www, to one URL. Each <key> implies cloudflare.dnsRecord.<key>-apex and <key>-www, the proxied placeholders, and cloudflare.ruleset.<key>, the redirect; an entry of the same key overrides field by field (LIB-0038 §3)",
+        additionalProperties: {
+          type: "object",
+          additionalProperties: false,
+          required: ["target_url"],
+          properties: {
+            target_url: {type: "string", pattern: "^https?://[^/]+", description: "URL every redirected request goes to. The path is not preserved"},
+            status_code: {type: "integer", enum: [301, 302, 303, 307, 308], description: "Default: 301"},
+            include_www: {type: "boolean", description: "Whether www is redirected too. Default: true"},
+            preserve_query_string: {type: "boolean", description: "Whether the query string is appended to target_url. Default: false"}
+          }
+        }
+      }
+  ' "$STATIC_ROOT/schemas/zone/v1.json" >"$STATIC_ROOT/schemas/zone/v2.json"
 
   echo "Generated ${schema_count} module inputs schema(s), and the workload and zone schemas, under ${STATIC_ROOT}."
 fi

@@ -1,5 +1,7 @@
 # apex-redirect
 
+> **Deprecated** ([LIB-0038](../../../docs/adr/LIB-0038-compose-deployers-and-redirects-from-single-resource-modules.md)). No further releases; its tags and short URLs still resolve. Compose [`dns-record`](../dns-record) and [`ruleset`](../ruleset) instead, as a zone's `apexRedirect` shorthand does since root.hcl v7.0.0, with the strings this module generates.
+
 Redirects a Cloudflare zone's apex, and `www` with it, to a single URL. It
 manages the three things a redirect needs, which used to be two leaves calling
 `cloudflare/dns-record` and `cloudflare/ruleset` (LIB-0011):

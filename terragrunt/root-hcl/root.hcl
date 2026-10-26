@@ -111,6 +111,19 @@
 # root zones.yaml is refused, and so is a workload's ruleset or apexRedirect,
 # which are a zone's alone, and a hand-written terraform/cloudflare/<zone>/
 # leaf. A workload's token no longer gets the redirect group.
+#
+# Since v6.1.0 (LIB-0037) a workload may live in its zone,
+# workloads/<zone>/<workload>/workload.yaml, or with no zone in
+# workloads/private/<workload>/.
+#
+# Since v7.0.0 (LIB-0038) a unit's deployer is three leaves,
+# scaleway/iam-application, scaleway/iam-policy and scaleway/iam-api-key, each
+# at the instance `deployer`, in place of scaleway/terraform-deployer-iam/main.
+# A zone's cloudflare.apexRedirect is a shorthand that expands into
+# cloudflare.dnsRecord and cloudflare.ruleset entries; it is no longer a kind.
+# The old layout of LIB-0037 §6 is refused: a workloads/<w>/values.yaml, a
+# leaf at its depth, a workload's secrets.yaml, zone.yaml's `workload`,
+# `features` and a workload's cloudflare.zone.
 
 locals {
   # The spoke's instance values. Missing spoke.hcl is a hard error, which is
@@ -156,7 +169,7 @@ locals {
 
   # Breakglass (LIB-0014): a provider's entry may set
   #
-  #   scaleway = { breakglass = { leaves = ["terraform/scaleway/terraform-deployer-iam/"] } }
+  #   scaleway = { breakglass = { leaves = ["terraform/scaleway/iam-api-key/terraform-deployer/"] } }
   #
   # and a leaf under one of those prefixes, with the provider on, then reads
   # that provider's credentials from <provider>_breakglass.enc. There is no
@@ -364,14 +377,17 @@ locals {
   # root is included from outside <spoke>/terraform/ is excluded -- except a
   # unit leaf, which is exactly <root>/<unit>/<provider>/<module>/<instance>:
   # a workload's under workloads/ (LIB-0023), or a zone's under zones/
-  # (LIB-0036). Since LIB-0037 a workload may also live in its zone, one
-  # segment deeper: workloads/<zone>/<workload>/..., or with no zone
+  # (LIB-0036). Since LIB-0037 a workload lives in its zone, one segment
+  # deeper: workloads/<zone>/<workload>/..., or with no zone
   # workloads/private/<workload>/..., which unit_offset steps past. Every
-  # workload_* local below is a unit's, a zone's included.
+  # workload_* local below is a unit's, a zone's included. Since v7.0.0 a leaf
+  # at the old depth, workloads/<workload>/<provider>/<module>/<instance>, is
+  # refused (LIB-0037 §6).
   path_segments      = split("/", path_relative_to_include())
   unit_root          = local.path_segments[0]
   is_nested_workload = length(local.path_segments) == 6 && local.unit_root == "workloads" && (length(regexall("^[a-z0-9-]+(\\.[a-z0-9-]+)+$", try(local.path_segments[1], ""))) > 0 || try(local.path_segments[1], "") == "private")
-  is_workload_leaf   = (length(local.path_segments) == 5 && contains(["workloads", "zones"], local.unit_root)) || local.is_nested_workload
+  is_old_workload    = length(local.path_segments) == 5 && local.unit_root == "workloads"
+  is_workload_leaf   = (length(local.path_segments) == 5 && local.unit_root == "zones") || local.is_nested_workload
   is_zone_unit       = local.is_workload_leaf && local.unit_root == "zones"
   is_valid_leaf      = local.path_segments[0] == "terraform" || local.is_workload_leaf
   unit_offset        = local.is_nested_workload ? 1 : 0
@@ -391,19 +407,19 @@ locals {
   )
   cloudflare_zone = local.is_zone_leaf ? local.path_segments[2] : ""
 
-  # Each zones/<zone>/zone.yaml (LIB-0036 §1) registers its zone to the
-  # workload it names, or to none. Unit leaves are selected by
-  # terragrunt-run.yml rather than the git filter, so these need no
-  # mark_as_read. A root zones.yaml is only looked for, to be refused.
-  # Since LIB-0037 §3 each also gives its hosts, the apex `@` and each
-  # subdomain label, to the workloads under workloads/<zone>/ that serve them.
+  # Each zones/<zone>/zone.yaml (LIB-0036 §1) gives its hosts, the apex `@`
+  # and each subdomain label, to the workloads under workloads/<zone>/ that
+  # serve them (LIB-0037 §3). Unit leaves are selected by terragrunt-run.yml
+  # rather than the git filter, so these need no mark_as_read. A root
+  # zones.yaml is only looked for, to be refused.
   zones = {
     for f in(local.is_workload_leaf ? fileset(get_parent_terragrunt_dir(), "zones/*/zone.yaml") : []) :
     split("/", f)[1] => {
-      workload = try(tostring(yamldecode(file("${get_parent_terragrunt_dir()}/${f}")).workload), "")
-      hosts    = try({ for h, w in yamldecode(file("${get_parent_terragrunt_dir()}/${f}")).hosts : h => tostring(w) }, {})
+      hosts = try({ for h, w in yamldecode(file("${get_parent_terragrunt_dir()}/${f}")).hosts : h => tostring(w) }, {})
     }
   }
+  # An old-layout workload (LIB-0037 §6), looked for only to be refused.
+  old_workload_files = local.is_workload_leaf ? fileset(get_parent_terragrunt_dir(), "workloads/*/values.yaml") : []
 
   # Workload leaves (LIB-0023). HCL evaluates both arms of a conditional, so
   # every expression below runs for every leaf and is written to be harmless
@@ -412,13 +428,9 @@ locals {
   workload          = try(local.path_segments[1 + local.unit_offset], "")
   workload_module   = "${try(local.path_segments[2 + local.unit_offset], "")}/${try(local.path_segments[3 + local.unit_offset], "")}"
   workload_instance = try(local.path_segments[4 + local.unit_offset], "")
-  unit_dir          = local.is_nested_workload ? "workloads/${local.workload_parent}/${local.workload}" : "${local.unit_root}/${local.workload}"
-  workload_file = (
-    local.is_zone_unit ? "zones/${local.workload}/zone.yaml" :
-    local.is_nested_workload ? "${local.unit_dir}/workload.yaml" :
-    "workloads/${local.workload}/values.yaml"
-  )
-  workload_raw = try(yamldecode(file(mark_as_read("${get_parent_terragrunt_dir()}/${local.workload_file}"))), null)
+  unit_dir          = local.is_nested_workload ? "workloads/${local.workload_parent}/${local.workload}" : "zones/${local.workload}"
+  workload_file     = local.is_nested_workload ? "${local.unit_dir}/workload.yaml" : "zones/${local.workload}/zone.yaml"
+  workload_raw      = try(yamldecode(file(mark_as_read("${get_parent_terragrunt_dir()}/${local.workload_file}"))), null)
   # A zone's file, read as a workload's (LIB-0036 §§1-2): its name defaults to
   # its directory, its prefix to that name with every character a resource
   # name can't hold turned into a dash, and every zone kind acts on the
@@ -469,32 +481,36 @@ locals {
   workload_suffix = try(tostring(local.workload_values.suffix), "")
 
   # The kinds (LIB-0023 §2): each module a workload can call, whether this
-  # leaf's values.yaml declares its instance, the entry itself, the inputs a
+  # leaf's unit file declares its instance, the entry itself, the inputs a
   # dependency fills and their types (§4's wiring, which the stub sets), the
   # defaults, whose credentials it signs in with (LIB-0024 §2), and which
   # units may declare it (`units`, LIB-0036 §1). resolve-workloads.sh's KINDS and generate-module-redirects.sh's
   # schema list are this table's twins: change one and change all three.
-  # resolve-workloads.sh's expand_values is workload_cf_dns's twin.
+  # resolve-workloads.sh's expand_zone and expand_workload are
+  # workload_cf_dns's and workload_cf_rulesets' twins.
   # A YAML key with nothing under it is null, so every lookup goes through
   # try(); a conditional can't stand in, since HCL wants both of its arms to
   # be the same shape of object.
   workload_scaleway = try(local.workload_values.scaleway, null)
   workload_iam      = try(local.workload_scaleway.iam, null)
-  workload_buckets  = try(local.workload_scaleway.bucket, null)
+  # The deployer's three leaves (LIB-0038 §1), each overridden by its own key.
+  workload_deployer         = merge({}, try(local.workload_scaleway.deployer, null))
+  workload_deployer_secrets = merge({}, try(local.workload_secrets_scaleway.deployer, null))
+  workload_deployer_keys    = ["application", "policy", "apiKey"]
+  workload_buckets          = try(local.workload_scaleway.bucket, null)
   # Backblaze kinds (LIB-0029).
   workload_backblaze    = try(local.workload_values.backblaze, null)
   workload_b2_buckets   = try(local.workload_backblaze.bucket, null)
   workload_b2_keys      = try(local.workload_backblaze.apiKey, null)
   workload_b2_key_entry = try(local.workload_b2_keys[local.workload_instance], null)
-  # Cloudflare kinds (LIB-0030). cloudflare.zone fills `zone` for the three
-  # zone kinds; a zone always comes from the file, never the path.
+  # Cloudflare kinds (LIB-0030). cloudflare.zone, which root.hcl sets from
+  # the unit's directory, fills `zone` for the two zone kinds.
   workload_cloudflare = try(local.workload_values.cloudflare, null)
   workload_cf_zone    = try(tostring(local.workload_cloudflare.zone), "")
-  # The Pages records features.githubPages implies (LIB-0034 §2), under any
-  # explicit entry of the same key. A for with an `if` stands in for a
-  # conditional, whose arms HCL wants the same shape.
-  # A nested workload's come from deployments.githubPages and its host
-  # (LIB-0037 §4): an apex host's are LIB-0034's two, a subdomain's one, all
+  # The Pages records deployments.githubPages implies (LIB-0034 §2, LIB-0037
+  # §4), under any explicit entry of the same key. A for with an `if` stands
+  # in for a conditional, whose arms HCL wants the same shape. They follow
+  # the workload's host: an apex host's are LIB-0034's two, a subdomain's one, all
   # pointing at `url`, by default <username>.github.io.
   workload_pages_on      = local.is_nested_workload && contains(try(keys(local.workload_raw.deployments), []), "githubPages")
   workload_pages_entry   = merge({}, try(local.workload_raw.deployments.githubPages, null))
@@ -508,43 +524,79 @@ locals {
   ])
   spoke_owner         = get_env("GITHUB_REPOSITORY_OWNER", try(regex("github\\.com[:/]([^/]+)/", local.spoke_origin)[0], ""))
   workload_pages_user = local.workload_pages_user_in != "" ? local.workload_pages_user_in : local.spoke_owner
-  workload_pages_host = (
-    local.is_nested_workload ? (local.workload_pages_on && local.workload_host != "" ? try(tostring(local.workload_pages_entry.url), "${local.workload_pages_user}.github.io") : "") :
-    try(tostring(local.workload_values.features.githubPages.pagesBaseUrl), "")
-  )
+  workload_pages_host = local.workload_pages_on && local.workload_host != "" ? try(tostring(local.workload_pages_entry.url), "${local.workload_pages_user}.github.io") : ""
   workload_pages_dns = merge(
     {
       for k, v in {
         "github-pages-root-cname" = { name = "@", type = "CNAME", content = local.workload_pages_host, ttl = 1, proxied = false, comment = "github pages root cname (apex, cloudflare-flattened)" }
         "github-pages-www-cname"  = { name = "www", type = "CNAME", content = local.workload_pages_host, ttl = 1, proxied = false, comment = "github pages www cname" }
-      } : k => v if local.workload_pages_host != "" && (!local.is_nested_workload || local.workload_host == "@")
+      } : k => v if local.workload_pages_host != "" && local.workload_host == "@"
     },
     {
       for k, v in {
         "github-pages-cname" = { name = local.workload_host, type = "CNAME", content = local.workload_pages_host, ttl = 1, proxied = false, comment = "github pages cname" }
-      } : k => v if local.workload_pages_host != "" && local.is_nested_workload && local.workload_host != "@"
+      } : k => v if local.workload_pages_host != "" && local.workload_host != "@"
     },
   )
-  workload_cf_dns = merge(local.workload_pages_dns, {
+  # A zone's apexRedirect (LIB-0038 §3) is a shorthand: each entry <key>
+  # implies dnsRecord <key>-apex and, with include_www, <key>-www, the proxied
+  # placeholders, and ruleset <key>, the redirect. Every string is the one
+  # cloudflare/apex-redirect generated, so its state moves with no change.
+  # An explicit entry of the same key is merged over its default, field by
+  # field, as the Pages records are. resolve-workloads.sh's expand_zone is its
+  # twin.
+  workload_cf_redirects     = { for k, v in merge({}, try(local.workload_cloudflare.apexRedirect, null)) : k => merge({}, v) if local.is_zone_unit }
+  workload_cf_redirect_keys = ["target_url", "status_code", "include_www", "preserve_query_string"]
+  workload_cf_redirect_host = { for k, e in local.workload_cf_redirects : k => try(trimsuffix(regex("^[a-zA-Z][a-zA-Z0-9+.-]*://(.*)$", tostring(e.target_url))[0], "/"), "") }
+  workload_cf_redirect_www  = { for k, e in local.workload_cf_redirects : k => try(tobool(e.include_www), true) }
+  workload_cf_redirect_dns = merge(
+    { for k, e in local.workload_cf_redirects : "${k}-apex" => { name = "@", type = "A", content = "192.0.2.1", proxied = true, ttl = 1, comment = "placeholder so Cloudflare intercepts apex traffic for the ${local.workload_cf_redirect_host[k]} redirect" } },
+    { for k, e in local.workload_cf_redirects : "${k}-www" => { name = "www", type = "CNAME", content = local.workload, proxied = true, ttl = 1, comment = "placeholder so Cloudflare intercepts www traffic for the ${local.workload_cf_redirect_host[k]} redirect" } if local.workload_cf_redirect_www[k] },
+  )
+  workload_cf_redirect_rulesets = {
+    for k, e in local.workload_cf_redirects : k => {
+      name  = "${local.workload} to ${local.workload_cf_redirect_host[k]} redirect"
+      kind  = "zone"
+      phase = "http_request_dynamic_redirect"
+      rules = [{
+        expression  = join(" or ", [for h in(local.workload_cf_redirect_www[k] ? [local.workload, "www.${local.workload}"] : [local.workload]) : "(http.host eq \"${h}\")"])
+        description = "redirect ${local.workload_cf_redirect_www[k] ? "${local.workload} and www" : local.workload} to the ${local.workload_cf_redirect_host[k]} homepage"
+        action      = "redirect"
+        action_parameters = {
+          from_value = {
+            status_code = try(e.status_code, 301)
+            target_url = {
+              value = try(tostring(e.target_url), "")
+            }
+            preserve_query_string = try(e.preserve_query_string, false)
+          }
+        }
+      }]
+    }
+  }
+  workload_cf_implied = merge(local.workload_pages_dns, local.workload_cf_redirect_dns)
+  workload_cf_dns = merge(local.workload_cf_implied, {
     for k, v in merge({}, try(local.workload_cloudflare.dnsRecord, null)) :
-    k => merge(lookup(local.workload_pages_dns, k, {}), merge({}, v))
+    k => merge(lookup(local.workload_cf_implied, k, {}), merge({}, v))
+  })
+  workload_cf_rulesets = merge(local.workload_cf_redirect_rulesets, {
+    for k, v in merge({}, try(local.workload_cloudflare.ruleset, null)) :
+    k => merge(lookup(local.workload_cf_redirect_rulesets, k, {}), merge({}, v))
   })
   workload_cf_maps = {
-    "cloudflare/bucket"        = try(local.workload_cloudflare.bucket, null)
-    "cloudflare/dns-record"    = local.workload_cf_dns
-    "cloudflare/ruleset"       = try(local.workload_cloudflare.ruleset, null)
-    "cloudflare/apex-redirect" = try(local.workload_cloudflare.apexRedirect, null)
+    "cloudflare/bucket"     = try(local.workload_cloudflare.bucket, null)
+    "cloudflare/dns-record" = local.workload_cf_dns
+    "cloudflare/ruleset"    = local.workload_cf_rulesets
   }
   workload_cf_yaml = {
-    "cloudflare/bucket"        = "bucket"
-    "cloudflare/dns-record"    = "dnsRecord"
-    "cloudflare/ruleset"       = "ruleset"
-    "cloudflare/apex-redirect" = "apexRedirect"
+    "cloudflare/bucket"     = "bucket"
+    "cloudflare/dns-record" = "dnsRecord"
+    "cloudflare/ruleset"    = "ruleset"
   }
   workload_cf_entry     = try(local.workload_cf_maps[local.workload_module][local.workload_instance], null)
   workload_cf_declared  = contains(try(keys(local.workload_cf_maps[local.workload_module]), []), local.workload_instance)
   workload_cf_secrets   = try(local.workload_secrets.cloudflare[local.workload_cf_yaml[local.workload_module]][local.workload_instance], null)
-  workload_cf_zone_kind = contains(["cloudflare/dns-record", "cloudflare/ruleset", "cloudflare/apex-redirect"], local.workload_module)
+  workload_cf_zone_kind = contains(["cloudflare/dns-record", "cloudflare/ruleset"], local.workload_module)
   workload_cf_zone_set  = { for k, v in { zone = local.workload_cf_zone } : k => v if v != "" }
   # The zone a zone kind acts on: its own, or the workload's default.
   workload_zone = try(tostring(local.workload_cf_entry.zone), local.workload_cf_zone)
@@ -555,11 +607,7 @@ locals {
   # (LIB-0036 §3).
   # A nested workload's token reaches its zone only when it has a host there
   # (LIB-0037 §3).
-  workload_cf_owned = (
-    local.is_zone_unit ? [local.workload] :
-    local.is_nested_workload ? [for z in [local.workload_parent] : z if local.workload_host != ""] :
-    sort([for z, v in local.zones : z if try(v.workload, "") == local.workload])
-  )
+  workload_cf_owned    = local.is_zone_unit ? [local.workload] : [for z in [local.workload_parent] : z if local.workload_host != ""]
   workload_cf_buckets  = length(try(keys(local.workload_cloudflare.bucket), [])) > 0
   workload_cf_deployer = local.is_zone_unit || length(local.workload_cf_owned) > 0 || local.workload_cf_buckets
   workload_cf_policies = concat(
@@ -594,16 +642,41 @@ locals {
       state       = "workload"
       units       = ["workload"]
     }
-    "scaleway/terraform-deployer-iam" = {
-      declared = local.workload_instance == "main"
-      entry    = try(local.workload_scaleway.deployer, null)
-      secrets  = try(local.workload_secrets_scaleway.deployer, null)
-      wiring   = { project_ids = "list(string)", default_project_id = "string" }
+    # The unit's deployer (LIB-0024 §1, LIB-0038 §1): an application, its
+    # policy on the unit's project, and the key every workload-credentials
+    # provider and workload-state backend signs in with. Its policy keeps the
+    # name terraform-deployer-iam gave it, since iam-policy appends -policy.
+    "scaleway/iam-application#deployer" = {
+      declared    = local.workload_instance == "deployer"
+      entry       = try(local.workload_deployer.application, null)
+      secrets     = try(local.workload_deployer_secrets.application, null)
+      wiring      = {}
+      defaults    = { name = "${local.workload_prefix}-${local.workload_suffix}${local.unit_tag}-deployer" }
+      sensitive   = false
+      credentials = "spoke"
+      state       = "spoke"
+      units       = ["workload", "zone"]
+    }
+    "scaleway/iam-policy#deployer" = {
+      declared = local.workload_instance == "deployer"
+      entry    = try(local.workload_deployer.policy, null)
+      secrets  = try(local.workload_deployer_secrets.policy, null)
+      wiring   = { project_ids = "list(string)", application_id = "string" }
       defaults = {
         name                    = "${local.workload_prefix}-${local.workload_suffix}${local.unit_tag}-deployer"
         project_permission_sets = ["ObjectStorageFullAccess"]
-        rotation_days           = 30
       }
+      sensitive   = false
+      credentials = "spoke"
+      state       = "spoke"
+      units       = ["workload", "zone"]
+    }
+    "scaleway/iam-api-key#deployer" = {
+      declared    = local.workload_instance == "deployer"
+      entry       = try(local.workload_deployer.apiKey, null)
+      secrets     = try(local.workload_deployer_secrets.apiKey, null)
+      wiring      = { default_project_id = "string", application_id = "string" }
+      defaults    = { rotation_days = 30 }
       sensitive   = true
       credentials = "spoke"
       state       = "spoke"
@@ -728,25 +801,16 @@ locals {
       state       = "workload"
       units       = ["zone"]
     }
-    "cloudflare/apex-redirect" = {
-      declared    = local.workload_cf_declared
-      entry       = local.workload_cf_entry
-      secrets     = local.workload_cf_secrets
-      wiring      = {}
-      defaults    = local.workload_cf_zone_set
-      sensitive   = false
-      credentials = "workload"
-      state       = "workload"
-      units       = ["zone"]
-    }
   }
   workload_kind_key = (
     local.workload_module == "scaleway/bucket" && local.workload_instance == "state" ? "scaleway/bucket#state" :
-    local.workload_module == "cloudflare/api-token" && local.workload_instance == "deployer" ? "cloudflare/api-token#deployer" :
+    local.workload_instance == "deployer" && contains(["scaleway/iam-application", "scaleway/iam-policy", "scaleway/iam-api-key", "cloudflare/api-token"], local.workload_module) ? "${local.workload_module}#deployer" :
     local.workload_module
   )
-  workload_kind  = try(local.workload_kinds[local.workload_kind_key], null)
-  workload_entry = merge({}, try(local.workload_kind.entry, null))
+  # The kinds LIB-0038 retired, refused by name rather than as unknown.
+  workload_retired = contains(["scaleway/terraform-deployer-iam", "cloudflare/apex-redirect"], local.workload_module)
+  workload_kind    = try(local.workload_kinds[local.workload_kind_key], null)
+  workload_entry   = merge({}, try(local.workload_kind.entry, null))
 
   # Secret inputs (LIB-0025 §3): this leaf's slice of secrets.yaml, and every
   # values.yaml input written as { secretRef: NAME }, resolved from `env`.
@@ -807,8 +871,12 @@ locals {
   )
   workload_version = try(regex("/v([0-9]+\\.[0-9]+\\.[0-9]+)(\\^\\{\\})?$", split("\n", trimspace(local.workload_tags))[0])[0], "")
 
-  guard_workload_values   = local.is_workload_leaf && local.workload_values == null ? file("${local.workload_file} is missing or not valid YAML, but ${path_relative_to_include()} is its stub (LIB-0023)") : true
-  guard_workload_kind     = local.is_workload_leaf && local.workload_kind == null ? file("${path_relative_to_include()}: ${local.workload_module} is not a workload kind (LIB-0023 §2)") : true
+  guard_workload_values = local.is_workload_leaf && local.workload_values == null ? file("${local.workload_file} is missing or not valid YAML, but ${path_relative_to_include()} is its stub (LIB-0023)") : true
+  # The old layout (LIB-0037 §6): a leaf at its depth, and any values.yaml.
+  guard_workload_old_leaf = local.is_old_workload ? file("${path_relative_to_include()} is a workload leaf in the old layout, workloads/<workload>/, refused since root.hcl v7.0.0: a workload lives in workloads/<zone>/<workload>/ or workloads/private/<workload>/ (LIB-0037 §6)") : true
+  guard_workload_old_file = length(local.old_workload_files) > 0 ? file("${join(", ", local.old_workload_files)}: a workloads/<workload>/values.yaml is refused since root.hcl v7.0.0; move it to workloads/<zone>/<workload>/workload.yaml (LIB-0037 §6)") : true
+  guard_workload_retired  = local.is_workload_leaf && local.workload_retired ? file("${path_relative_to_include()}: ${local.workload_module} is no longer a kind; its resources are the ${local.workload_module == "cloudflare/apex-redirect" ? "cloudflare/dns-record and cloudflare/ruleset leaves an apexRedirect implies" : "scaleway/iam-application, iam-policy and iam-api-key leaves at the instance deployer"}. Regenerate the stubs with workflows v7, and move its state by LIB-0038 §5") : true
+  guard_workload_kind     = local.is_workload_leaf && !local.workload_retired && local.workload_kind == null ? file("${path_relative_to_include()}: ${local.workload_module} is not a workload kind (LIB-0023 §2)") : true
   guard_workload_unit     = local.is_workload_leaf && local.workload_kind != null && !contains(try(local.workload_kind.units, []), local.is_zone_unit ? "zone" : "workload") ? file("${path_relative_to_include()}: ${local.workload_module} is not a kind a ${local.is_zone_unit ? "zone" : "workload"} takes (LIB-0036 §§1, 3)") : true
   guard_workload_declared = local.is_workload_leaf && !try(local.workload_kind.declared, true) ? file("${path_relative_to_include()} has no entry in ${local.workload_file}; run resolve-workloads.sh, which generates stubs from values.yaml (LIB-0023)") : true
   guard_workload_names    = local.is_workload_leaf && (local.workload_prefix == "" || local.workload_suffix == "") ? file("${local.workload_file} needs a non-empty prefix and suffix (LIB-0023 §4)") : true
@@ -822,7 +890,10 @@ locals {
   guard_workload_prefix   = local.is_workload_leaf && !can(regex("^[^/].*/$", local.workload_state_prefix)) ? file("${local.workload_file}: scaleway.state.prefix \"${local.workload_state_prefix}\" must not start with / and must end with one (LIB-0028 §3)") : true
   guard_workload_versions = local.is_workload_leaf && try(local.workload_scaleway.state.enable_versioning, true) == false ? file("${local.workload_file}: scaleway.state.enable_versioning can't be false; versioning is the state's only protection (LIB-0028 §2)") : true
   guard_workload_glacier  = local.is_workload_leaf && try(local.workload_scaleway.state.storage_class, "standard") == "glacier" ? file("${local.workload_file}: scaleway.state.storage_class can't be glacier; state moved to GLACIER after 90 days can't be read without a restore (LIB-0028 §2)") : true
-  guard_workload_deployer = local.is_workload_leaf && can(local.workload_scaleway.deployer.project_permission_sets) && !contains(try(tolist(local.workload_scaleway.deployer.project_permission_sets), []), "ObjectStorageFullAccess") ? file("${local.workload_file}: scaleway.deployer.project_permission_sets must keep ObjectStorageFullAccess; the deployer's key signs in to the workload's state bucket (LIB-0028 §5)") : true
+  guard_workload_deployer = local.is_workload_leaf && can(local.workload_deployer.policy.project_permission_sets) && !contains(try(tolist(local.workload_deployer.policy.project_permission_sets), []), "ObjectStorageFullAccess") ? file("${local.workload_file}: scaleway.deployer.policy.project_permission_sets must keep ObjectStorageFullAccess; the deployer's key signs in to the workload's state bucket (LIB-0028 §5, LIB-0038 §1)") : true
+  # LIB-0024 §1's flat scaleway.deployer, the bundle's inputs (LIB-0038 §1).
+  workload_deployer_flat  = sort(setsubtract(concat(keys(local.workload_deployer), keys(local.workload_deployer_secrets)), local.workload_deployer_keys))
+  guard_workload_dep_flat = local.is_workload_leaf && length(local.workload_deployer_flat) > 0 ? file("${local.workload_file}: scaleway.deployer.${join(", scaleway.deployer.", local.workload_deployer_flat)}: the deployer is three leaves, so each input goes under scaleway.deployer.application, .policy or .apiKey, by its module's own name (LIB-0038 §1)") : true
   guard_workload_backend  = !local.workload_stub_backend ? file("${path_relative_to_include()} keeps its state in the workload's bucket but its stub declares no remote_state; regenerate it with a resolve-workloads.sh from workflows v4.9.0 or later (LIB-0028 §5)") : true
   guard_workload_b2_on    = local.is_workload_leaf && local.leaf_provider == "backblaze" && !contains(keys(local.providers), "backblaze") ? file("${path_relative_to_include()} is a Backblaze workload leaf, but spoke.hcl's providers map has no backblaze (LIB-0029 §4)") : true
   guard_workload_b2_list  = local.is_workload_leaf && local.workload_module == "backblaze/api-key" && length(try(tolist(local.workload_b2_key_entry.buckets), [])) == 0 ? file("${local.workload_file}: backblaze.apiKey.${local.workload_instance}.buckets must list at least one of this workload's backblaze.bucket keys (LIB-0029 §3)") : true
@@ -831,17 +902,16 @@ locals {
   guard_workload_cf_on    = local.is_workload_leaf && local.leaf_provider == "cloudflare" && !contains(keys(local.providers), "cloudflare") ? file("${path_relative_to_include()} is a Cloudflare workload leaf, but spoke.hcl's providers map has no cloudflare (LIB-0030 §1)") : true
   guard_workload_cf_spoke = local.is_workload_leaf && local.leaf_provider == "cloudflare" && (can(local.workload_cf_entry.account_id) || can(local.workload_cf_entry.zone_id) || can(local.workload_cf_secrets.account_id) || can(local.workload_cf_secrets.zone_id)) ? file("${local.workload_file}: cloudflare.${try(local.workload_cf_yaml[local.workload_module], "")}.${local.workload_instance} can't set account_id or zone_id; the account is the spoke's, and a zone is named (LIB-0030 §§4-5)") : true
   guard_workload_cf_zone  = local.is_workload_leaf && local.workload_cf_zone_kind && local.workload_zone == "" ? file("${local.workload_file}: cloudflare.${try(local.workload_cf_yaml[local.workload_module], "")}.${local.workload_instance} has no zone, and the workload sets no cloudflare.zone (LIB-0030 §3)") : true
-  guard_workload_cf_owner = local.is_workload_leaf && !local.is_zone_unit && !local.is_nested_workload && local.workload_cf_zone_kind && local.workload_zone != "" && try(local.zones[local.workload_zone].workload, "") != local.workload ? file("${local.workload_file}: zone ${local.workload_zone} isn't registered to workload ${local.workload}, in zones/${local.workload_zone}/zone.yaml (LIB-0036 §3)") : true
   # Nested workloads (LIB-0037 §§1-4): what a workload.yaml can't say, read
   # before its defaults fill it in, then what its host allows.
   workload_record_name = try(tostring(local.workload_cf_entry.name), local.workload_instance)
   workload_nested_problems = local.is_nested_workload && local.workload_raw != null ? compact([
-    can(local.workload_raw.features) ? "features is replaced by deployments; githubPages moves to deployments.githubPages (LIB-0037 §4)" : "",
+    can(local.workload_raw.features) ? "features is refused since root.hcl v7.0.0; githubPages moves to deployments.githubPages (LIB-0037 §§4, 6)" : "",
     can(local.workload_raw.prefix) || can(local.workload_raw.suffix) ? "prefix and suffix move to deployments.scaleway.project (LIB-0037 §2)" : "",
     can(local.workload_raw.scaleway.project) ? "scaleway.project moves to deployments.scaleway.project (LIB-0037 §2)" : "",
-    can(local.workload_raw.cloudflare.zone) || can(local.workload_raw.cloudflare[local.workload_cf_yaml[local.workload_module]][local.workload_instance].zone) ? "a zone can't be set; the directory names it (LIB-0037 §1)" : "",
+    can(local.workload_raw.cloudflare.zone) || can(local.workload_raw.cloudflare[local.workload_cf_yaml[local.workload_module]][local.workload_instance].zone) ? "cloudflare.zone is refused; the directory names the zone (LIB-0037 §§1, 6)" : "",
     local.workload_name == "zone" ? "name can't be zone, which a zone's own resources carry (LIB-0037 §1)" : "",
-    fileexists("${get_parent_terragrunt_dir()}/${local.unit_dir}/secrets.yaml") ? "secrets.yaml is now secrets.workload.yaml; rename it (LIB-0037 §1)" : "",
+    fileexists("${get_parent_terragrunt_dir()}/${local.unit_dir}/secrets.yaml") ? "secrets.yaml is refused; rename it secrets.workload.yaml (LIB-0037 §§1, 6)" : "",
     !local.is_private_workload && local.workload_zone_raw == null ? "zone ${local.workload_parent} has no zones/${local.workload_parent}/zone.yaml (LIB-0037 §1)" : "",
     local.workload_pages_on && local.is_private_workload ? "deployments.githubPages needs a host, which a private workload never has (LIB-0037 §§1, 4)" : "",
     local.workload_pages_on && !local.is_private_workload && local.workload_host == "" ? "deployments.githubPages needs a host; give this workload one in zones/${local.workload_parent}/zone.yaml (LIB-0037 §4)" : "",
@@ -861,7 +931,14 @@ locals {
   guard_zone_prefix   = local.is_zone_unit && length(regexall("^[a-z0-9-]+$", local.workload_prefix)) == 0 ? file("${local.workload_file}: prefix \"${local.workload_prefix}\" may hold only a-z, 0-9 and - (LIB-0036 §1)") : true
   guard_zone_own_zone = local.is_zone_unit && (can(local.workload_raw.cloudflare.zone) || can(local.workload_raw.cloudflare[local.workload_cf_yaml[local.workload_module]][local.workload_instance].zone)) ? file("${local.workload_file}: a zone's entries can't set zone; the directory names it (LIB-0036 §1)") : true
   guard_zone_secrets  = local.is_zone_unit && fileexists("${get_parent_terragrunt_dir()}/${local.workload_secrets_file}") ? file("${local.workload_secrets_file}: a zone has no secrets.yaml (LIB-0036, Out of scope)") : true
-  guard_zone_workload = local.is_zone_unit && try(tostring(local.workload_raw.workload), "") != "" && !fileexists("${get_parent_terragrunt_dir()}/workloads/${try(tostring(local.workload_raw.workload), "")}/values.yaml") ? file("${local.workload_file}: workload ${try(tostring(local.workload_raw.workload), "")} has no workloads/${try(tostring(local.workload_raw.workload), "")}/values.yaml (LIB-0036 §1)") : true
+  guard_zone_workload = local.is_zone_unit && can(local.workload_raw.workload) ? file("${local.workload_file}: workload is refused since root.hcl v7.0.0; hosts names the workloads under workloads/${local.workload}/ (LIB-0037 §§3, 6)") : true
+  # An apexRedirect is a shorthand with the old module's four inputs (LIB-0038
+  # §3), and a target_url it can take a host from.
+  zone_redirect_problems = flatten([for k, e in local.workload_cf_redirects : concat(
+    [for x in sort(setsubtract(keys(e), local.workload_cf_redirect_keys)) : "cloudflare.apexRedirect.${k}.${x} isn't one of ${join(", ", local.workload_cf_redirect_keys)}; set it on the entry it expands into (LIB-0038 §3)"],
+    local.workload_cf_redirect_host[k] == "" ? ["cloudflare.apexRedirect.${k}.target_url must be an absolute http:// or https:// URL (LIB-0038 §3)"] : [],
+  )])
+  guard_zone_redirect = length(local.zone_redirect_problems) > 0 ? file("${local.workload_file}: ${join("; ", local.zone_redirect_problems)}") : true
   # A zone's hosts (LIB-0037 §3): each names a workload in workloads/<zone>/,
   # and a host's names are its workload's, not the zone's.
   zone_hosts        = local.is_zone_unit ? try(local.zones[local.workload].hosts, {}) : {}

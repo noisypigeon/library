@@ -16,6 +16,9 @@ on:
   workflow_call:
     inputs:
       leaf_pattern:
+        # A workload's old values.yaml or secrets.yaml (LIB-0023, LIB-0025)
+        # and a root zones.yaml are refused (LIB-0036 §1, LIB-0037 §6), but
+        # still matched, so the run that refuses them runs.
         description: "ERE matching paths that require a terragrunt run."
         type: string
         required: false

@@ -7,20 +7,18 @@
 # Two modes. A caller passing `site_repo` and `workflow` dispatches exactly
 # that, as before, and says when by its own `on:` paths. A caller passing
 # neither gets LIB-0034 §3's mode: it names no workload, and this finds them.
-# On a push it diffs the push and keeps each workloads/<w>/ with a change
-# outside values.yaml and secrets.yaml and a config.toml (LIB-0031 §1); on
-# workflow_dispatch it keeps every one with a config.toml. Each site's shim
-# comes from its values.yaml's `features.githubPages.pagesShim` (LIB-0034 §1),
-# and every shim's deploy workflow is pages.yml (LIB-0034 §4). A site with no
-# pagesShim would never deploy, so it fails the run -- after the others have
-# been dispatched, so one bad stanza doesn't hold back every other site.
-#
-# Since v6.1.0 a site may also be a workload in its zone (LIB-0037),
-# workloads/<zone>/<w>/, with a change outside workload.yaml and
-# secrets.workload.yaml. Its shim is <username>/<shim> from its
+# On a push it diffs the push and keeps each workloads/<zone>/<w>/ (LIB-0037
+# §1) with a change outside workload.yaml and secrets.workload.yaml and a
+# config.toml (LIB-0031 §1); on workflow_dispatch it keeps every one with a
+# config.toml. Each site's shim is <username>/<shim> from its
 # deployments.githubPages, each defaulting as LIB-0037 §4 says: username to
 # the spoke repo's owner, shim to its host, from zones/<zone>/zone.yaml, as a
-# domain.
+# domain. Every shim's deploy workflow is pages.yml (LIB-0034 §4). A site
+# with no shim would never deploy, so it fails the run -- after the others
+# have been dispatched, so one bad stanza doesn't hold back every other site.
+#
+# Since v7.0.0 a site in the old layout, workloads/<w>/ with a values.yaml,
+# fails the same way (LIB-0037 §6).
 #
 # Needs BOT_GITHUB_TOKEN with actions: write on every shim it dispatches.
 # Without it this fails loudly -- the symptom otherwise is a merged post that
@@ -30,12 +28,12 @@ on:
   workflow_call:
     inputs:
       site_repo:
-        description: "owner/name of the Pages shim repo that deploys the site. Empty (the default) reads each changed site workload's shim from its values.yaml (LIB-0034 §3)."
+        description: "owner/name of the Pages shim repo that deploys the site. Empty (the default) reads each changed site workload's shim from its workload.yaml (LIB-0034 §3, LIB-0037 §4)."
         type: string
         required: false
         default: ""
       workflow:
-        description: "Deploy workflow filename in site_repo. Only read with site_repo; the values.yaml mode always dispatches pages.yml (LIB-0034 §4)."
+        description: "Deploy workflow filename in site_repo. Only read with site_repo; the workload.yaml mode always dispatches pages.yml (LIB-0034 §4)."
         type: string
         required: false
         default: ""
@@ -80,8 +78,9 @@ jobs:
           OWNER: ${{ github.repository_owner }}
         run: |
           # Each changed path's unit: workloads/<zone>/<w> where <zone> is a
-          # domain or `private` (LIB-0037 §1), else workloads/<w>, leaving out
-          # its unit file and secrets.
+          # domain or `private` (LIB-0037 §1), leaving out its unit file and
+          # secrets. Anything else under workloads/ is the old layout, kept as
+          # workloads/<w> so a site there fails below (LIB-0037 §6).
           units() {
             awk -F/ '
               $1 != "workloads" || NF < 3 { next }
@@ -89,7 +88,6 @@ jobs:
                 if (NF < 4 || $3 == "" || (NF == 4 && ($4 == "workload.yaml" || $4 == "secrets.workload.yaml"))) next
                 print $1 "/" $2 "/" $3; next
               }
-              NF == 3 && ($3 == "values.yaml" || $3 == "secrets.yaml") { next }
               { print $1 "/" $2 }
             ' | sort -u
           }
@@ -132,12 +130,9 @@ jobs:
               fi
               shim="${user:-$OWNER}/$name"
             else
-              shim=$(yq '.features.githubPages.pagesShim // ""' "$u/values.yaml" 2>/dev/null || true)
-              if [ -z "$shim" ]; then
-                echo "::error::$u is a site but its values.yaml sets no features.githubPages.pagesShim, so it can never deploy (LIB-0034 §1)"
-                failed=1
-                continue
-              fi
+              echo "::error::$u is a site in the old layout, workloads/<w>/, refused since workflows/v7.0.0; move it to workloads/<zone>/<w>/ (LIB-0037 §6)"
+              failed=1
+              continue
             fi
             if ! gh workflow run pages.yml -R "$shim" --ref main; then
               echo "::error::could not dispatch pages.yml in $shim for $u; BOT_GITHUB_TOKEN needs actions: write there (LIB-0031 §4)"

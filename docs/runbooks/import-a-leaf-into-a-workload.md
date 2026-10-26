@@ -144,7 +144,7 @@ create a duplicate. Tell everyone who can comment `terragrunt apply`.
 | Resource | New address | Import ID |
 | --- | --- | --- |
 | `cloudflare/dns-record` | `module.this.cloudflare_dns_record.this` | `<zone_id>/<record_id>` |
-| `cloudflare/apex-redirect`, apex | `module.this.cloudflare_dns_record.apex` | `<zone_id>/<record_id>` |
+| `cloudflare/apex-redirect` (before root.hcl v7), apex | `module.this.cloudflare_dns_record.apex` | `<zone_id>/<record_id>` |
 | `cloudflare/apex-redirect`, www | `module.this.cloudflare_dns_record.www[0]` | `<zone_id>/<record_id>` |
 | `cloudflare/apex-redirect`, ruleset | `module.this.cloudflare_ruleset.this` | `zones/<zone_id>/<ruleset_id>` |
 | `cloudflare/ruleset` | `module.this.cloudflare_ruleset.this` | `zones/<zone_id>/<ruleset_id>` |
