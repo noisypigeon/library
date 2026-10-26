@@ -4,6 +4,33 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [7.1.0] - 2026-10-26
+
+### Wrapped unit files, dnsRecords and zone services (LIB-0039)
+
+LIB-0039's first release. A unit file can now hold its content under one key, `zone:` in zone.yaml and `workload:` in workload.yaml and secrets.workload.yaml, with its records at `dnsRecords` directly under it in place of `cloudflare.dnsRecord`. An unwrapped file still reads exactly as before, so a spoke can take this release with no changes and move its files over at its own pace.
+
+A wrapped zone.yaml can also list `services`. Each of `proton` (Proton Pass aliases), `fastmail`, `googleSearch` and `bluesky` adds its provider's records to `dnsRecords` when `enabled: true`. The records are keyed `<service>-<record>`, with ttl 1 and a fixed comment. The only inputs are the zone's own values: Proton's `verification.pm` and `verification.protonmail`, Google's `verification`, and Bluesky's `did`. A mail service's `dmarc` defaults to `v=DMARC1; p=quarantine; pct=100; adkim=s; aspf=s` at `_dmarc`. Set it to another policy string, or to `false` for no DMARC record. A `dnsRecords` entry with the same key as an added record overrides it field by field. The leaves stay `cloudflare/dns-record/<key>`, so moving a hand-written record under a service moves no state, as long as its key matches.
+
+Both `resolve-workloads.sh` and the template refuse each of these by name before planning:
+- a key beside the wrapper;
+- `cloudflare.dnsRecord` inside a wrapped file;
+- `services` or `dnsRecords` in an unwrapped file;
+- `services` in a workload;
+- an unknown service or service key;
+- an enabled service that is missing an input;
+- `proton` and `fastmail` both enabled;
+- two SPF or two DMARC policies at one name.
+
+`site-dispatch.yml` reads either shape. noisypigeon.garden now also publishes `schemas/zone/v3.json` and `schemas/workload/v4.json` for the wrapped files. The older schemas stay published.
+
+v8.0.0 will refuse the unwrapped shape.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#202](https://github.com/noisypigeon/library/pull/202)
+
 ## [7.0.0] - 2026-10-26
 
 ### Compose deployers and redirects from single-resource modules (LIB-0038)
