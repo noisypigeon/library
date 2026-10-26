@@ -4,6 +4,59 @@ All notable changes to this template are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [7.0.0] - 2026-10-26
+
+### Compose deployers and redirects from single-resource modules (LIB-0038)
+
+This is the major release of `terragrunt/root-hcl` (v7.0.0) and `workflows/` (v7.0.0) that [LIB-0038](docs/adr/LIB-0038-compose-deployers-and-redirects-from-single-resource-modules.md) records. It also carries LIB-0037 §6's refusal of the old workload layout.
+
+## A unit's deployer is three leaves
+
+Every zone and workload now gets `scaleway/iam-application/deployer`, `scaleway/iam-policy/deployer` and `scaleway/iam-api-key/deployer` in place of `scaleway/terraform-deployer-iam/main`.
+- **Names stay the same.** The application and policy keep the bundle's names (`<prefix>-<suffix><tag>-deployer`, and `-policy` on the policy).
+- **Defaults stay the same.** The policy keeps `ObjectStorageFullAccess` and the key rotates every 30 days, through `iam-api-key`'s new `rotation_days` (v0.3.0).
+- **The key signs every unit leaf in.** Every workload-state backend and workload-credentials provider now signs in with `iam-api-key/deployer`'s key.
+- **Overrides go under one key per module:** `scaleway.deployer.application`, `.policy` or `.apiKey`. A module input directly under `scaleway.deployer` is refused, and the `ObjectStorageFullAccess` guard now reads `scaleway.deployer.policy.project_permission_sets`.
+
+## `apexRedirect` is a shorthand
+
+A zone's `cloudflare.apexRedirect.<key>` keeps its four inputs: `target_url`, `status_code`, `include_www` and `preserve_query_string`.
+- **What it expands into:** `cloudflare.dnsRecord.<key>-apex`, `<key>-www` and `cloudflare.ruleset.<key>`, with exactly the strings `cloudflare/apex-redirect` generated. An explicit entry of the same key is merged over its default, field by field.
+- **What it refuses:** any other input, `version` included.
+- **The clash checks run on the expanded entries.** A record beside a redirect at `@` or `www` is still refused.
+
+## The retired kinds and the old layout are refused
+
+Each refusal names its record.
+- **Retired kinds.** root.hcl refuses a stub under `scaleway/terraform-deployer-iam/` or `cloudflare/apex-redirect/`. The two modules are deprecated, but their tags and short URLs stay.
+- **The old layout.** Refused since this release:
+  - a `workloads/<w>/values.yaml` or `secrets.yaml`, and a leaf at that depth;
+  - a `secrets.yaml` beside a `workload.yaml`;
+  - `zone.yaml`'s `workload`;
+  - `features`;
+  - a workload's `cloudflare.zone`.
+- **Old-layout code removed.** Those branches leave root.hcl, `resolve-workloads.sh`, `terragrunt-run.yml`, `site-dispatch.yml` and `site-pages.yml`. `site-pages.yml` now refuses a `workload` that isn't `<zone>/<workload>`. `terragrunt-detect.yml` still matches a `values.yaml`, `secrets.yaml` or root `zones.yaml`, so the run that refuses one runs.
+
+## Schemas
+
+`/schemas/workload/v3.json` and `/schemas/zone/v2.json` describe the new shape. Earlier versions stay published unchanged, and `scaleway/iam-policy`'s per-version input schemas are now published too.
+
+## Adopting it
+
+A spoke takes the workflows pin alone first, then moves each deployer's and redirect's state by LIB-0038 §5, with nothing recreated. Only then does it bump `root_hcl_version` to 7.0.0, in a PR whose plan shows `No changes.` for every moved leaf.
+
+Tested on a copy of runway's `main` after its LIB-0037 teardown:
+- **Stubs:** the stubs and `--check` passed against locally generated schemas.
+- **Renders:** every leaf rendered with mocked dependencies. The new leaves carry the old names, comments and rules, and every other leaf renders byte-identically to root.hcl 6.1.0.
+- **Refusals:** each of the refusals above fired, from `resolve-workloads.sh` and from root.hcl.
+- **Lint:** shellcheck, actionlint, `terragrunt hcl fmt` and `node --test` passed.
+
+Part of #192; runway's move closes it.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#195](https://github.com/noisypigeon/library/pull/195)
+
 ## [6.1.0] - 2026-10-25
 
 ### Read workloads that live in their zone (LIB-0037)
