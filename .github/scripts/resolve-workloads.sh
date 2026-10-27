@@ -697,8 +697,11 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
     name=$(jq -r --arg w "$workload" '.name // $w' <<<"$raw")
     json=$(expand_workload "$raw" "$parent" "$zf" "$host" "$user")
   fi
-  # A nested workload's names carry its name (LIB-0037 §2).
-  if [ "$nested" = true ]; then tag="-$name"; else tag=""; fi
+  # A nested workload's names carry its name in its zone's project (LIB-0037
+  # §2), and none in a project of its own (LIB-0040's 2026-10-27 amendment).
+  # The test is expand_workload's $own; root.hcl's workload_name_tag is the twin.
+  tag=""
+  if [ "$nested" = true ] && [ "$parent" != private ] && ! jq -e '(.deployments.scaleway.project? // {}) | objects | has("name") or has("prefix") or has("suffix")' <<<"$raw" >/dev/null; then tag="-$name"; fi
 
   structural=$(jq -r --arg kebab "$KEBAB" --arg workload "$workload" --arg unit "$unit" --argjson zones "$ZONES" --arg nested "$nested" --arg host "$host" --arg tag "$tag" '
     def entry_ok($where): if . == null or type == "object" then empty else "\($where) must be a mapping of module inputs" end;

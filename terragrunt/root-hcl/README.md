@@ -677,6 +677,15 @@ Since v8.0.0 (LIB-0039 §4), with `workflows/v8.0.0` or later, an unwrapped
 planning, by `resolve-workloads.sh` and by this template. A spoke whose files
 are all wrapped plans `No changes.` on the bump.
 
+Since v8.0.1, a workload in a project of its own leaves its name out of its
+implicit resources' names (LIB-0040's 2026-10-27 amendment). Only a workload
+in its zone's project has siblings there to tell apart. So a private
+workload, or a zoned one that sets its own project, gets
+`<prefix>-<suffix>-deployer` and `<prefix>-<code>-terraform-state`, not
+`<prefix>-<suffix>-<name>-deployer` and the like. Its IAM application and
+policy are renamed in place, but a state bucket that already exists would be
+replaced, so pin its name in `scaleway.state` before taking the bump.
+
 A workload may also have a `workloads/<workload>/secrets.yaml` (v4.5.0,
 LIB-0025), encrypted with sops as YAML. Its rule in the spoke's `.sops.yaml` is
 `^workloads/[^/]+/secrets\.yaml$`. It holds secret inputs under the same kind
