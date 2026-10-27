@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-26
 
+- [adr] LIB-0039 amendment: what moving runway found ([#204](https://github.com/noisypigeon/library/pull/204))
 - [workflows] Refuse unwrapped unit files (LIB-0039) ([#203](https://github.com/noisypigeon/library/pull/203))
 - [terragrunt/root-hcl] Refuse unwrapped unit files (LIB-0039) ([#203](https://github.com/noisypigeon/library/pull/203))
 - [workflows] Wrapped unit files, dnsRecords and zone services (LIB-0039) ([#202](https://github.com/noisypigeon/library/pull/202))
