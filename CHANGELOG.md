@@ -46,6 +46,8 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-27
 
+- [workflows] A workload in its own project doesn't repeat its name in its resources ([#206](https://github.com/noisypigeon/library/pull/206))
+- [terragrunt/root-hcl] A workload in its own project doesn't repeat its name in its resources ([#206](https://github.com/noisypigeon/library/pull/206))
 - [adr] LIB-0040: runway's cold-storage buckets become the private/cold-storage workload ([#205](https://github.com/noisypigeon/library/pull/205))
 
 ## 2026-10-26

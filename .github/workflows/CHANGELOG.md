@@ -4,6 +4,18 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [8.0.1] - 2026-10-27
+
+### A workload in its own project doesn't repeat its name in its resources
+
+A workload in a project of its own no longer carries its name in its implicit resources' names. LIB-0037 §2's name tag keeps sibling workloads apart in their zone's project. A private workload, or a zoned one that sets its own project, has no siblings there, and its project's suffix already names it, so the tag only repeated it: `workloads/private/cold-storage/` with suffix `cold-storage` named its deployer `wg-cold-storage-cold-storage-deployer`. Such a workload now gets `<prefix>-<suffix>-deployer` and a state bucket ending in `-terraform-state`, as a top-level workload does.
+
+Both twins change: root.hcl's `workload_name_tag` and `resolve-workloads.sh`'s `tag`. A workload in its zone's project keeps its tag, so its names don't change. A spoke with an existing workload in its own project sees its deployer's IAM application and policy renamed in place; its existing state bucket would be replaced, so pin that bucket's name under `scaleway.state` before taking the bump. LIB-0040's 2026-10-27 amendment records the rule.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#206](https://github.com/noisypigeon/library/pull/206)
+
 ## [8.0.0] - 2026-10-26
 
 ### Refuse unwrapped unit files (LIB-0039)
