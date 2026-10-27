@@ -44,6 +44,10 @@ ADR-0154 and ADR-0084 each made before it.
 
 <!-- entries below; newest first -->
 
+## 2026-10-27
+
+- [adr] LIB-0040: runway's cold-storage buckets become the private/cold-storage workload ([#205](https://github.com/noisypigeon/library/pull/205))
+
 ## 2026-10-26
 
 - [adr] LIB-0039 amendment: what moving runway found ([#204](https://github.com/noisypigeon/library/pull/204))
