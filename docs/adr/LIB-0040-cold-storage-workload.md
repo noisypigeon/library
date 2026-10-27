@@ -2,8 +2,9 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-27.
-- **Status**: Proposed. Applies LIB-0029 and LIB-0037 to runway, and amends
-  nothing.
+- **Status**: Proposed; amended 2026-10-27 (see `## Amendments`). Applies
+  LIB-0029 and LIB-0037 to runway. The amendment refines LIB-0037 §2's names
+  for a workload in its own project.
 
 ## Context
 
@@ -169,3 +170,33 @@ State can't be pushed into a bucket that doesn't exist yet. So:
    shows `No changes.`
 5. **B2 still holds all five buckets under the same names,** checked out of
    band with the spoke's key.
+
+## Amendments
+
+### 2026-10-27: a workload in its own project doesn't repeat its name
+
+§2 took the doubled name as what the rule produces. noisypigeon/runway#87's
+first stage then created the deployer's IAM application as
+`wg-cold-storage-cold-storage-deployer`, which showed the name was worth
+fixing before the rest landed.
+
+1. **A workload in a project of its own carries no name tag.** LIB-0037 §2's
+   `<name>` keeps sibling workloads apart in their zone's project. A private
+   workload, or a zoned one that sets its own project, has no siblings in it,
+   and the project's suffix already names it. Its implicit resources are named
+   as a top-level LIB-0028 workload's are.
+2. **cold-storage's names become:**
+
+   | Leaf | Name |
+   | --- | --- |
+   | `scaleway/project/main` | `wg-cold-storage` (unchanged) |
+   | `scaleway/{iam-application,iam-policy,iam-api-key}/deployer` | `wg-cold-storage-deployer` |
+   | `scaleway/bucket/state` | `wg-<code>-terraform-state` |
+
+3. **Both twins change:** root.hcl's `workload_name_tag` and
+   `resolve-workloads.sh`'s `tag`, in `terragrunt/root-hcl` v8.0.1 and
+   `workflows/v8.0.1`. A workload in its zone's project keeps its tag, so
+   blog's and garden's names don't change.
+4. **runway#87 takes 8.0.1 before its second stage.** The IAM application is
+   renamed in place. The policy, key and state bucket don't exist yet, so
+   they're created under the new names.

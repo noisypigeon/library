@@ -483,8 +483,10 @@ locals {
   # The host its zone gives a nested workload (LIB-0037 §3), or "".
   workload_host = try([for h, w in local.zones[local.workload_parent].hosts : h if w == local.workload][0], "")
   # What a unit's implicit resources carry in their names: a zone's `zone`
-  # (LIB-0036 §2), a nested workload's name (LIB-0037 §2).
-  workload_name_tag = local.is_nested_workload ? "-${local.workload_name}" : ""
+  # (LIB-0036 §2), a nested workload's name in its zone's project (LIB-0037
+  # §2). A workload in its own project has no siblings there to tell apart,
+  # so it carries none (LIB-0040's 2026-10-27 amendment).
+  workload_name_tag = local.workload_zone_project ? "-${local.workload_name}" : ""
   unit_tag          = local.is_zone_unit ? "-zone" : local.workload_name_tag
   # The workload's secrets.yaml (LIB-0025), decrypted the way terraform/secrets/
   # is: a for whose filter, not a conditional, keeps sops from running for a
