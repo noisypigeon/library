@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-26.
-- **Status**: Proposed. Amends:
+- **Status**: Proposed; amended 2026-10-26 (see `## Amendments`). Amends:
   - LIB-0036 §§1–3, whose `zone.yaml` moves under one `zone` key and gains
     `services` and `dnsRecords`;
   - LIB-0037 §§1–4, whose `workload.yaml` moves under one `workload` key;
@@ -272,3 +272,58 @@ a file runway hasn't rewritten yet.
    leaf shows `No changes.`
 5. **DNS answers as before.** That means MX, SPF, DKIM and DMARC for both mail
    zones, Bluesky's `_atproto` and Google's verification record.
+
+## Amendments
+
+### 2026-10-26: what moving runway found
+
+The library shipped in two releases: `terragrunt/root-hcl/v7.1.0` and
+`workflows/v7.1.0` (#202), then `v8.0.0` of both (#203). runway moved under
+§5 in four PRs:
+- noisypigeon/runway#83 took `workflows/v7.1.0` alone;
+- noisypigeon/runway#84 took `root_hcl_version` 7.1.0, wrapped all six files
+  and declared both zones' services;
+- noisypigeon/runway#85 took `workflows/v8.0.0`;
+- noisypigeon/runway#86 took `root_hcl_version` 8.0.0.
+
+The Verification held:
+
+1. **Nothing renders differently.** Under 7.1.0, all 61 leaves of an
+   unwrapped copy of runway rendered byte-identically to 7.0.0. The wrapped
+   copy's leaf set differed only by §5's two renames. Its renders differed
+   only in §5's comments and Google's ttl, with every record's content,
+   quoting included, unchanged. Under 8.0.0 the wrapped copy rendered
+   byte-identically to 7.1.0.
+2. **Each is refused by name, before planning,** in both
+   `resolve-workloads.sh` and root.hcl, on a copy of runway. That covers every
+   case in §§1–3, and from 8.0.0 an unwrapped zone.yaml, workload.yaml and
+   secrets.workload.yaml.
+3. **State moved, not recreated.** Both new keys were empty before the push.
+   After it, `proton-spf` planned only its comment and
+   `googlesearch-site-verification` its comment and ttl, both in place, with
+   their outputs unchanged. Then the old leaves were emptied, their outputs
+   included.
+4. **runway's move planned only §5's updates.** runway#84 changed eight
+   noisypigeon.com records in place: seven comments, and Google's comment and
+   ttl. 81 leaves had no changes, nothing was created, destroyed or replaced,
+   and pigeon.dev's six records were unchanged. After v8, runway#86's plan
+   shows `No changes.` on all 87 leaves, with none failed.
+5. **DNS answers as before.** After the apply, both mail zones' MX, SPF and
+   DKIM, noisypigeon.com's DMARC, Bluesky's `_atproto` and Google's
+   verification each answer with the same content as before. pigeon.dev
+   still serves no DMARC.
+
+Building it changed one rule in §3. The refusal of "a `dnsRecords` entry
+that holds the same name and type as an enabled service's record" would
+have refused a zone's own TXT at `@`, beside its verification records. What
+shipped is LIB-0030 §6's clash rule unchanged, plus one per-name rule: a
+name holds at most one `v=spf1` TXT and one `v=DMARC1` TXT, whoever declares
+them. So a second SPF or DMARC policy is refused, and any other extra record
+beside a service's is allowed. A `dmarc` string must begin `v=DMARC1` in
+both twins and the schema.
+
+Moving it confirmed LIB-0038's 2026-10-26 amendment. The two old leaves
+kept their outputs after `state rm` and were cleared the same way. garden
+needed a dispatch of `garden-generate.yml` after runway#83 merged before
+`schemas/zone/v3.json` and `schemas/workload/v4.json` resolved. The move
+needed no output rewrite, because a `dns-record` leaf has no dependents.
