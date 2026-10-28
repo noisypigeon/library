@@ -44,6 +44,10 @@ ADR-0154 and ADR-0084 each made before it.
 
 <!-- entries below; newest first -->
 
+## 2026-10-28
+
+- [adr] docs: LIB-0040 amendment, results of the cold-storage move ([#207](https://github.com/noisypigeon/library/pull/207))
+
 ## 2026-10-27
 
 - [workflows] A workload in its own project doesn't repeat its name in its resources ([#206](https://github.com/noisypigeon/library/pull/206))
