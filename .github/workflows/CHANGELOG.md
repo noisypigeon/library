@@ -4,6 +4,41 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [8.2.0] - 2026-10-28
+
+### Plan workload leaves in waves, and replan only the stage left
+
+`terragrunt-run.yml` now plans a spoke's workload leaves in parallel waves rather than one at a time. A staged apply's replan now plans only what that apply left deferred, and every run shares a provider cache (LIB-0042).
+
+**Workload leaves plan in waves (LIB-0042 §1).** A wave is every selected unit whose workload dependencies have all settled. Each wave is planned by one parallel `terragrunt run --all`, so there is one invocation per DAG level instead of one per leaf. On runway that is about 6 invocations instead of about 72.
+
+Deferral keeps LIB-0024 §3's rule: a unit is deferred if any of its workload dependencies changed or is deferred. Whether a unit changed is now read from its JSON plan, by the same count the PR comment uses, rather than from `-detailed-exitcode`. The `=== <unit>: deferred until … is applied ===` lines and the comment are unchanged. The new `plan-waves.js` picks each wave and classifies its units; its tests run in `scripts-test.yml`.
+
+**A replan plans only the stage that's left (LIB-0042 §2).** The plan archive now records the units a plan deferred. When a staged apply's replan finds that record, and the PR still selects what was planned, it plans only those units. Its hand-written leaves and destroys were all applied with the earlier stage, so they aren't planned again.
+
+The archive also marks a plan as one stage. That stage's apply skips the hand-written leaves and destroys, and reports only the stage's own units as deferred.
+
+A `terragrunt plan` comment still plans everything. So does a replan of an archive from before this version.
+
+**A shared provider cache (LIB-0042 §3).** The run step sets `TG_PROVIDER_CACHE=1`, and `actions/cache` keeps the cache directory between runs, keyed on `root.hcl`. Parallel inits need this cache to be safe, and it saves the provider download on each one. It holds provider packages only: `.terragrunt-cache`, whose generated files can hold decrypted values, is still cleared and never cached.
+
+**One tag list per run (LIB-0042 §4).** "Select units" lists the library's `terraform/*` tags once and exports the list as `LIB_TAG_LIST`. From root.hcl v8.2.0, a workload leaf reads its module's version from that list, instead of running `git ls-remote` on every parse. An older root.hcl ignores it.
+
+**Taking it.** A spoke bumps its callers to `workflows/v8.2.0`, and its `root.hcl` to v8.2.0 for the tag list. `plan-archive.sh pack` takes optional extra files, which is backward compatible.
+
+**Checked locally** by running the step's own script on a terragrunt tree with a 9-link chain and a diamond:
+- With no changes, waves plan the same units as the serial loop.
+- With two units changed, waves defer the same seven units, with the same lines.
+- A stage replan planned only those seven units, and its apply applied only them.
+- A second init with the provider cache took 0.6s, against 1.8s for the first.
+
+LIB-0042 is now Accepted.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#216](https://github.com/noisypigeon/library/pull/216)
+
 ## [8.1.0] - 2026-10-28
 
 ### A workload's own Backblaze key, and providers with no spoke-wide credentials

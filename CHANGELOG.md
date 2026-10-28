@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-28
 
+- [workflows] Plan workload leaves in waves, and replan only the stage left ([#216](https://github.com/noisypigeon/library/pull/216))
 - [terragrunt/root-hcl] Read workload module versions from a run's tag list ([#215](https://github.com/noisypigeon/library/pull/215))
 - [adr] docs: LIB-0041 amendment, results of retiring runway's spoke deployers ([#214](https://github.com/noisypigeon/library/pull/214))
 - [adr] Link LIB-0042's render-diff selection issue ([#213](https://github.com/noisypigeon/library/pull/213))
