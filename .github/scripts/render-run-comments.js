@@ -256,4 +256,4 @@ function linkSummary(summary, urls) {
   });
 }
 
-module.exports = { render, linkSummary, BUDGET, _test: { normalizeUnit, parse, countPlan, splitBody, maskText, fenceFor } };
+module.exports = { render, linkSummary, countPlan, BUDGET, _test: { normalizeUnit, parse, countPlan, splitBody, maskText, fenceFor } };
