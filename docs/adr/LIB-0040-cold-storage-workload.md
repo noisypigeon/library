@@ -200,3 +200,42 @@ fixing before the rest landed.
 4. **runway#87 takes 8.0.1 before its second stage.** The IAM application is
    renamed in place. The policy, key and state bucket don't exist yet, so
    they're created under the new names.
+
+### 2026-10-28: results
+
+noisypigeon/runway#87 and noisypigeon/runway#89 both applied and merged, and
+runway took root-hcl and workflows v8.0.1 in between (runway#88). All five
+Verification items hold:
+
+1. **The first PR created only the workload's own leaves:** the project, the
+   three deployer leaves and the state bucket, under the 2026-10-27
+   amendment's names.
+2. **State moved, not recreated.** Each of the five bucket leaves planned
+   `No changes.` at its workload key before its old leaf was emptied.
+3. **The deleted leaves plan nothing.** All six old leaves are empty.
+4. **It converges.** runway#89's apply changed nothing in any of its 16
+   leaves.
+5. **B2 still holds all five buckets** under the same names and bucket IDs.
+
+Four things went differently from §4 and §5:
+
+1. **The original key's leaf did have state.** §3 assumed it never had any,
+   but its state still held the key that B2 no longer did. The key had
+   already been revoked out of band, so nothing needed revoking. Its leaf was
+   emptied with `state rm`, like the others.
+2. **`state rm` left that leaf's outputs behind.** runway#89 planned their
+   removal, an outputs-only change, and its apply wrote it. Emptying a leaf
+   should mean no resources *and* no outputs. A later move should check both
+   before the PR that deletes the leaf.
+3. **The `moved` block needs a `state mv` too.** §4's table left
+   `random_string.suffix` to v0.2.0's `moved` block. That made each pushed
+   leaf plan a move, so step 5's plan exited 2 rather than 0. Each leaf ran
+   `state mv 'module.this.random_string.suffix'
+   'module.this.random_string.suffix[0]'` before its plan. A later move
+   should rename to the `moved` block's target in the backup instead.
+4. **Three pushes left stale locks.** A dropped connection killed three
+   `state push` runs from the operator's own machine after they took the
+   lock. Each lock was released with `force-unlock`, as
+   `docs/runbooks/release-a-stuck-state-lock.md` describes, once its `Who` and
+   `Operation` showed it was ours. The pushes were then retried. None had
+   written state.
