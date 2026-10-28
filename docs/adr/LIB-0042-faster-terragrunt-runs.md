@@ -230,10 +230,10 @@ implementation measures that first.
   But a rendered file holds secrets, so the comparison has to hash in memory,
   and dependency outputs complicate it. That needs its own record.
 - **Narrowing a secrets-only change** to the leaves that read the changed
-  file. Today any change under `terraform/secrets/` selects every unit.
+  file. Today any change under `terraform/secrets/` selects every unit (#211).
 - **Committing provider lock files.** A lock file saved about 1.9s per init
   in our measurements. But unit leaves are generated, so a lock file needs a
-  home that survives regeneration.
+  home that survives regeneration (#212).
 - **Bigger or self-hosted runners.**
 
 ## Verification
