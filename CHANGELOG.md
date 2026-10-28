@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-28
 
+- [adr] LIB-0042: faster spoke Terragrunt runs (proposed) ([#209](https://github.com/noisypigeon/library/pull/209))
 - [workflows] A workload's own Backblaze key, and providers with no spoke-wide credentials ([#208](https://github.com/noisypigeon/library/pull/208))
 - [terragrunt/root-hcl] A workload's own Backblaze key, and providers with no spoke-wide credentials ([#208](https://github.com/noisypigeon/library/pull/208))
 - [backblaze/api-key] A workload's own Backblaze key, and providers with no spoke-wide credentials ([#208](https://github.com/noisypigeon/library/pull/208))
