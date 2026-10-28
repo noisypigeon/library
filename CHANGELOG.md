@@ -46,6 +46,9 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-28
 
+- [workflows] A workload's own Backblaze key, and providers with no spoke-wide credentials ([#208](https://github.com/noisypigeon/library/pull/208))
+- [terragrunt/root-hcl] A workload's own Backblaze key, and providers with no spoke-wide credentials ([#208](https://github.com/noisypigeon/library/pull/208))
+- [backblaze/api-key] A workload's own Backblaze key, and providers with no spoke-wide credentials ([#208](https://github.com/noisypigeon/library/pull/208))
 - [adr] docs: LIB-0040 amendment, results of the cold-storage move ([#207](https://github.com/noisypigeon/library/pull/207))
 
 ## 2026-10-27
