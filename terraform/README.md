@@ -35,7 +35,7 @@ This directory holds only module source — it has no root provider/backend conf
 | `scaleway/cockpit-observability` | A Scaleway Cockpit (`scaleway_cockpit_source`/`scaleway_cockpit_token`) wrapper that creates a metrics and/or logs source plus a shared push token, each individually toggleable via `enable_metrics`/`enable_logs`. |
 | `scaleway/compute-cluster` | A cluster of `pigeon-cli` job instances: one shared Private Network and Public Gateway, an optional debug bastion, and per job an instance, IAM application/policy/API keys, optional block volume, IP and private NIC. The composing layer for every `compute-instance` concern (ADR-0153). |
 | `backblaze/bucket` | A private Backblaze B2 bucket (`b2_bucket`) with a randomized name suffix, or `exact_name`; always `bucket_type = "allPrivate"`. |
-| `backblaze/api-key` | A thin wrapper around `b2_application_key`, defaulting `valid_duration_in_seconds` to 30 days. |
+| `backblaze/api-key` | A thin wrapper around `b2_application_key`, defaulting `valid_duration_in_seconds` to 30 days, or rotating every `rotation_days`. |
 | `cloudflare/bucket` | A thin wrapper around a single Cloudflare R2 bucket (`cloudflare_r2_bucket`), named like `backblaze/bucket` and `scaleway/bucket`: a randomized name suffix, or `exact_name`. |
 | `cloudflare/dns-record` | A thin wrapper around a single `cloudflare_dns_record`. Zone-scoped: takes the zone's apex domain as `zone` and looks its ID up (LIB-0011). |
 | `cloudflare/ruleset` | A thin wrapper around a single `cloudflare_ruleset`, its zone named by apex (LIB-0030). A zone's `apexRedirect` expands into one, beside two `dns-record` placeholders (LIB-0038). |

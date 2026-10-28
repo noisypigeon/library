@@ -312,7 +312,10 @@ if [ -n "$STATIC_ROOT" ]; then
     kinds=("$wmodule|inputs")
     if [ "$wmodule" = scaleway/bucket ]; then kinds+=("$wmodule#state|state"); fi
     case "$wmodule" in
-      backblaze/api-key | cloudflare/bucket | cloudflare/ruleset | cloudflare/api-token) kinds=("$wmodule#workload|workload") ;;
+      # A workload's own Backblaze key, backblaze.deployer, takes the module's
+      # plain inputs (LIB-0041 §1).
+      backblaze/api-key) kinds=("$wmodule#workload|workload" "$wmodule|inputs") ;;
+      cloudflare/bucket | cloudflare/ruleset | cloudflare/api-token) kinds=("$wmodule#workload|workload") ;;
     esac
     for wkind in "${kinds[@]}"; do
       kinds_json="$(jq --arg m "$wmodule" --arg key "${wkind%|*}" --arg file "${wkind#*|}" --arg versions "$wversions" --arg base "$SCHEMA_BASE_URL" '
@@ -390,6 +393,7 @@ if [ -n "$STATIC_ROOT" ]; then
         type: ["object", "null"],
         additionalProperties: false,
         properties: {
+          deployer: ($k["backblaze/api-key"] // {}),
           bucket: {
             type: ["object", "null"],
             propertyNames: {pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"},
@@ -397,7 +401,7 @@ if [ -n "$STATIC_ROOT" ]; then
           },
           apiKey: {
             type: ["object", "null"],
-            propertyNames: {pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"},
+            propertyNames: {pattern: "^[a-z0-9]+(-[a-z0-9]+)*$", not: {const: "deployer"}},
             additionalProperties: ($k["backblaze/api-key#workload"] // {})
           }
         }

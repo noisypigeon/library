@@ -337,3 +337,12 @@ minting anything.
 - **No code changes.** A spoke whose bootstrap token lacks *Zone Read* fails
   the same way, at plan time, before anything is minted.
 
+
+### 2026-10-28: a workload's Backblaze key is its own (LIB-0041)
+
+LIB-0041 supersedes §5 for workloads. A workload with Backblaze kinds gets its
+own key, `backblaze/api-key/deployer`, minted with the breakglass key as §4's
+Cloudflare tokens are, and its Backblaze leaves sign in with it. §5's reason
+stands: the key is still account-wide. A spoke with no hand-written Backblaze
+or Cloudflare leaf may then set the provider `workloads_only` and retire §2's
+spoke deployer and its hand-copied key. runway does both.

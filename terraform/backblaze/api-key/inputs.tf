@@ -19,3 +19,14 @@ variable "valid_duration_in_seconds" {
   description = "Key validity duration in seconds, counted from creation. Defaults to 30 days (2592000 seconds); pass null for a key that never expires."
   default     = 2592000
 }
+
+variable "rotation_days" {
+  type        = number
+  description = "Replace the key every this many days, create-before-destroy, and let each expire a week after its scheduled rotation (LIB-0041 §1). Overrides valid_duration_in_seconds. Null never rotates"
+  default     = null
+
+  validation {
+    condition     = var.rotation_days == null || try(var.rotation_days > 0, false)
+    error_message = "rotation_days must be a positive number of days."
+  }
+}
