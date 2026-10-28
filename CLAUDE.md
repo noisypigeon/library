@@ -33,7 +33,10 @@ nothing that is deployed:
   only those leaves then read that provider's credentials, and the state
   backend's when it's the same provider, from
   `terraform/secrets/<provider>_breakglass.enc`, a hand-made key Terraform
-  never manages (LIB-0014). It also builds every unit leaf's module block:
+  never manages (LIB-0014). Cloudflare's or Backblaze's entry may instead set
+  `workloads_only = true` with `breakglass = {}`: no hand-written leaf turns
+  it on, the spoke keeps no credentials of its own for it, and the breakglass
+  key mints each unit's own token or key (LIB-0041). It also builds every unit leaf's module block:
   a workload's from `workloads/<w>/values.yaml`, and a zone's from
   `zones/<zone>/zone.yaml`, which names the one workload that may also write
   in that zone (LIB-0036; `.github/scripts/resolve-workloads.sh` generates

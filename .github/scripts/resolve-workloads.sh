@@ -16,9 +16,11 @@
 # its own remote_state, which replaces root.hcl's: the bucket comes from its
 # state dependency, and it signs in with the deployer's API key (LIB-0028
 # §5).
-# Backblaze kinds (LIB-0029) sign in with the spoke's Backblaze key and keep
-# their state in that same workload bucket. An API key depends on each
-# bucket its `buckets` list names, and gets their IDs as bucket_ids.
+# Backblaze kinds (LIB-0029) sign in with the workload's own Backblaze key,
+# backblaze/api-key/deployer, which any workload declaring one has
+# (LIB-0041), and keep their state in that same workload bucket. An API key
+# depends on each bucket its `buckets` list names, and gets their IDs as
+# bucket_ids.
 # Cloudflare kinds (LIB-0030) sign in with the unit's own Cloudflare token,
 # cloudflare/api-token/deployer (LIB-0033 §4). A zone always has one; a
 # workload has one when its zone's `hosts` gives it a host, or when it
@@ -124,11 +126,14 @@ done
 #   the unit's state bucket, whose instance is `state` (LIB-0028 §2), and
 #   `cfimplicit` is the unit's Cloudflare token, whose instance is `deployer`,
 #   present when the workload has a host or declares an R2 bucket (LIB-0037
-#   §3), and always present in a zone.
+#   §3), and always present in a zone. `b2implicit` is the workload's
+#   Backblaze key, whose instance is `deployer`, present when it declares a
+#   Backblaze bucket or key (LIB-0041 §1).
 # - credentials (LIB-0024 §2): `spoke` kinds sign in with the spoke's key;
 #   `workload` kinds with their provider's workload credential, which they
 #   then also depend on: a Scaleway kind the deployer's API key, a Cloudflare
-#   kind the workload's token, cf_token (LIB-0033 §4).
+#   kind the workload's token, cf_token (LIB-0033 §4), a Backblaze kind the
+#   workload's key, b2_key (LIB-0041 §2).
 # - state (LIB-0028 §4): `spoke` kinds keep state in the spoke's bucket;
 #   `workload` kinds in the workload's, so they also depend on the state
 #   bucket and on the deployer whose key signs in to it.
@@ -145,8 +150,9 @@ KINDS=(
   "scaleway.iam.application|scaleway/iam-application|singleton||spoke|workload|w"
   "scaleway.bucket|scaleway/bucket|map|project|workload|workload|w"
   "scaleway.iam.apiKey|scaleway/iam-api-key|singleton|project application|spoke|workload|w"
-  "backblaze.bucket|backblaze/bucket|map||spoke|workload|w"
-  "backblaze.apiKey|backblaze/api-key|map|buckets|spoke|workload|w"
+  "backblaze.deployer|backblaze/api-key|b2implicit||spoke|workload|w"
+  "backblaze.bucket|backblaze/bucket|map||workload|workload|w"
+  "backblaze.apiKey|backblaze/api-key|map|buckets|workload|workload|w"
   "cloudflare.deployer|cloudflare/api-token|cfimplicit||spoke|workload|wz"
   "cloudflare.bucket|cloudflare/bucket|map||workload|workload|w"
   "cloudflare.dnsRecord|cloudflare/dns-record|map||workload|workload|wz"
@@ -167,6 +173,7 @@ dep_dir() {
     deployer) echo "scaleway/iam-api-key/deployer" ;;
     state) echo "scaleway/bucket/state" ;;
     cf_token) echo "cloudflare/api-token/deployer" ;;
+    b2_key) echo "backblaze/api-key/deployer" ;;
     bucket_*) echo "backblaze/bucket/$(echo "${1#bucket_}" | tr _ -)" ;;
   esac
 }
@@ -185,6 +192,10 @@ wiring_lines() {
     scaleway/iam-policy:project) echo "project_ids|[dependency.project.outputs.module.id]" ;;
     scaleway/iam-policy:deployer_application | scaleway/iam-api-key:deployer_application) echo "application_id|dependency.deployer_application.outputs.module.id" ;;
     cloudflare/*:cf_token) echo "cloudflare_api_token|dependency.cf_token.outputs.module.token" ;;
+    backblaze/*:b2_key)
+      echo "backblaze_application_key_id|dependency.b2_key.outputs.module.application_key_id"
+      echo "backblaze_application_key|dependency.b2_key.outputs.module.application_key"
+      ;;
     scaleway/*:deployer)
       if [ "$3" = workload ]; then
         echo "scaleway_access_key|dependency.deployer.outputs.module.access_key"
@@ -746,7 +757,8 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
       end),
       # Backblaze kinds (LIB-0029 §§1-5).
       (. as $file | .backblaze // {} | if type != "object" then "backblaze must be a mapping" else
-        keys_in("backblaze"; ["bucket", "apiKey"]),
+        keys_in("backblaze"; ["deployer", "bucket", "apiKey"]),
+        (.deployer | entry_ok("backblaze.deployer")),
         (.bucket // {} | if type != "object" then "backblaze.bucket must be a mapping of bucket names" else
           to_entries[] |
             (if (.key | test($kebab)) then empty else "backblaze.bucket.\(.key): bucket name must be kebab-case" end),
@@ -759,6 +771,7 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
         (.apiKey // {} | if type != "object" then "backblaze.apiKey must be a mapping of key names" else
           to_entries[] | .key as $k |
             (if ($k | test($kebab)) then empty else "backblaze.apiKey.\($k): key name must be kebab-case" end),
+            (if $k == "deployer" then "backblaze.apiKey.deployer: `deployer` is the workload'"'"'s own key'"'"'s instance; configure it as backblaze.deployer (LIB-0041 §1)" else empty end),
             (.value | entry_ok("backblaze.apiKey.\($k)")),
             (.value // {} | objects |
               (if (.buckets | type) != "array" or (.buckets | length) == 0
@@ -808,7 +821,7 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
         # The clash checks (§6) run spoke-wide, after every unit.
         empty
       end),
-      ([.scaleway.project, (.scaleway.deployer // {} | objects | .application, .policy, .apiKey), .scaleway.state, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?), (.backblaze.bucket // {} | .[]?), (.backblaze.apiKey // {} | .[]?), (.cloudflare.deployer), (.cloudflare // {} | (.bucket, .dnsRecord, .ruleset) // {} | .[]?)]
+      ([.scaleway.project, (.scaleway.deployer // {} | objects | .application, .policy, .apiKey), .scaleway.state, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?), (.backblaze.deployer), (.backblaze.bucket // {} | .[]?), (.backblaze.apiKey // {} | .[]?), (.cloudflare.deployer), (.cloudflare // {} | (.bucket, .dnsRecord, .ruleset) // {} | .[]?)]
         | .[] | objects | select(has("version")) | .version
         | if type == "string" and test("^[0-9]+(\\.[0-9]+){0,2}$") then empty
           else "version \(tojson) must be a quoted X, X.Y or X.Y.Z" end)
@@ -844,6 +857,7 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
     if [ "$credentials" = workload ]; then
       case "$module" in
         cloudflare/*) deps="$deps cf_token" ;;
+        backblaze/*) deps="$deps b2_key" ;;
         *) deps="$deps deployer" ;;
       esac
     fi
@@ -860,6 +874,9 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
     elif [ "$shape" = cfimplicit ]; then
       # A host, or an R2 bucket (LIB-0037 §3).
       names=$(jq -r --arg host "$host" 'if $host != "" or ((.cloudflare.bucket // {}) | length) > 0 then "deployer" else empty end' <<<"$json")
+    elif [ "$shape" = b2implicit ]; then
+      # A Backblaze bucket or key (LIB-0041 §1).
+      names=$(jq -r 'if ((.backblaze.bucket // {}) | length) + ((.backblaze.apiKey // {}) | length) > 0 then "deployer" else empty end' <<<"$json")
     elif [ "$shape" = state ]; then
       names=state
     else
@@ -1000,7 +1017,9 @@ if [ "$CHECK" = true ]; then
             ($k.value // {} | keys[] as $i | select($v.scaleway.iam // {} | has($i) | not) | "scaleway.iam.\($i): values.yaml declares no such entry")
           else "unknown key scaleway.\($k.key)" end),
         (.backblaze // {} | to_entries[] as $k |
-          if $k.key == "bucket" or $k.key == "apiKey" then
+          if $k.key == "deployer" then
+            empty
+          elif $k.key == "bucket" or $k.key == "apiKey" then
             ($k.value // {} | keys[] as $i | select($v.backblaze[$k.key] // {} | has($i) | not) | "backblaze.\($k.key).\($i): values.yaml declares no such entry"),
             (if $k.key == "apiKey" then ($k.value // {} | to_entries[] | select(.value | objects | has("bucket_ids")) | "backblaze.apiKey.\(.key).bucket_ids can'"'"'t be set (LIB-0029 §3)") else empty end)
           else "unknown key backblaze.\($k.key)" end),
@@ -1011,7 +1030,7 @@ if [ "$CHECK" = true ]; then
             ($k.value // {} | keys[] as $i | select($v.cloudflare[$k.key] // {} | has($i) | not) | "cloudflare.\($k.key).\($i): workload.yaml declares no such entry"),
             ($k.value // {} | to_entries[] | select(.value | objects | has("account_id") or has("zone_id")) | "cloudflare.\($k.key).\(.key) cannot set account_id or zone_id (LIB-0030 §§4-5)")
           else "unknown key cloudflare.\($k.key)" end),
-        ([.scaleway.project, (.scaleway.deployer // {} | objects | .application, .policy, .apiKey), .scaleway.state, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?), (.backblaze.bucket // {} | .[]?), (.backblaze.apiKey // {} | .[]?), (.cloudflare // {} | (.bucket, .dnsRecord, .ruleset) // {} | .[]?)]
+        ([.scaleway.project, (.scaleway.deployer // {} | objects | .application, .policy, .apiKey), .scaleway.state, .scaleway.iam.application, .scaleway.iam.apiKey, (.scaleway.bucket // {} | .[]?), (.backblaze.deployer), (.backblaze.bucket // {} | .[]?), (.backblaze.apiKey // {} | .[]?), (.cloudflare // {} | (.bucket, .dnsRecord, .ruleset) // {} | .[]?)]
           | .[] | objects | to_entries[] | select((.value | type) == "object" or (.value | type) == "array")
           | "\(.key) must be one value, not a list or a map")
       end
@@ -1060,11 +1079,11 @@ if [ "$CHECK" = true ]; then
     # A wiring input the stub sets has to exist at this version too: an older
     # pin can predate it (iam-api-key v0.1.0 has no default_project_id). The
     # provider credentials a stub passes aren't module inputs: root.hcl signs
-    # the provider in with them (LIB-0024 §2, LIB-0033 §4).
+    # the provider in with them (LIB-0024 §2, LIB-0033 §4, LIB-0041 §2).
     missing_wiring=""
     for dep in $declared_deps; do
       while IFS='|' read -r input _; do
-        case "$input" in "" | scaleway_access_key | scaleway_secret_key | cloudflare_api_token) continue ;; esac
+        case "$input" in "" | scaleway_access_key | scaleway_secret_key | cloudflare_api_token | backblaze_application_key_id | backblaze_application_key) continue ;; esac
         if ! jq -e --arg i "$input" 'has($i)' <<<"$entry" >/dev/null &&
            ! jq -e --arg i "$input" 'index($i) != null' <<<"$props" >/dev/null; then
           missing_wiring="${missing_wiring:+$missing_wiring, }$input"

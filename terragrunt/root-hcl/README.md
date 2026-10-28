@@ -94,9 +94,9 @@ the one sops dotenv file for its concern, under the spoke's
 | File | Required when | Keys, exactly | Feeds |
 | --- | --- | --- | --- |
 | `terraform.enc` | always | `TERRAFORM_STATE_BUCKET_NAME`, `TERRAFORM_STATE_ACCESS_KEY_ID`, `TERRAFORM_STATE_ACCESS_KEY`; plus `TERRAFORM_STATE_BACKUP_BUCKET_NAME`, `TERRAFORM_STATE_BACKUP_ACCESS_KEY_ID`, `TERRAFORM_STATE_BACKUP_ACCESS_KEY` if and only if `state_backup = true` | the state backend, either one; `state-backup.yml`'s B2 copy (LIB-0007) |
-| `cloudflare.enc` | `providers.cloudflare` is set | `CLOUDFLARE_PROVIDER_ACCOUNT_ID`, `CLOUDFLARE_PROVIDER_TOKEN` | `provider "cloudflare"`, `local.cloudflare_account_id`, and the R2 endpoint |
+| `cloudflare.enc` | `providers.cloudflare` is set | `CLOUDFLARE_PROVIDER_ACCOUNT_ID`; plus `CLOUDFLARE_PROVIDER_TOKEN` unless it sets `workloads_only` | `provider "cloudflare"`, `local.cloudflare_account_id`, and the R2 endpoint |
 | `scaleway.enc` | `providers.scaleway` is set | `SCALEWAY_PROVIDER_ACCESS_KEY_ID`, `SCALEWAY_PROVIDER_ACCESS_KEY`, `SCALEWAY_PROVIDER_ORGANIZATION_ID`, `SCALEWAY_PROVIDER_PROJECT_ID` | `provider "scaleway"`, `local.scaleway_organization_id` and `local.scaleway_project_id` |
-| `backblaze.enc` | `providers.backblaze` is set | `BACKBLAZE_PROVIDER_ACCESS_KEY_ID`, `BACKBLAZE_PROVIDER_ACCESS_KEY` | `provider "b2"` |
+| `backblaze.enc` | `providers.backblaze` is set without `workloads_only` | `BACKBLAZE_PROVIDER_ACCESS_KEY_ID`, `BACKBLAZE_PROVIDER_ACCESS_KEY` | `provider "b2"` |
 | `env.enc` | optional | any key matching `^[A-Z][A-Z0-9_]*$` | `local.<lowercased key>` in every leaf |
 
 The contract:
@@ -147,8 +147,11 @@ because R2 can't version objects (LIB-0007), and still requires
 
 `secrets-schema.json` holds the table above as data. `files.<name>` has
 `required_when`, a list of conditions any one of which requires the file
-(`always`, `backend.<state_backend>`, `provider.<name>`), `keys`, and
-`keys_when`, extra keys under a condition (`state_backup`). `files.env` has no
+(`always`, `backend.<state_backend>`, `provider.<name>`,
+`spoke_credentials.<name>`), `keys`, and `keys_when`, extra keys under a
+condition (`state_backup`, `spoke_credentials.<name>`).
+`spoke_credentials.<name>` holds where `provider.<name>` does, unless that
+provider sets `workloads_only` (v8.1.0, LIB-0041 §3). `files.env` has no
 `required_when`, which makes it optional, plus its `pattern` and `reserved`
 local names. It's enforced twice, and both name the file and key, never a
 value:
@@ -227,6 +230,17 @@ providers = {
   backend is always `fr-par`, whatever this says.
 - **`backblaze`** generates `provider "b2"` from
   `BACKBLAZE_PROVIDER_ACCESS_KEY{_ID,}` (DEV-0148).
+- **`workloads_only = true`** (v8.1.0, LIB-0041 §3), for `cloudflare` or
+  `backblaze`, turns the provider on for unit leaves alone. The spoke then
+  keeps no credentials of its own for it: no `backblaze.enc`, and no
+  `CLOUDFLARE_PROVIDER_TOKEN`. It needs `breakglass`, with no `leaves`, since
+  the breakglass key mints every key the units sign in with. Neither entry
+  may set `leaves`:
+
+  ```hcl
+  backblaze  = { workloads_only = true, breakglass = {} }
+  cloudflare = { workloads_only = true, breakglass = {} }
+  ```
 - **`grafana`** generates a `data "scaleway_cockpit_grafana" "grafana"` and a
   `provider "grafana"` that authenticates with **`local.grafana_auth_token`**,
   which the leaf must define (an IAM API key secret, usually a Terragrunt
@@ -417,7 +431,8 @@ backblaze:
 ```
 
 - **They sign in with the spoke's Backblaze key**, from `backblaze.enc`, and
-  keep their state in the workload's bucket.
+  keep their state in the workload's bucket. Since v8.1.0 they sign in with
+  the workload's own key instead; see below.
 - **An API key reaches only the buckets its `buckets` list names.** Each is
   one of the workload's `backblaze.bucket` keys, and its stub wires their IDs
   as `bucket_ids`. `bucket_ids` itself can't be set, and `capabilities` has
@@ -676,6 +691,23 @@ Since v8.0.0 (LIB-0039 §4), with `workflows/v8.0.0` or later, an unwrapped
 `zone.yaml`, `workload.yaml` or `secrets.workload.yaml` is refused before
 planning, by `resolve-workloads.sh` and by this template. A spoke whose files
 are all wrapped plans `No changes.` on the bump.
+
+Since v8.1.0 (LIB-0041), with `workflows/v8.1.0` or later, a workload that
+declares a `backblaze.bucket` or `backblaze.apiKey` gets its own Backblaze key,
+`backblaze/api-key/deployer`, as it gets a Cloudflare token:
+
+- **It's minted with the spoke's Backblaze breakglass key** where the spoke
+  has one, and with `backblaze.enc`'s key otherwise. It's account-wide, since
+  B2 needs an unrestricted key to create a bucket, and it rotates every 30
+  days, each key expiring a week after its rotation. It's named
+  `<prefix>-<suffix>-backblaze-deployer`, with the unit's tag as other
+  implicit names have it. `backblaze.deployer` overrides any input.
+- **Every Backblaze leaf of the workload signs in with it.** Its stub
+  depends on the key and passes its ID and secret to the provider.
+  `backblaze.apiKey.deployer` is reserved.
+- **Taking the bump plans `+1` per workload:** the key. Its Backblaze leaves
+  are deferred until the key applies, then plan `No changes.`, since only
+  their provider's credentials change.
 
 Since v8.0.1, a workload in a project of its own leaves its name out of its
 implicit resources' names (LIB-0040's 2026-10-27 amendment). Only a workload

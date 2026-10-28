@@ -132,6 +132,12 @@
 #
 # v8.0.0 (LIB-0039 §4) refuses an unwrapped zone.yaml, workload.yaml or
 # secrets.workload.yaml, before planning.
+#
+# Since v8.1.0 (LIB-0041) a workload that declares a Backblaze kind gets its
+# own key, backblaze/api-key/deployer, minted with the spoke's Backblaze
+# breakglass key where it has one, and its Backblaze leaves sign in with it. A
+# provider's entry may set workloads_only = true: no hand-written leaf turns it
+# on, and the spoke keeps no credentials of its own for it.
 
 locals {
   # The spoke's instance values. Missing spoke.hcl is a hard error, which is
@@ -152,18 +158,23 @@ locals {
   # is a list of path prefixes (relative to this file, ending in "/") and the
   # provider is on only for leaves under one of them; omitted, it is on for
   # every leaf.
+  #
+  # `workloads_only = true` (LIB-0041 §3) turns it on for unit leaves alone.
+  # The spoke then holds no credentials of its own for it, so it needs
+  # `breakglass`, with no `leaves`, to mint the units' keys.
   providers         = local.spoke.locals.providers
   known_providers   = ["cloudflare", "scaleway", "backblaze", "grafana"]
   unknown_providers = setsubtract(keys(local.providers), local.known_providers)
   provider_prefixes = flatten([for name, cfg in local.providers : concat(try(cfg.leaves, []), try(cfg.breakglass.leaves, []))])
 
-  leaf = "${path_relative_to_include()}/"
+  leaf           = "${path_relative_to_include()}/"
+  workloads_only = { for name in local.known_providers : name => try(local.providers[name].workloads_only, false) == true }
   # A workload leaf gets exactly the provider its path names (LIB-0029 §4):
   # `leaves` can't name workloads/*/<provider>/, and shouldn't turn a
   # provider on for every workload.
   provider_on = {
     for name in local.known_providers : name => contains(keys(local.providers), name) && (
-      local.is_workload_leaf ? name == local.leaf_provider : (
+      local.is_workload_leaf ? name == local.leaf_provider : !local.workloads_only[name] && (
         length(try(local.providers[name].leaves, [])) == 0 ||
         anytrue([for prefix in try(local.providers[name].leaves, []) : startswith(local.leaf, prefix)])
       )
@@ -194,10 +205,19 @@ locals {
     local.workload_module == "cloudflare/api-token" &&
     local.workload_instance == "deployer"
   )
+  # So is a workload's own Backblaze key leaf (LIB-0041 §1), which a key that
+  # can only mint can mint.
+  is_b2_key_leaf = (
+    local.is_workload_leaf &&
+    local.leaf_provider == "backblaze" &&
+    local.workload_module == "backblaze/api-key" &&
+    local.workload_instance == "deployer"
+  )
   breakglass_on = {
     for name in local.known_providers : name => local.provider_on[name] && contains(local.breakglass_providers, name) && (
       anytrue([for prefix in try(local.providers[name].breakglass.leaves, []) : startswith(local.leaf, prefix)]) ||
-      (name == "cloudflare" && local.is_cf_token_leaf)
+      (name == "cloudflare" && local.is_cf_token_leaf) ||
+      (name == "backblaze" && local.is_b2_key_leaf)
     )
   }
 
@@ -211,9 +231,14 @@ locals {
   guard_grafana           = local.grafana_enabled && !local.scaleway_enabled ? file("providers.grafana is on for ${path_relative_to_include()} but providers.scaleway is not; its data source needs the Scaleway provider") : true
   guard_bucket_key        = contains(keys(local.spoke.locals), "state_bucket_secret") ? file("spoke.hcl sets state_bucket_secret: root.hcl v3 reads the state bucket from TERRAFORM_STATE_BUCKET_NAME (LIB-0010) in terraform/secrets/terraform.enc; delete state_bucket_secret") : true
   guard_r2_account        = local.state_backend == "cloudflare" && !contains(keys(local.providers), "cloudflare") ? file("spoke.hcl state_backend is cloudflare but providers has no cloudflare; the R2 endpoint is built from CLOUDFLARE_PROVIDER_ACCOUNT_ID in terraform/secrets/cloudflare.enc (LIB-0010, LIB-0012)") : true
-  guard_breakglass_leaves = alltrue([for name in local.breakglass_providers : length(try(local.providers[name].breakglass.leaves, [])) > 0]) ? true : file("spoke.hcl providers sets breakglass without leaves for ${join(", ", [for name in local.breakglass_providers : name if length(try(local.providers[name].breakglass.leaves, [])) == 0])}; breakglass must list the leaves allowed to use it (LIB-0014)")
+  guard_breakglass_leaves = alltrue([for name in local.breakglass_providers : local.workloads_only[name] || length(try(local.providers[name].breakglass.leaves, [])) > 0]) ? true : file("spoke.hcl providers sets breakglass without leaves for ${join(", ", [for name in local.breakglass_providers : name if !local.workloads_only[name] && length(try(local.providers[name].breakglass.leaves, [])) == 0])}; breakglass must list the leaves allowed to use it (LIB-0014)")
   guard_breakglass_file   = alltrue([for name in local.breakglass_providers : contains(keys(local.secret_files), "${name}_breakglass")]) ? true : file("spoke.hcl providers sets breakglass for ${join(", ", [for name in local.breakglass_providers : name if !contains(keys(local.secret_files), "${name}_breakglass")])}, which has no <provider>_breakglass file in secrets-schema.json (LIB-0014)")
   guard_r2_backup         = local.state_backend == "cloudflare" && local.state_backup != true ? file("spoke.hcl state_backend is cloudflare but state_backup is not true; R2 can't version objects, so its state must be backed up to B2 (LIB-0007, LIB-0012)") : true
+
+  # workloads_only (LIB-0041 §3): no hand-written leaf, so no `leaves`, and
+  # breakglass mints every key the units sign in with.
+  workloads_only_bad   = [for name in local.known_providers : name if local.workloads_only[name] && (can(local.providers[name].leaves) || can(local.providers[name].breakglass.leaves) || !contains(local.breakglass_providers, name) || !contains(["cloudflare", "backblaze"], name))]
+  guard_workloads_only = length(local.workloads_only_bad) == 0 ? true : file("spoke.hcl providers sets workloads_only for ${join(", ", local.workloads_only_bad)}; it takes cloudflare or backblaze, with breakglass and no leaves in either, since no hand-written leaf turns it on and only breakglass can mint the units' keys (LIB-0041 §3)")
 
   # extra_required_providers: { <name> = { source = "...", version = "..." } },
   # appended to the one required_providers block (LIB-0003 v1.1.0). A
@@ -250,10 +275,23 @@ locals {
   secrets_dir    = "${get_parent_terragrunt_dir()}/terraform/secrets"
   secret_files   = local.secrets_schema.files
 
+  # spoke_credentials.<name> (LIB-0041 §3): the provider is on and the spoke
+  # holds credentials of its own for it, which workloads_only says it doesn't.
   leaf_conditions = concat(
     ["always", "backend.${local.state_backend}"],
     [for name in local.known_providers : "provider.${name}" if local.provider_on[name]],
+    [for name in local.known_providers : "spoke_credentials.${name}" if local.provider_on[name] && !local.workloads_only[name]],
     [for name in local.known_providers : "breakglass.${name}" if local.breakglass_on[name]],
+    local.state_backup ? ["state_backup"] : [],
+  )
+  # The same conditions spoke-wide, as check-secrets.sh computes them. A file
+  # this leaf reads may hold a key another leaf needs, such as cloudflare.enc's
+  # token where a leaf reads that file for the R2 backend alone.
+  spoke_conditions = concat(
+    ["always", "backend.${local.state_backend}"],
+    [for name in local.known_providers : "provider.${name}" if contains(keys(local.providers), name)],
+    [for name in local.known_providers : "spoke_credentials.${name}" if contains(keys(local.providers), name) && !local.workloads_only[name]],
+    [for name in local.breakglass_providers : "breakglass.${name}"],
     local.state_backup ? ["state_backup"] : [],
   )
   secret_file_path     = { for name, f in local.secret_files : name => "${local.secrets_dir}/${name}.enc" }
@@ -294,6 +332,13 @@ locals {
       flatten([for c, ks in try(f.keys_when, {}) : ks if contains(local.leaf_conditions, c)]),
     ))
   }
+  # What each may hold: its keys under the spoke-wide conditions.
+  spoke_file_keys = {
+    for name, f in local.secret_files : name => distinct(concat(
+      try(f.keys, []),
+      flatten([for c, ks in try(f.keys_when, {}) : ks if contains(local.spoke_conditions, c)]),
+    ))
+  }
   # Every key some non-env file may hold, whatever the conditions: an env key
   # with one of these names is a value in the wrong file.
   schema_keys = distinct(flatten([
@@ -321,7 +366,7 @@ locals {
       for k in sort(keys(local.secrets_by_file[name])) : "${name}.enc ${k}"
       if local.secret_file_optional[name] ? (
         !can(regex(try(local.secret_files[name].pattern, ""), k)) || contains(local.schema_keys, k)
-      ) : !contains(local.secret_file_keys[name], k)
+      ) : !contains(local.spoke_file_keys[name], k)
     ]
   ])
   reserved_env_secrets = flatten([
@@ -533,6 +578,21 @@ locals {
   workload_b2_buckets   = try(local.workload_backblaze.bucket, null)
   workload_b2_keys      = try(local.workload_backblaze.apiKey, null)
   workload_b2_key_entry = try(local.workload_b2_keys[local.workload_instance], null)
+  workload_b2_deployer  = length(try(keys(local.workload_b2_buckets), [])) + length(try(keys(local.workload_b2_keys), [])) > 0
+  # Everything a deployer needs to create, reconfigure and delete buckets and
+  # their keys (LIB-0033 §5), as runway's spoke key held.
+  b2_deployer_capabilities = [
+    "listBuckets", "readBuckets", "writeBuckets", "deleteBuckets",
+    "readBucketEncryption", "writeBucketEncryption",
+    "readBucketRetentions", "writeBucketRetentions",
+    "readBucketLifecycleRules", "writeBucketLifecycleRules",
+    "readBucketNotifications", "writeBucketNotifications",
+    "readBucketReplications", "writeBucketReplications",
+    "listKeys", "writeKeys", "deleteKeys",
+    "listFiles", "readFiles", "shareFiles", "writeFiles", "deleteFiles",
+    "readFileLegalHolds", "writeFileLegalHolds",
+    "readFileRetentions", "writeFileRetentions",
+  ]
   # Cloudflare kinds (LIB-0030). cloudflare.zone, which root.hcl sets from
   # the unit's directory, fills `zone` for the two zone kinds.
   workload_cloudflare = try(local.workload_values.cloudflare, null)
@@ -810,7 +870,8 @@ locals {
       state       = "workload"
       units       = ["workload"]
     }
-    # Backblaze (LIB-0029): the spoke's account-wide key, the workload's state.
+    # Backblaze (LIB-0029): the workload's own key (LIB-0041 §2), the
+    # workload's state.
     "backblaze/bucket" = {
       declared    = contains(try(keys(local.workload_b2_buckets), []), local.workload_instance)
       entry       = try(local.workload_b2_buckets[local.workload_instance], null)
@@ -818,7 +879,7 @@ locals {
       wiring      = {}
       defaults    = { name_prefix = "${local.workload_prefix}${local.workload_name_tag}-${local.workload_instance}", name_suffix = local.workload_suffix }
       sensitive   = false
-      credentials = "spoke"
+      credentials = "workload"
       state       = "workload"
       units       = ["workload"]
     }
@@ -830,6 +891,21 @@ locals {
       secrets     = try(local.workload_secrets.backblaze.apiKey[local.workload_instance], null)
       wiring      = { bucket_ids = "list(string)" }
       defaults    = { key_name = "${local.workload_prefix}${local.workload_name_tag}-${local.workload_instance}-${local.workload_suffix}" }
+      sensitive   = true
+      credentials = "workload"
+      state       = "workload"
+      units       = ["workload"]
+    }
+    # The workload's Backblaze key (LIB-0041 §1), minted with the spoke's
+    # breakglass key where it has one (breakglass_on). Account-wide, since B2
+    # needs an unrestricted key to create a bucket (LIB-0033 §5). An entry
+    # under backblaze.deployer overrides any default.
+    "backblaze/api-key#deployer" = {
+      declared    = local.workload_instance == "deployer" && local.workload_b2_deployer
+      entry       = try(local.workload_backblaze.deployer, null)
+      secrets     = try(local.workload_secrets.backblaze.deployer, null)
+      wiring      = {}
+      defaults    = { key_name = "${local.workload_prefix}-${local.workload_suffix}${local.unit_tag}-backblaze-deployer", capabilities = local.b2_deployer_capabilities, rotation_days = 30 }
       sensitive   = true
       credentials = "spoke"
       state       = "workload"
@@ -890,7 +966,7 @@ locals {
   }
   workload_kind_key = (
     local.workload_module == "scaleway/bucket" && local.workload_instance == "state" ? "scaleway/bucket#state" :
-    local.workload_instance == "deployer" && contains(["scaleway/iam-application", "scaleway/iam-policy", "scaleway/iam-api-key", "cloudflare/api-token"], local.workload_module) ? "${local.workload_module}#deployer" :
+    local.workload_instance == "deployer" && contains(["scaleway/iam-application", "scaleway/iam-policy", "scaleway/iam-api-key", "cloudflare/api-token", "backblaze/api-key"], local.workload_module) ? "${local.workload_module}#deployer" :
     local.workload_module
   )
   # The kinds LIB-0038 retired, refused by name rather than as unknown.
@@ -924,9 +1000,11 @@ locals {
   # (LIB-0024 §2), which the stub passes from its deployer dependency.
   workload_credentials = local.is_workload_leaf && try(local.workload_kind.credentials, "spoke") == "workload"
   # Whose: a Scaleway leaf's comes from the workload deployer's key, a
-  # Cloudflare leaf's from the workload's Cloudflare token (LIB-0033 §4).
+  # Cloudflare leaf's from the workload's Cloudflare token (LIB-0033 §4), a
+  # Backblaze leaf's from the workload's Backblaze key (LIB-0041 §2).
   workload_credentials_scaleway   = local.workload_credentials && local.leaf_provider == "scaleway"
   workload_credentials_cloudflare = local.workload_credentials && local.leaf_provider == "cloudflare"
+  workload_credentials_backblaze  = local.workload_credentials && local.leaf_provider == "backblaze"
 
   # Where a `workload`-state leaf's state sits in its workload's bucket
   # (LIB-0028 §3): under scaleway.state.prefix, by default workloads/<workload>/,
@@ -982,9 +1060,10 @@ locals {
   guard_workload_dep_flat = local.is_workload_leaf && length(local.workload_deployer_flat) > 0 ? file("${local.workload_file}: scaleway.deployer.${join(", scaleway.deployer.", local.workload_deployer_flat)}: the deployer is three leaves, so each input goes under scaleway.deployer.application, .policy or .apiKey, by its module's own name (LIB-0038 §1)") : true
   guard_workload_backend  = !local.workload_stub_backend ? file("${path_relative_to_include()} keeps its state in the workload's bucket but its stub declares no remote_state; regenerate it with a resolve-workloads.sh from workflows v4.9.0 or later (LIB-0028 §5)") : true
   guard_workload_b2_on    = local.is_workload_leaf && local.leaf_provider == "backblaze" && !contains(keys(local.providers), "backblaze") ? file("${path_relative_to_include()} is a Backblaze workload leaf, but spoke.hcl's providers map has no backblaze (LIB-0029 §4)") : true
-  guard_workload_b2_list  = local.is_workload_leaf && local.workload_module == "backblaze/api-key" && length(try(tolist(local.workload_b2_key_entry.buckets), [])) == 0 ? file("${local.workload_file}: backblaze.apiKey.${local.workload_instance}.buckets must list at least one of this workload's backblaze.bucket keys (LIB-0029 §3)") : true
-  guard_workload_b2_known = local.is_workload_leaf && local.workload_module == "backblaze/api-key" && length(setsubtract(try(tolist(local.workload_b2_key_entry.buckets), []), try(keys(local.workload_b2_buckets), []))) > 0 ? file("${local.workload_file}: backblaze.apiKey.${local.workload_instance}.buckets names a bucket this workload's backblaze.bucket doesn't have (LIB-0029 §3)") : true
-  guard_workload_b2_ids   = local.is_workload_leaf && local.workload_module == "backblaze/api-key" && (can(local.workload_b2_key_entry.bucket_ids) || can(local.workload_secrets.backblaze.apiKey[local.workload_instance].bucket_ids)) ? file("${local.workload_file}: backblaze.apiKey.${local.workload_instance}.bucket_ids can't be set; list the buckets in buckets instead (LIB-0029 §3)") : true
+  guard_workload_b2_list  = local.is_workload_leaf && local.workload_kind_key == "backblaze/api-key" && length(try(tolist(local.workload_b2_key_entry.buckets), [])) == 0 ? file("${local.workload_file}: backblaze.apiKey.${local.workload_instance}.buckets must list at least one of this workload's backblaze.bucket keys (LIB-0029 §3)") : true
+  guard_workload_b2_known = local.is_workload_leaf && local.workload_kind_key == "backblaze/api-key" && length(setsubtract(try(tolist(local.workload_b2_key_entry.buckets), []), try(keys(local.workload_b2_buckets), []))) > 0 ? file("${local.workload_file}: backblaze.apiKey.${local.workload_instance}.buckets names a bucket this workload's backblaze.bucket doesn't have (LIB-0029 §3)") : true
+  guard_workload_b2_dep   = local.is_workload_leaf && contains(try(keys(local.workload_b2_keys), []), "deployer") ? file("${local.workload_file}: backblaze.apiKey.deployer is reserved for the workload's own key; configure it as backblaze.deployer (LIB-0041 §1)") : true
+  guard_workload_b2_ids   = local.is_workload_leaf && local.workload_kind_key == "backblaze/api-key" && (can(local.workload_b2_key_entry.bucket_ids) || can(local.workload_secrets.backblaze.apiKey[local.workload_instance].bucket_ids)) ? file("${local.workload_file}: backblaze.apiKey.${local.workload_instance}.bucket_ids can't be set; list the buckets in buckets instead (LIB-0029 §3)") : true
   guard_workload_cf_on    = local.is_workload_leaf && local.leaf_provider == "cloudflare" && !contains(keys(local.providers), "cloudflare") ? file("${path_relative_to_include()} is a Cloudflare workload leaf, but spoke.hcl's providers map has no cloudflare (LIB-0030 §1)") : true
   guard_workload_cf_spoke = local.is_workload_leaf && local.leaf_provider == "cloudflare" && (can(local.workload_cf_entry.account_id) || can(local.workload_cf_entry.zone_id) || can(local.workload_cf_secrets.account_id) || can(local.workload_cf_secrets.zone_id)) ? file("${local.workload_file}: ${local.workload_cf_path}.${local.workload_instance} can't set account_id or zone_id; the account is the spoke's, and a zone is named (LIB-0030 §§4-5)") : true
   guard_workload_cf_zone  = local.is_workload_leaf && local.workload_cf_zone_kind && local.workload_zone == "" ? file("${local.workload_file}: ${local.workload_cf_path}.${local.workload_instance} has no zone, and the workload sets no cloudflare.zone (LIB-0030 §3)") : true
@@ -1096,6 +1175,19 @@ variable "cloudflare_api_token" {
 }
 
 %{endif~}
+%{if local.workload_credentials_backblaze~}
+# The workload's Backblaze key (LIB-0041 §2), for provider_backblaze_generated.tf.
+variable "backblaze_application_key_id" {
+  type      = string
+  sensitive = true
+}
+
+variable "backblaze_application_key" {
+  type      = string
+  sensitive = true
+}
+
+%{endif~}
 %{if local.workload_credentials_scaleway~}
 # The workload deployer's key (LIB-0024 §2), for provider_scaleway_generated.tf.
 variable "scaleway_access_key" {
@@ -1184,8 +1276,8 @@ EOF
 
   backblaze_provider_block = <<EOF
 provider "b2" {
-  application_key_id = "${local.backblaze_application_key_id}"
-  application_key    = "${local.backblaze_application_key}"
+  application_key_id = ${local.workload_credentials_backblaze ? "var.backblaze_application_key_id" : "\"${local.backblaze_application_key_id}\""}
+  application_key    = ${local.workload_credentials_backblaze ? "var.backblaze_application_key" : "\"${local.backblaze_application_key}\""}
 }
 EOF
 
