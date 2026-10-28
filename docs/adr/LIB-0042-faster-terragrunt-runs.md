@@ -228,7 +228,7 @@ implementation measures that first.
   in 92. Rendering every leaf at the PR's base and head, and planning only
   those whose generated files or inputs differ, would be the next big saving.
   But a rendered file holds secrets, so the comparison has to hash in memory,
-  and dependency outputs complicate it. That needs its own record.
+  and dependency outputs complicate it. That needs its own record (#210).
 - **Narrowing a secrets-only change** to the leaves that read the changed
   file. Today any change under `terraform/secrets/` selects every unit (#211).
 - **Committing provider lock files.** A lock file saved about 1.9s per init
