@@ -1027,12 +1027,33 @@ locals {
     length(split(".", local.workload_pin)) == 3 ? "v${local.workload_pin}" :
     "v${local.workload_pin}.*"
   )
-  workload_tags = run_cmd(
-    "--terragrunt-quiet", local.is_workload_leaf ? "git" : "true",
-    "ls-remote", "--sort=-v:refname", "--tags",
-    get_env("LIB_TAG_REMOTE", "https://github.com/noisypigeon/library"),
-    "refs/tags/terraform/${local.workload_module}/${local.workload_tag_pattern}",
-  )
+  # A run that lists every terraform/* tag once, already in that order, names
+  # the file in LIB_TAG_LIST (LIB-0042 §4), and each leaf picks its module's
+  # lines out of it rather than asking the remote. Both reads sit behind a
+  # for's filter, since HCL evaluates both arms of a conditional: file()
+  # would fail on an empty name, and run_cmd would still run git.
+  workload_tag_list = get_env("LIB_TAG_LIST", "")
+  workload_tag_regex = "^[0-9a-f]+\\s+refs/tags/terraform/${local.workload_module}/${(
+    local.workload_pin == "" ? "v[^/]*" :
+    length(split(".", local.workload_pin)) == 3 ? "v${replace(local.workload_pin, ".", "\\.")}" :
+    "v${replace(local.workload_pin, ".", "\\.")}\\.[^/]*"
+  )}(\\^\\{\\})?$"
+  workload_tags = join("\n", concat(
+    flatten([
+      for f in compact([local.workload_tag_list]) : [
+        for line in split("\n", file(f)) : trimspace(line)
+        if local.is_workload_leaf && can(regex(local.workload_tag_regex, trimspace(line)))
+      ]
+    ]),
+    [
+      for c in ["ls-remote"] : run_cmd(
+        "--terragrunt-quiet", local.is_workload_leaf ? "git" : "true",
+        "ls-remote", "--sort=-v:refname", "--tags",
+        get_env("LIB_TAG_REMOTE", "https://github.com/noisypigeon/library"),
+        "refs/tags/terraform/${local.workload_module}/${local.workload_tag_pattern}",
+      ) if local.workload_tag_list == ""
+    ],
+  ))
   workload_version = try(regex("/v([0-9]+\\.[0-9]+\\.[0-9]+)(\\^\\{\\})?$", split("\n", trimspace(local.workload_tags))[0])[0], "")
 
   guard_workload_values = local.is_workload_leaf && local.workload_values == null ? file("${local.workload_file} is missing or not valid YAML, but ${path_relative_to_include()} is its stub (LIB-0023)") : true
