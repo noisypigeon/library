@@ -154,3 +154,43 @@ means every leaf. It ships as root-hcl v8.1.0, `workflows/v8.1.0` and
    `CLOUDFLARE_PROVIDER_TOKEN`.
 5. **B2 holds cold-storage's key and not the spoke's,** checked by count out
    of band.
+
+## Amendments
+
+### 2026-10-28: results
+
+runway took the release in noisypigeon/runway#90 and retired its spoke
+deployers in noisypigeon/runway#91. Both applied and merged. All five
+Verification items hold:
+
+1. **Only cold-storage's stubs changed.** A scratch copy of runway generated
+   one new stub, the key. Each of the five bucket stubs gained only the
+   `b2_key` dependency and its two credential inputs. Every other stub, and
+   every rendered leaf with its credentials masked, was byte-identical to
+   v8.0.1's.
+2. **runway#90 planned `+3`, all in the key's leaf:** the key,
+   `time_rotating.key[0]` and `terraform_data.rotation`. The five bucket
+   leaves were deferred. After the apply, the automatic replan showed all 92
+   leaves `No changes.`
+3. **runway#91 planned exactly the two retirements.** The spoke B2 key was
+   one destroy. The spoke Cloudflare token was three: the token,
+   `terraform_data.rotation` and `time_static.created`. The other 90 leaves
+   planned `No changes.`
+4. **`check-secrets.sh` passes** on runway's secrets after #91. On a copy, it
+   fails when `CLOUDFLARE_PROVIDER_TOKEN` is put back.
+5. **B2 holds one key, cold-storage's,** checked by name and count with the
+   breakglass key.
+
+The work also found three things:
+
+1. **The key leaf mints with the breakglass key,** not `backblaze.enc`'s. This
+   was confirmed before #90 by comparing hashes of the rendered and decrypted
+   key IDs, without printing either.
+2. **`sops unset` edits a dotenv file in place.** It removed
+   `CLOUDFLARE_PROVIDER_TOKEN` and the two `BACKBLAZE_ORIGINAL_*` keys with no
+   plaintext on disk, and both files still decrypt.
+3. **A spoke's published workload schema follows its own pin.**
+   `garden-generate.yml` builds `schemas/workload/*.json` with the generator
+   at the `workflows/` version the spoke pins. So `backblaze.deployer`
+   appeared there only after runway#90 moved runway to v8.1.0, and
+   `garden-generate.yml` was dispatched again.
