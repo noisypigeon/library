@@ -3,7 +3,7 @@
 # Packs the saved plans `terragrunt run --all --out-dir <dir> -- plan` wrote
 # into one encrypted archive, and unpacks it again for apply (LIB-0022 §2-3).
 #
-#   plan-archive.sh pack <out-dir> <units-file> <archive>
+#   plan-archive.sh pack <out-dir> <units-file> <archive> [<extra-file>...]
 #   plan-archive.sh unpack <archive> <out-dir>
 #
 # A plan file holds sensitive values in plaintext, and the archive is uploaded
@@ -19,10 +19,15 @@
 # not a selected unit wrote a plan. It may be empty: a PR can select no units
 # (one changing only .sops.yaml, say), and its apply then applies nothing.
 #
+# Each <extra-file> that exists is carried beside it, by its own name:
+# terragrunt-run.yml's deferred-units.txt, which a staged apply's re-plan
+# reads to plan only that stage, and stage.txt, which marks a plan of one
+# stage for its apply (LIB-0042 §2).
+#
 # Lives under .github/scripts/ so the workflows/ track versions it.
 set -euo pipefail
 
-usage() { echo "usage: $0 pack <out-dir> <units-file> <archive> | unpack <archive> <out-dir>" >&2; exit 2; }
+usage() { echo "usage: $0 pack <out-dir> <units-file> <archive> [<extra-file>...] | unpack <archive> <out-dir>" >&2; exit 2; }
 [ $# -ge 3 ] || usage
 
 work=$(mktemp -d)
@@ -30,8 +35,9 @@ trap 'rm -rf "$work"' EXIT
 
 case "$1" in
   pack)
-    [ $# -eq 4 ] || usage
+    [ $# -ge 4 ] || usage
     out_dir=$2 units_file=$3 archive=$4
+    shift 4
     [ -f "$units_file" ] || { echo "::error::$units_file does not exist" >&2; exit 1; }
     mkdir -p "$out_dir" "$work/plans"
     (cd "$out_dir" && find . -name tfplan.tfplan -type f | sed 's|^\./||' | LC_ALL=C sort) > "$work/files.txt"
@@ -40,6 +46,9 @@ case "$1" in
       cp "$out_dir/$file" "$work/plans/$file"
     done < "$work/files.txt"
     cp "$units_file" "$work/plans/units.txt"
+    for extra in "$@"; do
+      if [ -f "$extra" ]; then cp "$extra" "$work/plans/$(basename "$extra")"; fi
+    done
     tar -C "$work/plans" -czf "$work/plans.tgz" .
     sops encrypt --input-type binary --output-type binary \
       --filename-override terraform/secrets/plan.enc "$work/plans.tgz" > "$archive"

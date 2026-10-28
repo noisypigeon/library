@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-28.
-- **Status**: Proposed. Amends LIB-0024 §3 (how workload leaves plan) and
+- **Status**: Accepted. Amends LIB-0024 §3 (how workload leaves plan) and
   LIB-0027 §1 (what the automatic re-plan selects).
 
 ## Context
@@ -116,8 +116,8 @@ after each unit:
   or output change other than a no-op. That is the same test
   `render-run-comments.js`'s `countPlan` uses for the comment.
 - A unit is **deferred** if any of its workload dependencies is changed or
-  deferred. Its saved plan, if the wave made one, is deleted before the
-  archive is packed.
+  deferred. A wave holds only units whose dependencies have all settled,
+  so a deferred unit is never planned and has no saved plan.
 - **A failed unit fails the run,** as it does today.
 
 **So the outcome is unchanged:** the same units are planned, deferred and
