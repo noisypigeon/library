@@ -4,6 +4,22 @@ All notable changes to this template are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [8.2.0] - 2026-10-28
+
+### Read workload module versions from a run's tag list
+
+A workload leaf's module version (LIB-0023 §3) can now come from a tag list the run made once, instead of a `git ls-remote` against the library on every parse (LIB-0042 §4).
+
+When `LIB_TAG_LIST` names a file, root.hcl reads it and picks the leaf's version from it. The file holds `git ls-remote --sort=-v:refname --tags <library> 'refs/tags/terraform/*'` output. Each leaf keeps its module's lines matching its pin, and takes the first, as before. The pin is `X.Y.Z` exactly, or the newest within `X.Y` or `X`, or the newest when unset. Reusable workflows from v8.2.0 set the variable.
+
+When it's unset, nothing changes: each workload leaf asks the remote, as before. A local `mise run plan` is one such case.
+
+Checked against `git ls-remote` for every pin shape, on the library's most-tagged module and on three workload kinds; every resolved version matched.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#215](https://github.com/noisypigeon/library/pull/215)
+
 ## [8.1.0] - 2026-10-28
 
 ### A workload's own Backblaze key, and providers with no spoke-wide credentials
