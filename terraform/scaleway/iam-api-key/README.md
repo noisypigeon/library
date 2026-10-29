@@ -22,6 +22,7 @@ Pass an explicit `expires_at` for any credential that needs to outlive the 30-da
 | <a name="input_default_project_id"></a> [default\_project\_id](#input\_default\_project\_id) | Default project ID to use for Object Storage operations with this key (defaults to the provider's own project when unset) | `string` | `null` | no |
 | <a name="input_description"></a> [description](#input\_description) | IAM API key description | `string` | `null` | no |
 | <a name="input_expires_at"></a> [expires\_at](#input\_expires\_at) | API key expiration timestamp (i.e. 2027-09-25T22:32:12Z). Defaults to 30 days after the key is first created. | `string` | `null` | no |
+| <a name="input_rotation_days"></a> [rotation\_days](#input\_rotation\_days) | Replace the API key every this many days, expiring it a week after each scheduled rotation (LIB-0038). Unset, the key expires 30 days after it was first created and is never replaced. | `number` | `null` | no |
 
 ## Outputs
 

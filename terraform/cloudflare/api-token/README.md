@@ -34,3 +34,22 @@ module "token" {
 
 The `token` output is sensitive. A spoke deployer's token is copied by hand
 into `cloudflare.enc` (LIB-0014 §4).
+
+<!-- BEGIN_TF_DOCS -->
+## Inputs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| <a name="input_account_id"></a> [account\_id](#input\_account\_id) | Cloudflare account the token belongs to, and the account its account policies grant | `string` | n/a | yes |
+| <a name="input_expires_on"></a> [expires\_on](#input\_expires\_on) | RFC 3339 expiry. Null means a week past the next rotation with rotation\_days, or 365 days after creation without | `string` | `null` | no |
+| <a name="input_name"></a> [name](#input\_name) | Token name | `string` | n/a | yes |
+| <a name="input_policies"></a> [policies](#input\_policies) | The token's policies. Each names its permission groups (e.g. "DNS Write") and exactly one resource: zones by apex domain, all\_zones for every zone in the account, or account for the account itself | <pre>list(object({<br/>    permission_groups = list(string)<br/>    zones             = optional(list(string), [])<br/>    all_zones         = optional(bool, false)<br/>    account           = optional(bool, false)<br/>    effect            = optional(string, "allow")<br/>  }))</pre> | n/a | yes |
+| <a name="input_rotation_days"></a> [rotation\_days](#input\_rotation\_days) | Replace the token every this many days, create-before-destroy (LIB-0024 §4, LIB-0033 §3). Null never rotates | `number` | `null` | no |
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| <a name="output_id"></a> [id](#output\_id) | Token ID |
+| <a name="output_token"></a> [token](#output\_token) | The token's secret value |
+<!-- END_TF_DOCS -->

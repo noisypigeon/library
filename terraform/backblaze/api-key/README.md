@@ -23,6 +23,7 @@ module "backup_key" {
 | <a name="input_bucket_ids"></a> [bucket\_ids](#input\_bucket\_ids) | Bucket IDs this key is restricted to (unset = account-wide access) | `set(string)` | `null` | no |
 | <a name="input_capabilities"></a> [capabilities](#input\_capabilities) | Capability strings the key grants (e.g. ["listBuckets", "readFiles", "writeFiles"]) -- see Backblaze's own capability catalog, not validated locally since it's provider-defined and subject to change | `set(string)` | n/a | yes |
 | <a name="input_key_name"></a> [key\_name](#input\_key\_name) | Application key name | `string` | n/a | yes |
+| <a name="input_rotation_days"></a> [rotation\_days](#input\_rotation\_days) | Replace the key every this many days, create-before-destroy, and let each expire a week after its scheduled rotation (LIB-0041 §1). Overrides valid\_duration\_in\_seconds. Null never rotates | `number` | `null` | no |
 | <a name="input_valid_duration_in_seconds"></a> [valid\_duration\_in\_seconds](#input\_valid\_duration\_in\_seconds) | Key validity duration in seconds, counted from creation. Defaults to 30 days (2592000 seconds); pass null for a key that never expires. | `number` | `2592000` | no |
 
 ## Outputs

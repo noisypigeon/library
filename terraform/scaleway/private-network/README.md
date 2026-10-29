@@ -19,4 +19,17 @@ module "private_network" {
 ```
 
 <!-- BEGIN_TF_DOCS -->
+## Inputs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| <a name="input_name"></a> [name](#input\_name) | Private Network name | `string` | n/a | yes |
+| <a name="input_project_id"></a> [project\_id](#input\_project\_id) | Project ID | `string` | n/a | yes |
+
+## Outputs
+
+| Name | Description |
+|------|-------------|
+| <a name="output_id"></a> [id](#output\_id) | Private Network ID |
+| <a name="output_name"></a> [name](#output\_name) | Private Network name |
 <!-- END_TF_DOCS -->
