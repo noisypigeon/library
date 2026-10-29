@@ -2,7 +2,8 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-28.
-- **Status**: Proposed. Applies LIB-0037 and LIB-0040 to runway.
+- **Status**: Proposed; amended 2026-10-28 (see `## Amendments`). Applies
+  LIB-0037 and LIB-0040 to runway.
 
 ## Context
 
@@ -141,3 +142,40 @@ PRs:
    renames, the key replace and the old leaves' outputs.
 4. **It converges.** After the last PR, a re-plan of every runway leaf shows
    `No changes.`
+
+## Amendments
+
+### 2026-10-28: results
+
+noisypigeon/runway#93, noisypigeon/runway#94 and noisypigeon/runway#95 each
+applied and merged. All four Verification items hold:
+
+1. **The bootstrap created only the new workload's own leaves:** its
+   project, its deployer's three leaves and its state bucket, in three stages,
+   with nothing destroyed.
+2. **The custodial bucket moved, not recreated.** Its new leaf planned
+   `No changes.` locally after the push, and so did CI's fresh plan before
+   the last stage. Its bucket ID is the one in the backup.
+3. **The rename destroyed nothing.** Its plan held the ten old leaves'
+   outputs, the in-place renames of the project, application and policy,
+   and the Backblaze key's replace. Nothing else changed.
+4. **It converges.** From `main` after runway#95, all 17 leaves of both
+   workloads plan `No changes.` with refresh. Every bucket, the state bucket
+   and the project keep the IDs in their backups.
+
+Three things went differently from §§4–5:
+
+1. **A stage's replan reports an already-applied destroy as a failure.**
+   Stage 1 applies the removed leaves' outputs-only destroys. Each later
+   stage's replan still lists them, finds no result, and counts them as
+   `failed to plan` (or `failed to apply`). That's one row per removed leaf:
+   one on runway#94 and ten on runway#95. Each old leaf was checked empty,
+   with no resources and no outputs, before going on. The runs succeeded and
+   the PRs merged, so it's only noise, but it reads like a failure.
+2. **The second PR's automatic replan ran before the state push.** It
+   planned the custodial bucket as a create, as §5 expected. It was never
+   applied: after the push, a `terragrunt plan` comment replaced it with a
+   `No changes.` plan, and that's the one that was applied. Any move that
+   pushes state between stages must replan before applying.
+3. **Two pulls of one state can differ in `check_results` order** alone.
+   Compare backups with that list sorted.
