@@ -42,24 +42,12 @@ variable "keyring" {
     error_message = "keyring aliases must be unique."
   }
 
-  validation {
-    condition = alltrue([for e in var.keyring : e.kind != "email" || (
-      e.email != null && e.provider != null && e.host != null && e.port != null && e.secret != null
-    )])
-    error_message = "keyring email entries require email, provider, host, port and secret."
-  }
 
   validation {
     condition     = alltrue([for e in var.keyring : e.kind != "email" || contains(["gmail", "fastmail", "icloud", "proton", "custom"], coalesce(e.provider, "custom"))])
     error_message = "keyring email provider must be one of \"gmail\", \"fastmail\", \"icloud\", \"proton\", \"custom\"."
   }
 
-  validation {
-    condition = alltrue([for e in var.keyring : e.kind != "bucket" || (
-      e.endpoint != null && e.bucket != null && e.access_key_id != null && e.secret_key != null
-    )])
-    error_message = "keyring bucket entries require endpoint, bucket, access_key_id and secret_key."
-  }
 }
 
 variable "cockpit" {
@@ -113,4 +101,29 @@ variable "has_attached_volume" {
   type        = bool
   description = "Whether a block volume is attached to this instance, which adds the mkfs/mount//etc/fstab steps for /dev/sdb at /mnt/data. A plain bool rather than the volume's ID, deliberately: the volume is created by the caller (ADR-0153), and a bool keeps the rendered document independent of apply-time-unknown values."
   default     = false
+}
+
+variable "keyring_wiring" {
+  type = map(object({
+    bucket        = optional(string)
+    access_key_id = optional(string)
+    secret_key    = optional(string)
+  }))
+  description = "Per-alias keyring fields another module's outputs fill, merged over the keyring entry of the same alias (LIB-0043 §4): a bucket's name, and an API key's access_key_id and secret_key. A null field leaves the entry's own value. Every key must be an alias in keyring."
+  default     = {}
+  sensitive   = true
+}
+
+variable "keyring_secrets" {
+  type        = map(map(string))
+  description = "Per-alias keyring fields that are secrets, merged over keyring and keyring_wiring by alias (LIB-0043 §4): a workload's secretRefs, resolved. Each inner key is a string field of the entry: email, host, secret, endpoint, bucket, access_key_id or secret_key. Every key must be an alias in keyring."
+  default     = {}
+  sensitive   = true
+
+  validation {
+    condition = alltrue(flatten([for alias, fields in var.keyring_secrets : [
+      for k in keys(fields) : contains(["email", "host", "secret", "endpoint", "bucket", "access_key_id", "secret_key"], k)
+    ]]))
+    error_message = "keyring_secrets fields must be among email, host, secret, endpoint, bucket, access_key_id, secret_key."
+  }
 }

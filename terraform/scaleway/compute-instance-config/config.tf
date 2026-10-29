@@ -1,4 +1,14 @@
 locals {
+  # LIB-0043 §4: each entry as rendered, with its wired fields, then its secret
+  # ones, merged over it by alias. The required-field checks run on this, in
+  # outputs.tf, since a field may arrive from either side input.
+  keyring = [for e in var.keyring : merge(
+    e,
+    { for k, v in try(var.keyring_wiring[e.alias], {}) : k => v if v != null },
+    try(var.keyring_secrets[e.alias], {}),
+  )]
+  keyring_aliases = [for e in var.keyring : e.alias]
+
   # ADR-0138: self_delete_on_exit must still run the post-provision unit even
   # when the caller passes zero post_provision_commands -- the self-delete
   # trap is the thing that has to execute, not the caller's own commands.
@@ -79,7 +89,7 @@ locals {
         permissions: '0600'
         defer: true
         content: |
-          %{~for entry in var.keyring~}
+          %{~for entry in local.keyring~}
           [[entries]]
           kind = ${jsonencode(entry.kind)}
           alias = ${jsonencode(entry.alias)}
