@@ -48,8 +48,9 @@
 # entries and whose apexRedirect is a shorthand. Since LIB-0039 they are
 # schemas/workload/v4.json and schemas/zone/v3.json, each file's content under
 # one key (workload or zone), its records at dnsRecords, and a zone's
-# services. The older ones stay published, unchanged, for files still pinned
-# to them.
+# services. Since LIB-0043 a workload's is schemas/workload/v5.json, with
+# Scaleway's compute kinds and iam.apiKey a mapping. The older ones stay
+# published, unchanged, for files still pinned to them.
 # Without it, nothing under static/ is touched.
 #
 # Regenerate-all semantics: every run wipes and rewrites every generated page
@@ -255,11 +256,11 @@ if [ -n "$STATIC_ROOT" ]; then
     exit 2
   fi
   find "$STATIC_ROOT/terraform" \( -name inputs.schema.json -o -name state.schema.json -o -name workload.schema.json \) -type f -delete 2>/dev/null || true
-  rm -f "$STATIC_ROOT/schemas/workload/v1.json" "$STATIC_ROOT/schemas/workload/v2.json" "$STATIC_ROOT/schemas/workload/v3.json" "$STATIC_ROOT/schemas/workload/v4.json" "$STATIC_ROOT/schemas/zone/v1.json" "$STATIC_ROOT/schemas/zone/v2.json" "$STATIC_ROOT/schemas/zone/v3.json"
+  rm -f "$STATIC_ROOT/schemas/workload/v1.json" "$STATIC_ROOT/schemas/workload/v2.json" "$STATIC_ROOT/schemas/workload/v3.json" "$STATIC_ROOT/schemas/workload/v4.json" "$STATIC_ROOT/schemas/workload/v5.json" "$STATIC_ROOT/schemas/zone/v1.json" "$STATIC_ROOT/schemas/zone/v2.json" "$STATIC_ROOT/schemas/zone/v3.json"
 
   kinds_json='{}'
   schema_count=0
-  for wmodule in scaleway/project scaleway/iam-application scaleway/iam-policy scaleway/terraform-deployer-iam scaleway/bucket scaleway/iam-api-key backblaze/bucket backblaze/api-key cloudflare/bucket cloudflare/dns-record cloudflare/ruleset cloudflare/apex-redirect cloudflare/api-token; do
+  for wmodule in scaleway/project scaleway/iam-application scaleway/iam-policy scaleway/terraform-deployer-iam scaleway/bucket scaleway/iam-api-key scaleway/block-volume scaleway/cockpit-observability scaleway/private-network scaleway/public-gateway scaleway/compute-instance scaleway/compute-instance-config scaleway/gateway-pat-rule backblaze/bucket backblaze/api-key cloudflare/bucket cloudflare/dns-record cloudflare/ruleset cloudflare/apex-redirect cloudflare/api-token; do
     wversions="$(templates_tags "terraform/${wmodule}/v*" \
       | sed -nE 's#.*/v([0-9]+\.[0-9]+\.[0-9]+)$#\1#p' \
       | sort -t. -k1,1n -k2,2n -k3,3n -u)"
@@ -578,6 +579,148 @@ if [ -n "$STATIC_ROOT" ]; then
   jq --arg base "$SCHEMA_BASE_URL" "$wrap_jq"'
     wrapped("workload"; "\($base)/schemas/workload/v4.json"; "Workload workload.yaml (LIB-0023, LIB-0028, LIB-0029, LIB-0030, LIB-0033, LIB-0037, LIB-0038, LIB-0039)")
   ' "$STATIC_ROOT/schemas/workload/v3.json" >"$STATIC_ROOT/schemas/workload/v4.json"
+
+  # LIB-0043: Scaleway's compute kinds, and iam.policy and iam.apiKey as
+  # mappings (§1). privateNetwork, publicGateway and instance mix a module's
+  # inputs with keys of their own, which a module's inputs schema refuses, so
+  # theirs are built from the newest version's properties. The rules that
+  # reach across kinds are resolve-workloads.sh's and root.hcl's; this
+  # carries only E2 and E3 (§5), the ones an editor can see from one file.
+  # deployments.scaleway.project is built the same way, since prefix and
+  # suffix (LIB-0037 §2) aren't the project module's inputs, which v2 to v4
+  # refuse.
+  newest_props() {
+    local url
+    url="$(jq -r --arg m "$1" '.[$m].anyOf[1].allOf[0].then["$ref"] // empty' <<<"$kinds_json")"
+    if [ -n "$url" ] && [ -f "$STATIC_ROOT${url#"$SCHEMA_BASE_URL"}" ]; then
+      jq -c '.properties' "$STATIC_ROOT${url#"$SCHEMA_BASE_URL"}"
+    else
+      echo '{}'
+    fi
+  }
+  jq --arg base "$SCHEMA_BASE_URL" \
+    --argjson kinds "$kinds_json" \
+    --argjson pn "$(newest_props scaleway/private-network)" \
+    --argjson gw "$(newest_props scaleway/public-gateway)" \
+    --argjson ci "$(newest_props scaleway/compute-instance)" \
+    --argjson project "$(newest_props scaleway/project)" '
+    $kinds as $k
+    | def kebab: "^[a-z0-9]+(-[a-z0-9]+)*$";
+      def unwired($inputs): {not: {anyOf: [$inputs[] | {required: [.]}]}};
+      def entries($kind; $wired; $reserved): {
+        type: ["object", "null"],
+        propertyNames: {pattern: kebab, not: {anyOf: [{enum: $reserved}, {pattern: "^self-delete-"}]}},
+        additionalProperties: {allOf: [($k[$kind] // {}), unwired($wired)]}
+      };
+      def mixed($props; $extra; $drop):
+        {type: "object", additionalProperties: false, properties: (($props | del(.[$drop[]])) + $extra)};
+      def text: {anyOf: [{type: "string"}, {"$ref": "#/definitions/secretRef"}]};
+      def on($key): {required: [$key], properties: {($key): {not: {type: "object", required: ["enabled"], properties: {enabled: {const: false}}}}}};
+    ."$id" = "\($base)/schemas/workload/v5.json"
+    | .title = "Workload workload.yaml (LIB-0023, LIB-0028, LIB-0029, LIB-0030, LIB-0033, LIB-0037, LIB-0038, LIB-0039, LIB-0043)"
+    | .definitions = {
+        secretRef: {type: "object", required: ["secretRef"], additionalProperties: false, properties: {secretRef: {type: "string", description: "A name in secrets.workload.yaml'"'"'s env (LIB-0025)"}}},
+        keyring: {
+          type: ["object", "null"],
+          propertyNames: {pattern: "^[a-z0-9][a-z0-9-]*[a-z0-9]$"},
+          description: "Credentials cloud-init writes for the instance, by alias. A command names one as ${keyring.<alias>.alias} (LIB-0043 §4)",
+          additionalProperties: {
+            type: "object",
+            required: ["kind"],
+            properties: {kind: {enum: ["bucket", "email"]}},
+            allOf: [
+              {
+                if: {properties: {kind: {const: "bucket"}}},
+                then: {
+                  additionalProperties: false,
+                  required: ["bucket"],
+                  properties: {
+                    kind: {const: "bucket"},
+                    bucket: (text + {description: "A scaleway.bucket key, whose name and endpoint are wired, or the name of a bucket elsewhere, which then needs endpoint"}),
+                    endpoint: text,
+                    apiKey: {type: "string", pattern: kebab, description: "A scaleway.iam.apiKey key, whose credentials are wired"},
+                    access_key_id: text,
+                    secret_key: text
+                  },
+                  oneOf: [{required: ["apiKey"]}, {required: ["access_key_id", "secret_key"]}]
+                }
+              },
+              {
+                if: {properties: {kind: {const: "email"}}},
+                then: {
+                  additionalProperties: false,
+                  required: ["email", "provider", "host", "port", "secret"],
+                  properties: {
+                    kind: {const: "email"},
+                    email: text,
+                    provider: {enum: ["gmail", "fastmail", "icloud", "proton", "custom"]},
+                    host: text,
+                    port: {type: "integer"},
+                    secret: text,
+                    max_imap_connections: {type: "integer"}
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    | .properties.workload.properties.deployments.properties.scaleway.properties.project = {
+        anyOf: [{type: "null"}, mixed($project; {
+          version: {type: "string"},
+          prefix: {type: "string", pattern: "^[a-z0-9-]+$"},
+          suffix: {type: "string", minLength: 1}
+        }; [])],
+        description: "Setting name, prefix or suffix gives the workload its own project; otherwise it lives in its zone'"'"'s, and prefix and suffix are the zone'"'"'s (LIB-0037 §2)"
+      }
+    | .properties.workload.properties.scaleway |= (
+        .properties.iam.properties.policy = entries("scaleway/iam-policy"; ["application_id", "project_ids"]; ["deployer"])
+        | .properties.iam.properties.apiKey = entries("scaleway/iam-api-key"; ["application_id", "default_project_id"]; ["deployer"])
+        | .properties.blockVolume = {
+            type: ["object", "null"],
+            propertyNames: {pattern: kebab},
+            additionalProperties: {allOf: [($k["scaleway/block-volume"] // {}), {type: "object", required: ["size"]}, unwired(["project_id"])]}
+          }
+        | .properties.cockpit = {allOf: [($k["scaleway/cockpit-observability"] // {}), {anyOf: [{type: "null"}, unwired(["project_id"])]}], description: "Cockpit for the workload'"'"'s project. Every instance ships to it unless it sets cockpit: false"}
+        | .properties.privateNetwork = {anyOf: [{type: "null"}, mixed($pn; {
+            version: {type: "string"},
+            enabled: {type: "boolean", description: "false destroys the network and keeps its settings here. Default: true"}
+          }; ["project_id"])], description: "The workload'"'"'s one Private Network (LIB-0043 §5)"}
+        | .properties.publicGateway = {anyOf: [{type: "null"}, mixed($gw; {
+            version: {type: "string"},
+            enabled: {type: "boolean", description: "false destroys the gateway and keeps its settings here; every instance must then set network.publicIpv4: true. Default: true"},
+            type: {enum: ["VPC-GW-S", "VPC-GW-M", "VPC-GW-L", "VPC-GW-XL"], description: "Default: VPC-GW-S. Only ever upgraded in place"}
+          }; ["project_id", "private_network_id"])], description: "The workload'"'"'s one Public Gateway, egress and SSH for instances on the private network (LIB-0043 §5)"}
+        | .properties.instance = {
+            type: ["object", "null"],
+            propertyNames: {pattern: kebab, maxLength: 40, not: {enum: ["main", "deployer"]}},
+            description: "Each <key> is a compute-instance and its compute-instance-config, and with selfDelete its own IAM application, policy and key (LIB-0043 §§2-3)",
+            additionalProperties: mixed($ci | with_entries(select(.key | IN("type", "image", "enabled", "ssh_key", "name_prefix", "name_suffix"))); {
+              version: {type: "string"},
+              network: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  privateNetwork: {type: "boolean", description: "Attach a NIC on the private network. Default: whether scaleway.privateNetwork is on"},
+                  publicIpv4: {type: "boolean", description: "Give it a routed IPv4. With the gateway on and the instance on the network, the IP is outbound-only while the gateway pushes its default route. Default: false"},
+                  sshViaGateway: {type: "integer", minimum: 1, maximum: 65535, description: "The gateway port forwarded to its port 22; unique across instances"}
+                }
+              },
+              volumes: {type: "array", maxItems: 1, items: {type: "string", pattern: kebab}, description: "The scaleway.blockVolume key mounted at /mnt/data"},
+              cockpit: {type: "boolean", description: "Ship metrics and logs to scaleway.cockpit. Default: whether it is declared"},
+              transcoding: {type: "boolean", description: "Install transcoding tools; x86_64 types only"},
+              selfDelete: {type: "boolean", description: "Delete the instance once its commands exit, with its own application, policy and key. Default: false"},
+              commands: {type: "array", items: {type: "string"}},
+              keyring: {"$ref": "#/definitions/keyring"}
+            }; [])
+          }
+        | .properties.sharedKeyring = ({"$ref": "#/definitions/keyring"} + {description: "Merged under every instance'"'"'s keyring, which wins on a shared alias"})
+        | .allOf = [
+            {if: {not: on("publicGateway")}, then: {properties: {instance: {additionalProperties: {required: ["network"], properties: {network: {required: ["publicIpv4"], properties: {publicIpv4: {const: true}}}}}}}}},
+            {if: on("publicGateway"), then: on("privateNetwork")}
+          ]
+      )
+  ' "$STATIC_ROOT/schemas/workload/v4.json" >"$STATIC_ROOT/schemas/workload/v5.json"
   jq --arg base "$SCHEMA_BASE_URL" "$wrap_jq"'
     def dmarc: {
       type: ["boolean", "string"],
