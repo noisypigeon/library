@@ -4,6 +4,20 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [9.0.2] - 2026-10-28
+
+### Leave earlier stages' destroys out of a staged replan or apply comment
+
+A staged plan applies a removed workload leaf's outputs-only destroy with its first stage (LIB-0042 §2). Every later stage, the automatic replan and its apply, still read the PR's destroys from \`destroy-units.txt\`, but never ran them, so the PR comment listed each one as \`destroy (removed from its unit file) no result found\` and counted it under "failed to plan" or "failed to apply". The runs themselves succeeded and the infrastructure was right; only the report was wrong. Since those rows weren't "unchanged", a last replan with nothing left to apply also couldn't count as settled, so it didn't merge by itself. LIB-0044's results amendment describes the case.
+
+\`render-run-comments.js\`'s \`render()\` now takes a \`stage\` input, the units the stage planned or applied. When it's set, destroys outside the stage are left out of the summary, the detail comments and the counts. \`terragrunt-run.yml\` passes the same stage file its run step reads: the replan's \`stage.txt\` for a plan, the saved plan's for an apply. A run that isn't a stage still reports a destroy with no result as a failure, as before.
+
+\`render-run-comments.test.js\` covers a stage plan and a stage apply, using the new fixtures \`plan-stage-after-destroy.txt\` and \`apply-stage-after-destroy.txt\`, as well as a last stage that settles and the case with no stage.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#229](https://github.com/noisypigeon/library/pull/229)
+
 ## [9.0.1] - 2026-10-28
 
 ### Honour apexRedirect include_www: false in the resolver's clash check

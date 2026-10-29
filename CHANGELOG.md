@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-28
 
+- [workflows] Leave earlier stages' destroys out of a staged replan or apply comment ([#229](https://github.com/noisypigeon/library/pull/229))
 - [workflows] Honour apexRedirect include_www: false in the resolver's clash check ([#228](https://github.com/noisypigeon/library/pull/228))
 - [adr] docs: LIB-0044 amendment, results of the custodial split and the rename ([#227](https://github.com/noisypigeon/library/pull/227))
 - [terragrunt/root-hcl] Scaleway compute kinds, their guards and the deployer's grants ([#226](https://github.com/noisypigeon/library/pull/226))
