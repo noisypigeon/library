@@ -4,6 +4,16 @@ All notable changes to this template are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [9.1.1] - 2026-10-28
+
+### Name the releases that brought Backblaze grants
+
+root.hcl's header now says the Backblaze grants arrived in v9.1.0, and v9.1.0's changelog entry names workflows/v9.2.0 as the `resolve-workloads.sh` release they pair with. Both had named versions from an older numbering. Nothing a leaf renders changes.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#236](https://github.com/noisypigeon/library/pull/236)
+
 ## [9.1.0] - 2026-10-28
 
 ### Grant guard for cross-workload Backblaze keys (LIB-0045)
