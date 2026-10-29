@@ -102,7 +102,12 @@ nothing that is deployed:
   finds the clone it was fetched into rather than the site's repo, and
   `--content-root`, which only the caller knows.
 
-These scripts, `resolve-root-hcl.sh`, `check-secrets.sh` and `split-secrets.sh` live under `.github/scripts/` so the
+- `.github/scripts/check-policies.sh` — checks a spoke against the policies
+  its committed `policies.yaml` turns on, before every plan (LIB-0045). Each
+  policy is a jq filter over one inventory of the spoke's leaves, with its
+  params' schema beside it, under `.github/scripts/policies/`.
+
+These scripts, `resolve-root-hcl.sh`, `check-secrets.sh`, `check-policies.sh` and `split-secrets.sh` live under `.github/scripts/` so the
 `workflows/vX.Y.Z` track covers them: a spoke pins one version and gets the
 reusable workflows and every script at that version, which is what invariant 2
 asks for.

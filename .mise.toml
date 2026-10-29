@@ -1,5 +1,7 @@
 [tools]
 terraform = "1.16.3"
+# check-policies.sh and resolve-workloads.sh, which their tests run.
+yq = "4.44.3"
 
 [tasks.fmt-terraform]
 run = "terraform fmt -recursive"

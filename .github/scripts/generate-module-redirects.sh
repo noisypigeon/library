@@ -51,6 +51,8 @@
 # services. Since LIB-0043 a workload's is schemas/workload/v5.json, with
 # Scaleway's compute kinds and iam.apiKey a mapping. The older ones stay
 # published, unchanged, for files still pinned to them.
+# Since LIB-0045 it also publishes schemas/policies/v1.json, a spoke's
+# policies.yaml, from each policies/<id>.schema.json beside check-policies.sh.
 # Without it, nothing under static/ is touched.
 #
 # Regenerate-all semantics: every run wipes and rewrites every generated page
@@ -256,7 +258,7 @@ if [ -n "$STATIC_ROOT" ]; then
     exit 2
   fi
   find "$STATIC_ROOT/terraform" \( -name inputs.schema.json -o -name state.schema.json -o -name workload.schema.json \) -type f -delete 2>/dev/null || true
-  rm -f "$STATIC_ROOT/schemas/workload/v1.json" "$STATIC_ROOT/schemas/workload/v2.json" "$STATIC_ROOT/schemas/workload/v3.json" "$STATIC_ROOT/schemas/workload/v4.json" "$STATIC_ROOT/schemas/workload/v5.json" "$STATIC_ROOT/schemas/zone/v1.json" "$STATIC_ROOT/schemas/zone/v2.json" "$STATIC_ROOT/schemas/zone/v3.json"
+  rm -f "$STATIC_ROOT/schemas/workload/v1.json" "$STATIC_ROOT/schemas/workload/v2.json" "$STATIC_ROOT/schemas/workload/v3.json" "$STATIC_ROOT/schemas/workload/v4.json" "$STATIC_ROOT/schemas/workload/v5.json" "$STATIC_ROOT/schemas/zone/v1.json" "$STATIC_ROOT/schemas/zone/v2.json" "$STATIC_ROOT/schemas/zone/v3.json" "$STATIC_ROOT/schemas/policies/v1.json"
 
   kinds_json='{}'
   schema_count=0
@@ -766,7 +768,41 @@ if [ -n "$STATIC_ROOT" ]; then
     | wrapped("zone"; "\($base)/schemas/zone/v3.json"; "Zone zone.yaml (LIB-0036, LIB-0037, LIB-0038, LIB-0039)")
   ' "$STATIC_ROOT/schemas/zone/v2.json" >"$STATIC_ROOT/schemas/zone/v3.json"
 
-  echo "Generated ${schema_count} module inputs schema(s), and the workload and zone schemas, under ${STATIC_ROOT}."
+  # A spoke's policies.yaml (LIB-0045 §4): one optional property per policy,
+  # its own params schema beside its filter plus `exempt`. A new policy adds
+  # one to v1 in place.
+  mkdir -p "$STATIC_ROOT/schemas/policies"
+  for pschema in "$LIB_ROOT"/.github/scripts/policies/*.schema.json; do
+    [ -f "$pschema" ] || continue
+    jq --arg id "$(basename "$pschema" .schema.json)" '{($id): .}' "$pschema"
+  done | jq -s --arg base "$SCHEMA_BASE_URL" 'add // {} | {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "\($base)/schemas/policies/v1.json",
+    title: "Spoke policies.yaml (LIB-0045)",
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      policies: {
+        type: "object",
+        description: "The policies this spoke enforces, each with its params",
+        additionalProperties: false,
+        properties: with_entries(.value |= (
+          .properties += {exempt: {
+            type: "array",
+            description: "Violations this spoke excuses, one per path; one that matches nothing fails",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["path", "reason"],
+              properties: {path: {type: "string", minLength: 1}, reason: {type: "string", minLength: 1}}
+            }
+          }}
+          | .additionalProperties = false))
+      }
+    }
+  }' >"$STATIC_ROOT/schemas/policies/v1.json"
+
+  echo "Generated ${schema_count} module inputs schema(s), and the workload, zone and policies schemas, under ${STATIC_ROOT}."
 fi
 
 mkdir -p "$THEME_CONTENT_DIR"
