@@ -4,6 +4,18 @@ All notable changes to this module are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.1.1] - 2026-10-28
+
+### Treat a null keyring_wiring or keyring_secrets as empty
+
+`keyring_wiring` and `keyring_secrets` are now `nullable = false`, so passing `null` gives each its default, `{}`. A workload stub declares every wiring input it doesn't fill as a variable defaulting to `null` (LIB-0023 §4). In v1.1.0, a null `keyring_wiring` reached the alias precondition's `keys()` and failed the plan with a function error instead of rendering the keyring unchanged.
+
+Nothing else changes. Verified in a scratch root: with both inputs `null`, the document is identical to v1.0.0's.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#223](https://github.com/noisypigeon/library/pull/223)
+
 ## [1.1.0] - 2026-10-28
 
 ### Let compute-instance-config take keyring fields from wiring and secrets
