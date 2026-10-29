@@ -4,6 +4,57 @@ All notable changes to this template are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [9.0.0] - 2026-10-28
+
+### Scaleway compute kinds, their guards and the deployer's grants
+
+root.hcl now builds the module calls for LIB-0043's Scaleway compute kinds, and refuses the rules that keep them consistent before anything plans. It's the twin of `workflows/v9.0.0`'s `resolve-workloads.sh`: take that release first, then dispatch `garden-generate.yml` so the new modules' schemas are published, then bump `root_hcl_version`.
+
+**Breaking:** `scaleway.iam.apiKey` is now a mapping of keys, each its own `iam-api-key/<key>` leaf on the workload's one application. A single key's inputs written directly under `scaleway.iam.apiKey` are refused. Move them under a name; naming it `main` keeps its leaf, `iam-api-key/main`, and so its state.
+
+New kinds:
+
+- `scaleway.iam.policy.<key>`: named `<prefix>-<suffix>-<key>`.
+- `scaleway.blockVolume.<key>`: named `<prefix>-<key>`, suffix `<suffix>`.
+- `scaleway.cockpit`, `scaleway.privateNetwork` and `scaleway.publicGateway`: named `<prefix>-<suffix>`. The project and the network are wired. `enabled: false` on the network or the gateway removes its leaf.
+- `scaleway.instance.<key>`:
+  - a `compute-instance` named `<prefix>-<random>-<key>`, with `public_ipv4` and its private NIC from `network`;
+  - and a `compute-instance-config` rendering its cloud-init from `volumes`, `cockpit`, `transcoding`, `selfDelete`, `commands` and `keyring`, with `scaleway.sharedKeyring` underneath.
+  - A command's `${keyring.<alias>.alias}` is written as the alias.
+  - `selfDelete` implies the instance's own `iam-application`, `iam-policy` (`InstancesFullAccess` on the project) and `iam-api-key` at `self-delete-<key>`.
+  - `network.sshViaGateway` implies a `gateway-pat-rule/<key>`.
+
+Keyring credentials never reach a generated file:
+
+- The literal `keyring` holds only plain fields. A bucket that names a `scaleway.bucket` key gets `https://s3.<region>.scw.cloud` as its endpoint.
+- What the stub wires from the bucket and API key leaves arrives as `keyring_wiring`.
+- Every `secretRef` reaches the config leaf as `keyring_secrets`, one sensitive variable.
+- The config's `cockpit`, `self_delete_credentials` and `keyring_wiring`, and the instance's `cloud_init`, are sensitive variables, so plans mask them.
+
+The deployer's default policy gains a permission set for each compute kind the file declares, beside `ObjectStorageFullAccess`:
+
+- `BlockStorageFullAccess` for `blockVolume`;
+- `InstancesFullAccess` for `instance`;
+- `PrivateNetworksFullAccess` for `privateNetwork`;
+- `VPCGatewayFullAccess` for `publicGateway`;
+- `ObservabilityFullAccess` for `cockpit`.
+
+A workload that declares none of them renders exactly as it did on v8, and plans `No changes.` on the bump.
+
+Refused before planning, with `resolve-workloads.sh`'s messages:
+
+- LIB-0043 §5's gateway rules E1 to E6. Above all, the gateway is off or absent while an instance doesn't set `network.publicIpv4: true` itself.
+- A policy or key without `iam.application`, a reserved name, or a wired input set by hand.
+- More than one volume on an instance, or one volume on two instances.
+- A keyring entry missing its fields or credentials, or naming an unknown API key or `secretRef`.
+- `transcoding` on an arm64 type, or `cockpit` without `scaleway.cockpit`.
+- An instance name that isn't kebab-case within 40 characters.
+- A command naming an alias its keyring doesn't have.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#226](https://github.com/noisypigeon/library/pull/226)
+
 ## [8.2.0] - 2026-10-28
 
 ### Read workload module versions from a run's tag list
