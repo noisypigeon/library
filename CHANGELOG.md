@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-28
 
+- [scaleway/compute-instance] Give compute-instance a project, its own public IPv4 and a Private Network NIC ([#221](https://github.com/noisypigeon/library/pull/221))
 - [scaleway/public-gateway] Add scaleway/private-network, public-gateway and gateway-pat-rule ([#220](https://github.com/noisypigeon/library/pull/220))
 - [scaleway/private-network] Add scaleway/private-network, public-gateway and gateway-pat-rule ([#220](https://github.com/noisypigeon/library/pull/220))
 - [scaleway/gateway-pat-rule] Add scaleway/private-network, public-gateway and gateway-pat-rule ([#220](https://github.com/noisypigeon/library/pull/220))
