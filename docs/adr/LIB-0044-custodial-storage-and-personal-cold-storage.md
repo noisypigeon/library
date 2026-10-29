@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-28.
-- **Status**: Proposed; amended 2026-10-28 (see `## Amendments`). Applies
+- **Status**: Proposed; amended twice on 2026-10-28 (see `## Amendments`). Applies
   LIB-0037 and LIB-0040 to runway.
 
 ## Context
@@ -179,3 +179,34 @@ Three things went differently from §§4–5:
    pushes state between stages must replan before applying.
 3. **Two pulls of one state can differ in `check_results` order** alone.
    Compare backups with that list sorted.
+
+### 2026-10-28: `custodial-storage` becomes `custodial-cold-storage`
+
+The custodial workload is renamed so that both private workloads name what
+they hold the same way: `personal-cold-storage` and `custodial-cold-storage`.
+
+1. **It moves to `workloads/private/custodial-cold-storage/`.** Its `name`,
+   `suffix` and project `name:` become `custodial-cold-storage`, and its
+   prefix stays `cus`.
+
+   | Leaf | After |
+   | --- | --- |
+   | `scaleway/project/main` | `custodial-cold-storage`, renamed in place |
+   | `scaleway/{iam-application,iam-policy}/deployer` | `cus-custodial-cold-storage-deployer`, renamed in place |
+   | `scaleway/iam-api-key/deployer` | unchanged |
+   | `scaleway/bucket/state` | unchanged: its name carries no suffix |
+   | `backblaze/api-key/deployer` | `cus-custodial-cold-storage-backblaze-deployer`, replaced |
+   | the custodial bucket | unchanged |
+
+2. **It moved as §4 describes.** All seven keys were pushed to their new
+   paths and the old leaves emptied before the PR planned.
+   noisypigeon/runway#96 applied in three stages and merged. Its only
+   changes were the in-place renames, the key's replace and the old leaves'
+   outputs.
+3. **It converges.** From `main` after runway#96, all 17 leaves of both
+   workloads plan `No changes.` with refresh. The custodial bucket, the
+   state bucket and the project keep the IDs in their backups.
+4. **The results amendment's item 1 recurred.** runway is still on
+   `workflows/v8.2.0`, so the seven removed leaves showed as
+   `failed to plan` in each later stage. `workflows/v9.0.2` stops that
+   (noisypigeon/library#229).
