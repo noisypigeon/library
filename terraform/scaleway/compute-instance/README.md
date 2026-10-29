@@ -1,37 +1,23 @@
 # compute-instance
 
-A Scaleway compute Instance (`scaleway_instance_server`) with a randomized name suffix, provisioned unconditionally for `pigeon-cli` (ADR-0118): rclone/neovim, a `keyring.toml` + `rclone.conf` rendered from one `keyring` list, and optional Cockpit/Alloy wiring — all grouped under `user_config`/`instance_config`.
+A Scaleway compute Instance (`scaleway_instance_server`) with a randomized name suffix. It takes an already-rendered `cloud_init` document, normally `compute-instance-config`'s, and block volumes the caller creates. Since v8.0.0 (LIB-0043) it also creates the instance's own routed public IPv4 (`public_ipv4`) and attaches it to a Private Network (`enable_private_network`, `private_network_id`), with a standalone NIC so that attaching or detaching never replaces the server. `project_id` is required.
 
 ## Usage
 
 ```hcl
-module "compute" {
-  source                = "https://noisypigeon.garden/terraform/scaleway/compute-instance/v4.0.0"
-  name_prefix           = "job-example"
-  name_suffix           = "worker"
+module "instance" {
+  source      = "https://noisypigeon.garden/terraform/scaleway/compute-instance/v8.0.0"
+  name_prefix = "pigeon-cli"
+  name_suffix = "worker"
+  project_id  = local.project_id
+
+  type                  = "COMPUTE3-X8C-16G"
+  cloud_init            = module.config.cloud_init
   additional_volume_ids = [module.volume.id]
 
-  user_config = {
-    ssh_key = local.ssh_key_public_key
-  }
-
-  instance_config = {
-    type    = "COMPUTE3-X8C-16G"
-    cockpit = local.cockpit
-    # image omitted -- defaults to "ubuntu_jammy"
-  }
-
-  keyring = [
-    {
-      kind          = "bucket"
-      alias         = "source"
-      endpoint      = module.bucket.endpoint
-      bucket        = module.bucket.name
-      access_key_id = module.iam.access_key
-      secret_key    = module.iam.secret_key
-      provider      = local.scaleway_s3_provider_name
-    }
-  ]
+  public_ipv4            = false
+  enable_private_network = true
+  private_network_id     = module.private_network.id
 }
 ```
 

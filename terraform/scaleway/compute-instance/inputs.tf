@@ -66,3 +66,31 @@ variable "enabled" {
   description = "Whether to create the instance. false destroys the server only; any IP, volume or IAM the caller created for it is untouched."
   default     = true
 }
+
+variable "project_id" {
+  type        = string
+  description = "Project the instance, and the IP public_ipv4 creates, live in (LIB-0043). Required since v8.0.0: the provider's own default project is rarely the one a caller means."
+}
+
+variable "public_ipv4" {
+  type        = bool
+  description = "Create a routed public IPv4 for the instance and attach it, beside any ip_ids (LIB-0043). The IP isn't gated by enabled, so it keeps its address across an enabled = false cycle. While a Public Gateway pushes its default route on the instance's Private Network, the IP works outbound only (ADR-0146)."
+  default     = false
+}
+
+variable "enable_private_network" {
+  type        = bool
+  description = "Attach the instance to private_network_id with a standalone scaleway_instance_private_nic, so attaching or detaching never replaces the server (ADR-0145). An explicit bool rather than private_network_id != null, since count can't depend on an apply-time-unknown ID (compute-instance v5.6.0)."
+  default     = false
+}
+
+variable "private_network_id" {
+  type        = string
+  description = "ID of the Private Network to attach to when enable_private_network is true (LIB-0043)."
+  default     = null
+
+  validation {
+    condition     = !var.enable_private_network || var.private_network_id != null
+    error_message = "private_network_id must be set when enable_private_network is true."
+  }
+}
