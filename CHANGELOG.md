@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-28
 
+- [adr] LIB-0046: runway's Scaleway project and pigeon buckets become the private/data-ops workload ([#237](https://github.com/noisypigeon/library/pull/237))
 - [terragrunt/root-hcl] Name the releases that brought Backblaze grants ([#236](https://github.com/noisypigeon/library/pull/236))
 - [terragrunt/root-hcl] Grant guard for cross-workload Backblaze keys (LIB-0045) ([#235](https://github.com/noisypigeon/library/pull/235))
 - [workflows] Owner-granted cross-workload Backblaze keys, and workload schema v6 (LIB-0045) ([#234](https://github.com/noisypigeon/library/pull/234))
