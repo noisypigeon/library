@@ -1097,14 +1097,15 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
   # Its zone entries, each with its zone, for the clash checks (LIB-0030 §6),
   # which group them across every unit (LIB-0036 §3).
   # An apexRedirect's own placeholders (LIB-0038 §3) are marked, so only
-  # someone else's record beside them is a clash.
+  # someone else's record beside them is a clash. include_www is tested with
+  # != false, not // true, which would read false as true.
   jq -c --arg rel "$rel" --arg dp dnsRecords '
     (.cloudflare // {}) as $c | ($c.zone // "") as $dz |
     def zone_of: (.value | objects | .zone) // $dz;
-    ([$c.apexRedirect // {} | objects | keys[] | "\(.)-apex", "\(.)-www"]) as $implied |
+    ([$c.apexRedirect // {} | objects | to_entries[] | "\(.key)-apex", (select((.value | objects | .include_www) != false) | "\(.key)-www")]) as $implied |
     {
       rs: [$c.ruleset // {} | to_entries[] | {k: "\($rel) cloudflare.ruleset.\(.key)", z: zone_of, p: (.value | objects | .phase)}],
-      ar: [$c.apexRedirect // {} | to_entries[] | {k: "\($rel) cloudflare.apexRedirect.\(.key)", z: zone_of, www: ((.value | objects | .include_www) // true)}],
+      ar: [$c.apexRedirect // {} | to_entries[] | {k: "\($rel) cloudflare.apexRedirect.\(.key)", z: zone_of, www: ((.value | objects | .include_www) != false)}],
       dr: [$c.dnsRecord // {} | to_entries[] | {k: "\($rel) \($dp).\(.key)", z: zone_of, n: ((.value | objects | .name) // .key), t: ((.value | objects | .type) // "" | tostring | ascii_upcase), c: (.value | objects | .content), own: (.key as $k | $implied | index($k) != null)}]
     }' <<<"$json" >>"$EXPECTED_DIR/.cache/clash.jsonl"
 
