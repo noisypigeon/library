@@ -112,6 +112,7 @@ variable "keyring_wiring" {
   description = "Per-alias keyring fields another module's outputs fill, merged over the keyring entry of the same alias (LIB-0043 §4): a bucket's name, and an API key's access_key_id and secret_key. A null field leaves the entry's own value. Every key must be an alias in keyring."
   default     = {}
   sensitive   = true
+  nullable    = false
 }
 
 variable "keyring_secrets" {
@@ -119,6 +120,7 @@ variable "keyring_secrets" {
   description = "Per-alias keyring fields that are secrets, merged over keyring and keyring_wiring by alias (LIB-0043 §4): a workload's secretRefs, resolved. Each inner key is a string field of the entry: email, host, secret, endpoint, bucket, access_key_id or secret_key. Every key must be an alias in keyring."
   default     = {}
   sensitive   = true
+  nullable    = false
 
   validation {
     condition = alltrue(flatten([for alias, fields in var.keyring_secrets : [
