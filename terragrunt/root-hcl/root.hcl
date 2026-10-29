@@ -138,6 +138,12 @@
 # breakglass key where it has one, and its Backblaze leaves sign in with it. A
 # provider's entry may set workloads_only = true: no hand-written leaf turns it
 # on, and the spoke keeps no credentials of its own for it.
+#
+# Since v8.3.0 (LIB-0045 §§6-7) a Backblaze bucket may grant other workloads,
+# each up to a list of capabilities, under `grants`, which isn't a module
+# input. A key may name a bucket another workload grants it as
+# <parent>/<workload>/<bucket>; its leaf reads that workload's file and refuses
+# a bucket it isn't granted, or capabilities beyond the grant.
 
 locals {
   # The spoke's instance values. Missing spoke.hcl is a hard error, which is
@@ -579,6 +585,28 @@ locals {
   workload_b2_keys      = try(local.workload_backblaze.apiKey, null)
   workload_b2_key_entry = try(local.workload_b2_keys[local.workload_instance], null)
   workload_b2_deployer  = length(try(keys(local.workload_b2_buckets), [])) + length(try(keys(local.workload_b2_keys), [])) > 0
+  # A key's buckets: its own by key, and another workload's as
+  # <parent>/<workload>/<bucket>, which that bucket's grants must give this
+  # workload, with at least the key's capabilities (LIB-0045 §§6-7). The
+  # owner's file is read as resolve-workloads.sh's grant check reads it.
+  workload_b2_key_buckets = [for b in try(tolist(local.workload_b2_key_entry.buckets), []) : tostring(b)]
+  workload_b2_own_buckets = [for b in local.workload_b2_key_buckets : b if length(split("/", b)) == 1]
+  workload_b2_xbuckets = {
+    for b in local.workload_b2_key_buckets : b => {
+      owner  = join("/", slice(split("/", b), 0, 2))
+      bucket = split("/", b)[2]
+    } if length(split("/", b)) == 3
+  }
+  workload_b2_xgrants = {
+    for b, x in local.workload_b2_xbuckets : b => try(
+      [for c in yamldecode(file(mark_as_read("${get_parent_terragrunt_dir()}/workloads/${x.owner}/workload.yaml"))).workload.backblaze.bucket[x.bucket].grants["${local.workload_parent}/${local.workload}"] : tostring(c)],
+      null
+    )
+  }
+  workload_b2_ungranted = sort([for b, g in local.workload_b2_xgrants : b if g == null])
+  workload_b2_overreach = sort(distinct(flatten([
+    for b, g in local.workload_b2_xgrants : g == null ? [] : tolist(setsubtract([for c in try(tolist(local.workload_b2_key_entry.capabilities), []) : tostring(c)], g))
+  ])))
   # Everything a deployer needs to create, reconfigure and delete buckets and
   # their keys (LIB-0033 §5), as runway's spoke key held.
   b2_deployer_capabilities = [
@@ -1080,9 +1108,11 @@ locals {
     }
     # Backblaze (LIB-0029): the workload's own key (LIB-0041 §2), the
     # workload's state.
+    # `grants` says who else may key a bucket (LIB-0045 §6); it isn't an
+    # input of the module's.
     "backblaze/bucket" = {
       declared    = contains(try(keys(local.workload_b2_buckets), []), local.workload_instance)
-      entry       = try(local.workload_b2_buckets[local.workload_instance], null)
+      entry       = try({ for k, v in local.workload_b2_buckets[local.workload_instance] : k => v if k != "grants" }, null)
       secrets     = try(local.workload_secrets.backblaze.bucket[local.workload_instance], null)
       wiring      = {}
       defaults    = { name_prefix = "${local.workload_prefix}${local.workload_name_tag}-${local.workload_instance}", name_suffix = local.workload_suffix }
@@ -1292,7 +1322,9 @@ locals {
   guard_workload_backend  = !local.workload_stub_backend ? file("${path_relative_to_include()} keeps its state in the workload's bucket but its stub declares no remote_state; regenerate it with a resolve-workloads.sh from workflows v4.9.0 or later (LIB-0028 §5)") : true
   guard_workload_b2_on    = local.is_workload_leaf && local.leaf_provider == "backblaze" && !contains(keys(local.providers), "backblaze") ? file("${path_relative_to_include()} is a Backblaze workload leaf, but spoke.hcl's providers map has no backblaze (LIB-0029 §4)") : true
   guard_workload_b2_list  = local.is_workload_leaf && local.workload_kind_key == "backblaze/api-key" && length(try(tolist(local.workload_b2_key_entry.buckets), [])) == 0 ? file("${local.workload_file}: backblaze.apiKey.${local.workload_instance}.buckets must list at least one of this workload's backblaze.bucket keys (LIB-0029 §3)") : true
-  guard_workload_b2_known = local.is_workload_leaf && local.workload_kind_key == "backblaze/api-key" && length(setsubtract(try(tolist(local.workload_b2_key_entry.buckets), []), try(keys(local.workload_b2_buckets), []))) > 0 ? file("${local.workload_file}: backblaze.apiKey.${local.workload_instance}.buckets names a bucket this workload's backblaze.bucket doesn't have (LIB-0029 §3)") : true
+  guard_workload_b2_known = local.is_workload_leaf && local.workload_kind_key == "backblaze/api-key" && length(setsubtract(local.workload_b2_own_buckets, try(keys(local.workload_b2_buckets), []))) > 0 ? file("${local.workload_file}: backblaze.apiKey.${local.workload_instance}.buckets names a bucket this workload's backblaze.bucket doesn't have (LIB-0029 §3)") : true
+  guard_workload_b2_grant = local.is_workload_leaf && local.workload_kind_key == "backblaze/api-key" && length(local.workload_b2_ungranted) > 0 ? file("${local.workload_file}: backblaze.apiKey.${local.workload_instance}.buckets: ${join(", ", local.workload_b2_ungranted)} isn't granted to ${local.workload_parent}/${local.workload}, or doesn't exist; the owning bucket's grants must name it (LIB-0045 §§6-7)") : true
+  guard_workload_b2_reach = local.is_workload_leaf && local.workload_kind_key == "backblaze/api-key" && length(local.workload_b2_overreach) > 0 ? file("${local.workload_file}: backblaze.apiKey.${local.workload_instance}.capabilities: ${join(", ", local.workload_b2_overreach)} exceed what a bucket of another workload it names grants ${local.workload_parent}/${local.workload} (LIB-0045 §§6-7)") : true
   guard_workload_b2_dep   = local.is_workload_leaf && contains(try(keys(local.workload_b2_keys), []), "deployer") ? file("${local.workload_file}: backblaze.apiKey.deployer is reserved for the workload's own key; configure it as backblaze.deployer (LIB-0041 §1)") : true
   guard_workload_b2_ids   = local.is_workload_leaf && local.workload_kind_key == "backblaze/api-key" && (can(local.workload_b2_key_entry.bucket_ids) || can(local.workload_secrets.backblaze.apiKey[local.workload_instance].bucket_ids)) ? file("${local.workload_file}: backblaze.apiKey.${local.workload_instance}.bucket_ids can't be set; list the buckets in buckets instead (LIB-0029 §3)") : true
   guard_workload_cf_on    = local.is_workload_leaf && local.leaf_provider == "cloudflare" && !contains(keys(local.providers), "cloudflare") ? file("${path_relative_to_include()} is a Cloudflare workload leaf, but spoke.hcl's providers map has no cloudflare (LIB-0030 §1)") : true
