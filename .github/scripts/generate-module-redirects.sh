@@ -49,8 +49,10 @@
 # schemas/workload/v4.json and schemas/zone/v3.json, each file's content under
 # one key (workload or zone), its records at dnsRecords, and a zone's
 # services. Since LIB-0043 a workload's is schemas/workload/v5.json, with
-# Scaleway's compute kinds and iam.apiKey a mapping. The older ones stay
-# published, unchanged, for files still pinned to them.
+# Scaleway's compute kinds and iam.apiKey a mapping, and since LIB-0045
+# schemas/workload/v6.json, with a bucket's grants and a key's buckets of
+# another workload, from each Backblaze version's granted.schema.json. The
+# older ones stay published, unchanged, for files still pinned to them.
 # Since LIB-0045 it also publishes schemas/policies/v1.json, a spoke's
 # policies.yaml, from each policies/<id>.schema.json beside check-policies.sh.
 # Without it, nothing under static/ is touched.
@@ -257,8 +259,8 @@ if [ -n "$STATIC_ROOT" ]; then
     echo "::error::--static-root $STATIC_ROOT is not a directory" >&2
     exit 2
   fi
-  find "$STATIC_ROOT/terraform" \( -name inputs.schema.json -o -name state.schema.json -o -name workload.schema.json \) -type f -delete 2>/dev/null || true
-  rm -f "$STATIC_ROOT/schemas/workload/v1.json" "$STATIC_ROOT/schemas/workload/v2.json" "$STATIC_ROOT/schemas/workload/v3.json" "$STATIC_ROOT/schemas/workload/v4.json" "$STATIC_ROOT/schemas/workload/v5.json" "$STATIC_ROOT/schemas/zone/v1.json" "$STATIC_ROOT/schemas/zone/v2.json" "$STATIC_ROOT/schemas/zone/v3.json" "$STATIC_ROOT/schemas/policies/v1.json"
+  find "$STATIC_ROOT/terraform" \( -name inputs.schema.json -o -name state.schema.json -o -name workload.schema.json -o -name granted.schema.json \) -type f -delete 2>/dev/null || true
+  rm -f "$STATIC_ROOT/schemas/workload/v1.json" "$STATIC_ROOT/schemas/workload/v2.json" "$STATIC_ROOT/schemas/workload/v3.json" "$STATIC_ROOT/schemas/workload/v4.json" "$STATIC_ROOT/schemas/workload/v5.json" "$STATIC_ROOT/schemas/workload/v6.json" "$STATIC_ROOT/schemas/zone/v1.json" "$STATIC_ROOT/schemas/zone/v2.json" "$STATIC_ROOT/schemas/zone/v3.json" "$STATIC_ROOT/schemas/policies/v1.json"
 
   kinds_json='{}'
   schema_count=0
@@ -287,6 +289,21 @@ if [ -n "$STATIC_ROOT" ]; then
         ' "$out/inputs.schema.json" >"$out/state.schema.json"
         schema_count=$((schema_count + 1))
       fi
+      # Since LIB-0045 a bucket may grant other workloads, and a key name
+      # their buckets: granted.schema.json, for workload schema v6.
+      if [ "$wmodule" = backblaze/bucket ]; then
+        jq --arg id "${SCHEMA_BASE_URL}/terraform/${wmodule}/v${v}/granted.schema.json" '
+          ."$id" = $id
+          | .properties.grants = {
+              type: "object",
+              minProperties: 1,
+              propertyNames: {pattern: "^[^/]+/[a-z0-9]+(-[a-z0-9]+)*$"},
+              additionalProperties: {type: "array", minItems: 1, items: {type: "string"}},
+              description: "Other workloads, <parent>/<workload>, that may name this bucket in a key, each with the most its key may do here (LIB-0045 §6)"
+            }
+        ' "$out/inputs.schema.json" >"$out/granted.schema.json"
+        schema_count=$((schema_count + 1))
+      fi
       if [ "$wmodule" = backblaze/api-key ]; then
         jq --arg id "${SCHEMA_BASE_URL}/terraform/${wmodule}/v${v}/workload.schema.json" '
           ."$id" = $id
@@ -299,7 +316,12 @@ if [ -n "$STATIC_ROOT" ]; then
             }
           | .required = ["buckets", "capabilities"]
         ' "$out/inputs.schema.json" >"$out/workload.schema.json"
-        schema_count=$((schema_count + 1))
+        jq --arg id "${SCHEMA_BASE_URL}/terraform/${wmodule}/v${v}/granted.schema.json" '
+          ."$id" = $id
+          | .properties.buckets.items.pattern = "^([a-z0-9]+(-[a-z0-9]+)*|[^/]+/[a-z0-9]+(-[a-z0-9]+)*/[a-z0-9]+(-[a-z0-9]+)*)$"
+          | .properties.buckets.description = "The workload'"'"'s backblaze.bucket keys this key may reach, and <parent>/<workload>/<bucket> for a bucket another workload grants it (LIB-0029 §3, LIB-0045 §7)"
+        ' "$out/workload.schema.json" >"$out/granted.schema.json"
+        schema_count=$((schema_count + 2))
       fi
       if [ "$wmodule" = cloudflare/bucket ] || [ "$wmodule" = cloudflare/ruleset ] || [ "$wmodule" = cloudflare/api-token ]; then
         jq --arg id "${SCHEMA_BASE_URL}/terraform/${wmodule}/v${v}/workload.schema.json" '
@@ -317,7 +339,8 @@ if [ -n "$STATIC_ROOT" ]; then
     case "$wmodule" in
       # A workload's own Backblaze key, backblaze.deployer, takes the module's
       # plain inputs (LIB-0041 §1).
-      backblaze/api-key) kinds=("$wmodule#workload|workload" "$wmodule|inputs") ;;
+      backblaze/api-key) kinds=("$wmodule#workload|workload" "$wmodule|inputs" "$wmodule#granted|granted") ;;
+      backblaze/bucket) kinds+=("$wmodule#granted|granted") ;;
       cloudflare/bucket | cloudflare/ruleset | cloudflare/api-token) kinds=("$wmodule#workload|workload") ;;
     esac
     for wkind in "${kinds[@]}"; do
@@ -723,6 +746,15 @@ if [ -n "$STATIC_ROOT" ]; then
           ]
       )
   ' "$STATIC_ROOT/schemas/workload/v4.json" >"$STATIC_ROOT/schemas/workload/v5.json"
+
+  # LIB-0045 §§6-8: a bucket's grants, and a key's buckets of another
+  # workload, from each version's granted.schema.json. v5 stays as it was.
+  jq --arg base "$SCHEMA_BASE_URL" --argjson kinds "$kinds_json" '
+    ."$id" = "\($base)/schemas/workload/v6.json"
+    | .title = "Workload workload.yaml (LIB-0023, LIB-0028, LIB-0029, LIB-0030, LIB-0033, LIB-0037, LIB-0038, LIB-0039, LIB-0043, LIB-0045)"
+    | .properties.workload.properties.backblaze.properties.bucket.additionalProperties = ($kinds["backblaze/bucket#granted"] // {})
+    | .properties.workload.properties.backblaze.properties.apiKey.additionalProperties = ($kinds["backblaze/api-key#granted"] // {})
+  ' "$STATIC_ROOT/schemas/workload/v5.json" >"$STATIC_ROOT/schemas/workload/v6.json"
   jq --arg base "$SCHEMA_BASE_URL" "$wrap_jq"'
     def dmarc: {
       type: ["boolean", "string"],

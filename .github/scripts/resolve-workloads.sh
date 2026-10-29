@@ -20,7 +20,10 @@
 # backblaze/api-key/deployer, which any workload declaring one has
 # (LIB-0041), and keep their state in that same workload bucket. An API key
 # depends on each bucket its `buckets` list names, and gets their IDs as
-# bucket_ids.
+# bucket_ids. A `buckets` entry <parent>/<workload>/<bucket> is another
+# workload's bucket, which that bucket's `grants` must give this workload,
+# with at least the key's capabilities (LIB-0045 §§6-7); grants isn't a
+# module input.
 # Cloudflare kinds (LIB-0030) sign in with the unit's own Cloudflare token,
 # cloudflare/api-token/deployer (LIB-0033 §4). A zone always has one; a
 # workload has one when its zone's `hosts` gives it a host, or when it
@@ -200,6 +203,13 @@ dep_dir() {
     cf_token) echo "cloudflare/api-token/deployer" ;;
     b2_key) echo "backblaze/api-key/deployer" ;;
     bucket_*) echo "backblaze/bucket/$(echo "${1#bucket_}" | tr _ -)" ;;
+    # xbucket_<n> is the nth bucket of another workload a Backblaze key
+    # names, <parent>/<workload>/<bucket>, from CUR_XBUCKETS (LIB-0045 §7).
+    xbucket_*)
+      local x
+      x=$(sed -n "$((${1#xbucket_} + 1))p" <<<"$CUR_XBUCKETS")
+      echo "../../${x%/*}/backblaze/bucket/${x##*/}"
+      ;;
     # LIB-0043: a Scaleway bucket, block volume or API key by its key, and
     # the leaves an instance's name gives, CUR_NAME being the stub's instance.
     sbucket_*) echo "scaleway/bucket/$(echo "${1#sbucket_}" | tr _ -)" ;;
@@ -566,10 +576,11 @@ EOF
     printf '\ndependency "%s" {\n  config_path = "../../../%s"\n}\n' "$dep" "$(dep_dir "$dep")"
     lines="$lines$(wiring_lines "$module" "$dep" "$credentials")"$'\n'
   done
-  # A Backblaze key's buckets become one list (LIB-0029 §3).
+  # A Backblaze key's buckets become one list (LIB-0029 §3), its own and
+  # those another workload granted it (LIB-0045 §7).
   local ids=""
   for dep in ${deps[@]+"${deps[@]}"}; do
-    case "$dep" in bucket_*) ids="${ids:+$ids, }dependency.$dep.outputs.module.bucket_id" ;; esac
+    case "$dep" in bucket_* | xbucket_*) ids="${ids:+$ids, }dependency.$dep.outputs.module.bucket_id" ;; esac
   done
   if [ -n "$ids" ]; then lines="${lines}bucket_ids|[$ids]"$'\n'; fi
   # An instance's volumes become one list, and its keyring's buckets and API
@@ -1005,6 +1016,14 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
           to_entries[] |
             (if (.key | test($kebab)) then empty else "backblaze.bucket.\(.key): bucket name must be kebab-case" end),
             (.value | entry_ok("backblaze.bucket.\(.key)")),
+            # Who else may key it, and the most each may do (LIB-0045 §6).
+            (.key as $k | .value // {} | objects | select(has("grants")) | .grants |
+              if type != "object" or length == 0 then "backblaze.bucket.\($k).grants must map each workload it grants, <parent>/<workload>, to the capabilities its key may have (LIB-0045 §6)"
+              else to_entries[] |
+                (if (.key | test("^[^/]+/[a-z0-9-]+$")) then empty else "backblaze.bucket.\($k).grants: \(.key | tojson) isn'"'"'t a workload ID, <parent>/<workload> (LIB-0045 §6)" end),
+                (if (.value | type) == "array" and (.value | length) > 0 and all(.value[]; type == "string") then empty
+                 else "backblaze.bucket.\($k).grants.\(.key) must list the capabilities its key may have (LIB-0045 §6)" end)
+              end),
             (.key as $k | .value // {} | objects | select(has("exact_name") | not)
               | ((.name_prefix // "\($file.prefix)\($tag)-\($k)") + "-xxxxxx-" + (.name_suffix // $file.suffix)) as $n
               | if ($n | length) > 50 then "backblaze.bucket.\($k): its name, \($n | length) characters with the random code, is longer than B2'"'"'s 50; shorten the key or set exact_name (LIB-0029 §5)" else empty end)
@@ -1018,8 +1037,13 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
             (.value // {} | objects |
               (if (.buckets | type) != "array" or (.buckets | length) == 0
                then "backblaze.apiKey.\($k).buckets must list at least one of this workload'"'"'s backblaze.bucket keys (LIB-0029 §3)"
-               else (.buckets[] | select(type != "string" or (. as $b | $buckets | index($b) | not))
-                 | "backblaze.apiKey.\($k).buckets: \(tojson) is not one of this workload'"'"'s backblaze.bucket keys (LIB-0029 §3)") end),
+               else (.buckets[] |
+                 if type == "string" and test("/") then
+                   (if test("^[^/]+/[a-z0-9-]+/[a-z0-9-]+$") then empty
+                    else "backblaze.apiKey.\($k).buckets: \(tojson) names another workload'"'"'s bucket as <parent>/<workload>/<bucket> (LIB-0045 §7)" end)
+                 elif type != "string" or (. as $b | $buckets | index($b) | not) then
+                   "backblaze.apiKey.\($k).buckets: \(tojson) is not one of this workload'"'"'s backblaze.bucket keys, nor <parent>/<workload>/<bucket> for a bucket another workload grants it (LIB-0029 §3, LIB-0045 §7)"
+                 else empty end) end),
               (if has("bucket_ids") then "backblaze.apiKey.\($k).bucket_ids can'"'"'t be set; list the buckets in buckets instead (LIB-0029 §3)" else empty end),
               (if (.capabilities | type) != "array" or (.capabilities | length) == 0 then "backblaze.apiKey.\($k).capabilities must list what the key may do (LIB-0029 §2)" else empty end)),
             (if .value == null then "backblaze.apiKey.\($k) needs buckets and capabilities (LIB-0029 §§2-3)" else empty end)
@@ -1158,14 +1182,21 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
       stub="$unit_dir/$module/$name"
       CUR_NAME="$name"
       CUR_KEYRING_WIRING=""
+      CUR_XBUCKETS=""
       # `buckets` becomes this instance's own bucket_<key> dependencies, and
-      # `config_deps` and `instance_deps` an instance's own (LIB-0043 §1).
+      # one xbucket_<n> per bucket another workload grants it (LIB-0045 §7),
+      # and `config_deps` and `instance_deps` an instance's own (LIB-0043 §1).
       instance_deps=()
       for dep in ${declared[@]+"${declared[@]}"}; do
         if [ "$dep" = buckets ]; then
+          xn=0
           while IFS= read -r b; do
-            [ -n "$b" ] && instance_deps+=("bucket_$(tr - _ <<<"$b")")
-          done < <(jq -r --arg n "$name" "${jq_path}[\$n].buckets[]?" <<<"$json")
+            case "$b" in
+              "") ;;
+              */*) instance_deps+=("xbucket_$xn"); CUR_XBUCKETS="$CUR_XBUCKETS$b"$'\n'; xn=$((xn + 1)) ;;
+              *) instance_deps+=("bucket_$(tr - _ <<<"$b")") ;;
+            esac
+          done < <(jq -r --arg n "$name" "${jq_path}[\$n].buckets[]? | strings" <<<"$json")
         elif [ "$dep" = config_deps ] || [ "$dep" = instance_deps ]; then
           while IFS= read -r d; do
             [ -n "$d" ] && instance_deps+=("$d")
@@ -1196,6 +1227,42 @@ for rel in ${unit_files[@]+"${unit_files[@]}"}; do
     done <<<"$names"
   done
 done
+
+# A key's bucket of another workload must exist, be granted to the key's
+# workload, and grant at least the key's capabilities, since a B2 key's
+# capabilities hold for every bucket it reaches (LIB-0045 §§6-7). Across every
+# workload, so each owner's file is read beside its consumers'.
+for rel in ${unit_files[@]+"${unit_files[@]}"}; do
+  case "$rel" in workloads/*/*/workload.yaml) ;; *) continue ;; esac
+  unit_dir="$(dirname "$rel")"
+  [ -f "$(unit_cache "$unit_dir")" ] || continue
+  jq -c --arg id "${unit_dir#workloads/}" --arg rel "$rel" '{
+    id: $id, rel: $rel,
+    buckets: (.backblaze.bucket // {} | objects | with_entries(.value |= ((objects | .grants // {} | objects) // {}))),
+    keys: (.backblaze.apiKey // {} | objects | with_entries(.value |= ((objects // {}) | {
+      buckets: (.buckets // [] | arrays // [] | map(strings)),
+      capabilities: (.capabilities // [] | arrays // [] | map(strings))
+    })))
+  }' "$(unit_cache "$unit_dir")"
+done >"$EXPECTED_DIR/.cache/grants.jsonl"
+grant_problems=$(jq -rs '
+  (map({key: .id, value: .}) | from_entries) as $w |
+  .[] | . as $c |
+  ($c.buckets | to_entries[] | select(.value | has($c.id))
+    | "\($c.rel): backblaze.bucket.\(.key).grants names \($c.id), this bucket'"'"'s own workload, which needs no grant (LIB-0045 §6)"),
+  ($c.keys | to_entries[] | .key as $k | .value as $key |
+    $key.buckets[] | capture("^(?<o>[^/]+/[^/]+)/(?<b>[^/]+)$") as $m |
+    ($w[$m.o].buckets[$m.b] // null) as $g |
+    if $m.o == $c.id then "\($c.rel): backblaze.apiKey.\($k).buckets: \($m.o)/\($m.b) is this workload'"'"'s own bucket; name it \($m.b) (LIB-0029 §3)"
+    elif $w[$m.o] == null then "\($c.rel): backblaze.apiKey.\($k).buckets: \($m.o)/\($m.b) names workload \($m.o), which doesn'"'"'t exist (LIB-0045 §7)"
+    elif ($w[$m.o].buckets | has($m.b) | not) then "\($c.rel): backblaze.apiKey.\($k).buckets: \($m.o)/\($m.b) isn'"'"'t one of \($m.o)'"'"'s backblaze.bucket keys (LIB-0045 §7)"
+    elif ($g | has($c.id) | not) then "\($c.rel): backblaze.apiKey.\($k).buckets: \($m.o)/\($m.b) isn'"'"'t granted to \($c.id); add it to that bucket'"'"'s grants in \($w[$m.o].rel) (LIB-0045 §§6-7)"
+    else ($key.capabilities - $g[$c.id]) as $over |
+      if $over == [] then empty
+      else "\($c.rel): backblaze.apiKey.\($k).capabilities: \($over | join(", ")) exceed what \($m.o)/\($m.b) grants \($c.id), \($g[$c.id] | join(", ")) (LIB-0045 §§6-7)" end
+    end)
+' "$EXPECTED_DIR/.cache/grants.jsonl")
+while IFS= read -r msg; do [ -n "$msg" ] && fail "$msg"; done <<<"$grant_problems"
 
 # One entrypoint per zone and phase, one record per name and type (LIB-0030
 # §6), across every unit: a zone's own file and its workload's (LIB-0036 §3).
@@ -1331,6 +1398,8 @@ if [ "$CHECK" = true ]; then
     # backblaze.apiKey.<key>.buckets is the stub's dependencies, not a module
     # input (LIB-0029 §3).
     if [ "$module" = backblaze/api-key ]; then entry=$(jq -c 'del(.buckets)' <<<"$entry"); fi
+    # Nor is backblaze.bucket.<key>.grants (LIB-0045 §6).
+    if [ "$module" = backblaze/bucket ]; then entry=$(jq -c 'del(.grants)' <<<"$entry"); fi
     sentry='{}'
     env_names='[]'
     if [ -f "$secrets" ]; then
@@ -1371,7 +1440,7 @@ if [ "$CHECK" = true ]; then
         fi
       done < <(wiring_lines "$module" "$dep" "$credentials")
     done
-    if [[ " $declared_deps " == *" bucket_"* ]] && ! jq -e 'index("bucket_ids") != null' <<<"$props" >/dev/null; then
+    if [[ " $declared_deps " == *" bucket_"* || " $declared_deps " == *" xbucket_"* ]] && ! jq -e 'index("bucket_ids") != null' <<<"$props" >/dev/null; then
       missing_wiring="${missing_wiring:+$missing_wiring, }bucket_ids"
     fi
     # A Cloudflare zone kind always gets `zone`, from the entry or the
