@@ -4,6 +4,37 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [9.1.0] - 2026-10-28
+
+### Add check-policies.sh and the backblaze-bucket-owners policy (LIB-0045)
+
+A spoke can now enforce policies of its own, chosen in a committed `policies.yaml` at its root. `.github/scripts/check-policies.sh` checks them. Run it in `prepare_cmd` after `resolve-workloads.sh --check`, so that a violation fails the PR before the first plan. It needs `yq` and `jq`, and no credentials or network. A spoke without `policies.yaml` is unaffected: the script prints a notice and passes.
+
+The script builds one inventory of the spoke's leaves:
+- every unit leaf from `resolve-workloads.sh --list`, implied ones included;
+- every hand-written leaf under `terraform/`, with the library modules it sources and the resource types in its own `.tf` files.
+
+Each policy is a jq filter over that inventory, with its params' JSON Schema beside it, under `.github/scripts/policies/`. A violation is reported as an `::error` annotation on its unit file, at the entry's line where there is one. An `exempt` entry excuses one violation by path, and it must give a reason. An exemption that no longer matches anything fails the check. `--inventory` prints the inventory and checks nothing.
+
+The first policy is `backblaze-bucket-owners`:
+
+```yaml
+# yaml-language-server: $schema=https://noisypigeon.garden/schemas/policies/v1.json
+policies:
+  backblaze-bucket-owners:
+    workloads:
+      - private/personal-cold-storage
+      - private/custodial-cold-storage
+```
+
+It fails a Backblaze bucket anywhere other than the listed workloads, including zones and hand-written leaves. It also fails a B2 key in a hand-written leaf, since no grant can cover one. A key that a workload declares passes.
+
+`generate-module-redirects.sh` now also publishes `schemas/policies/v1.json`, built from each policy's params schema.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#233](https://github.com/noisypigeon/library/pull/233)
+
 ## [9.0.2] - 2026-10-28
 
 ### Leave earlier stages' destroys out of a staged replan or apply comment
