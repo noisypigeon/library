@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-28
 
+- [adr] LIB-0044: the custodial bucket gets its own workload, and cold-storage becomes personal-cold-storage ([#224](https://github.com/noisypigeon/library/pull/224))
 - [scaleway/compute-instance-config] Treat a null keyring_wiring or keyring_secrets as empty ([#223](https://github.com/noisypigeon/library/pull/223))
 - [scaleway/compute-instance-config] Let compute-instance-config take keyring fields from wiring and secrets ([#222](https://github.com/noisypigeon/library/pull/222))
 - [scaleway/compute-instance] Give compute-instance a project, its own public IPv4 and a Private Network NIC ([#221](https://github.com/noisypigeon/library/pull/221))
