@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-28
 
+- [workflows] Owner-granted cross-workload Backblaze keys, and workload schema v6 (LIB-0045) ([#234](https://github.com/noisypigeon/library/pull/234))
 - [workflows] Add check-policies.sh and the backblaze-bucket-owners policy (LIB-0045) ([#233](https://github.com/noisypigeon/library/pull/233))
 - [adr] docs: LIB-0044 amendment, custodial-storage becomes custodial-cold-storage ([#232](https://github.com/noisypigeon/library/pull/232))
 - [adr] LIB-0045: spoke policies, and owner-granted Backblaze keys ([#231](https://github.com/noisypigeon/library/pull/231))

@@ -4,6 +4,51 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [9.2.0] - 2026-10-28
+
+### Owner-granted cross-workload Backblaze keys, and workload schema v6 (LIB-0045)
+
+A workload can now hold a B2 key to another workload's bucket, but only when that bucket's owner grants it, and only up to the capabilities the owner allows.
+
+The owner lists who may key a bucket under its new `grants` field. Each grant maps a workload ID to the most its key may do in that bucket:
+
+```yaml
+backblaze:
+  bucket:
+    snapshot-2026-10-17:
+      grants:
+        private/pigeon-cli: [listBuckets, listFiles, readFiles]
+```
+
+The other workload names that bucket as `<parent>/<workload>/<bucket>` in its own key's `buckets`:
+
+```yaml
+backblaze:
+  apiKey:
+    snapshots-read:
+      capabilities: [listFiles, readFiles]
+      buckets: [private/personal-cold-storage/snapshot-2026-10-17]
+```
+
+`resolve-workloads.sh` turns each such entry into a dependency of the key's stub, `dependency "xbucket_<n>"`, on the owner's bucket leaf. That bucket's ID joins `bucket_ids` beside the workload's own buckets. `grants` isn't a module input, so it's left out before inputs are checked against the module's schema.
+
+`resolve-workloads.sh` refuses, across every workload:
+- a bucket of another workload that isn't granted to this one;
+- a bucket or workload that doesn't exist;
+- a key whose capabilities exceed the grant of any bucket it names. A B2 key's capabilities hold for every bucket it reaches, so the key must fit within each grant.
+- a malformed `grants`;
+- a grant to a bucket's own workload.
+
+Revoking a grant fails the consumer's key until the key drops that bucket.
+
+`generate-module-redirects.sh` publishes `schemas/workload/v6.json` with both forms. It takes them from a new `granted.schema.json` beside each `backblaze/bucket` and `backblaze/api-key` version. v5 and every older workload schema stay as they were.
+
+A spoke that writes `grants` also needs the root.hcl release that strips the field from the bucket's module block and checks the grant at plan time. It ships separately on the `terragrunt/root-hcl/` track.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#234](https://github.com/noisypigeon/library/pull/234)
+
 ## [9.1.0] - 2026-10-28
 
 ### Add check-policies.sh and the backblaze-bucket-owners policy (LIB-0045)
