@@ -777,6 +777,9 @@ jobs:
                 jsonPlans,
                 deferred: lines(`${process.env.RUNNER_TEMP}/deferred-units.txt`),
                 destroys: lines(`${process.env.RUNNER_TEMP}/destroy-units.txt`),
+                // The stage this run planned or applied, if it was one: the
+                // same files the run step reads (LIB-0042 §2).
+                stage: lines(command === 'apply' ? `${process.env.PLAN_DIR}/stage.txt` : `${process.env.RUNNER_TEMP}/stage.txt`),
                 masked: lines(`${process.env.RUNNER_TEMP}/masked.txt`),
                 roots: [process.env.GITHUB_WORKSPACE, `${process.env.RUNNER_TEMP}/base`],
                 footer,

@@ -171,13 +171,17 @@ function render(input) {
   const roots = input.roots || [];
   const masked = input.masked || [];
   const parsed = parse(maskText(input.output || '', masked), roots);
+  // A stage of a staged plan or apply (LIB-0042 §2) runs only its own units.
+  // The destroys were applied with the first stage, so a later one leaves
+  // out every destroy it didn't select rather than report it with no result.
+  const stage = new Set((input.stage || []).map((u) => normalizeUnit(u, roots)));
   const ctx = {
     command: input.command,
     leaves: parsed.leaves,
     deferredReasons: parsed.deferredReasons,
     jsonPlans: Object.fromEntries(Object.entries(input.jsonPlans || {}).map(([u, p]) => [normalizeUnit(u, roots), p])),
     deferred: new Set((input.deferred || []).map((u) => normalizeUnit(u, roots))),
-    destroys: new Set((input.destroys || []).map((u) => normalizeUnit(u, roots))),
+    destroys: new Set((input.destroys || []).map((u) => normalizeUnit(u, roots)).filter((u) => !stage.size || stage.has(u))),
   };
   const units = [...new Set([...ctx.leaves.keys(), ...Object.keys(ctx.jsonPlans), ...ctx.deferred, ...ctx.destroys])];
   const rows = units
