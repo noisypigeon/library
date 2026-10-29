@@ -4,6 +4,26 @@ All notable changes to this template are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [9.1.0] - 2026-10-28
+
+### Grant guard for cross-workload Backblaze keys (LIB-0045)
+
+root.hcl now reads the Backblaze grants that workloads/v8.4.0's `resolve-workloads.sh` understands, so they also hold at plan time, leaf by leaf.
+
+- **A bucket's `grants` stays out of its module block.** It says which other workloads may key the bucket, and isn't an input of `backblaze/bucket`.
+- **A key may name another workload's bucket as `<parent>/<workload>/<bucket>`.** Its leaf reads that workload's `workload.yaml` and refuses the plan:
+  - when the bucket doesn't grant this workload, or doesn't exist;
+  - when the key's `capabilities` exceed what any such bucket grants.
+
+  The owner's file is marked as read, so changing a grant replans the keys that depend on it.
+- **The existing guard is unchanged for a workload's own buckets.** It still refuses a bare bucket name that isn't one of the workload's.
+
+A spoke that writes neither `grants` nor a qualified bucket sees no change.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+[#235](https://github.com/noisypigeon/library/pull/235)
+
 ## [9.0.0] - 2026-10-28
 
 ### Scaleway compute kinds, their guards and the deployer's grants
