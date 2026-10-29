@@ -46,6 +46,9 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-28
 
+- [scaleway/public-gateway] Add scaleway/private-network, public-gateway and gateway-pat-rule ([#220](https://github.com/noisypigeon/library/pull/220))
+- [scaleway/private-network] Add scaleway/private-network, public-gateway and gateway-pat-rule ([#220](https://github.com/noisypigeon/library/pull/220))
+- [scaleway/gateway-pat-rule] Add scaleway/private-network, public-gateway and gateway-pat-rule ([#220](https://github.com/noisypigeon/library/pull/220))
 - [adr] Record LIB-0043: compute, network and IAM policy kinds for workloads ([#219](https://github.com/noisypigeon/library/pull/219))
 - [workflows] Plan workload leaves in waves, and replan only the stage left ([#216](https://github.com/noisypigeon/library/pull/216))
 - [terragrunt/root-hcl] Read workload module versions from a run's tag list ([#215](https://github.com/noisypigeon/library/pull/215))
