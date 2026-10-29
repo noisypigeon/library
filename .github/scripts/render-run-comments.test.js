@@ -86,6 +86,30 @@ test('a removed instance is labelled as a destroy', () => {
   assert.match(r.summary, /\| `workloads\/w\/scaleway\/bucket\/b` \| destroy \(removed from its unit file\) \+0 ~0 -2 \|/);
 });
 
+test("a later stage leaves out the destroys the first stage applied", () => {
+  const destroys = ['workloads/poc/scaleway/bucket/old-a', 'workloads/poc/scaleway/bucket/old-b'];
+  const stage = ['workloads/poc/scaleway/bucket/scratch', 'workloads/poc/scaleway/iam-policy/main'];
+  const p = plan({ output: fixture('plan-stage-after-destroy.txt'), destroys, stage });
+  assert.match(p.summary, /: 1 with changes, 1 with no changes, 0 failed to plan\./);
+  assert.match(p.summary, /\| `workloads\/poc\/scaleway\/bucket\/scratch` \| \+1 ~0 -0 \|/);
+  assert.doesNotMatch(p.summary, /old-a|old-b|no result found/);
+  assert.ok(p.details.every((d) => !/old-a|old-b/.test(d)));
+
+  const a = render({ ...base, command: 'apply', marker: '<!-- terragrunt-apply -->', output: fixture('apply-stage-after-destroy.txt'), destroys, stage: stage.slice(0, 1) });
+  assert.match(a.summary, /: 1 with changes, 0 with no changes, 0 failed to apply\./);
+  assert.match(a.summary, /\| `workloads\/poc\/scaleway\/bucket\/scratch` \| applied \+1 ~0 -0 \|/);
+  assert.doesNotMatch(a.summary, /old-a|old-b|no result found/);
+
+  // A last stage with nothing left settles, the destroys notwithstanding.
+  const s = plan({ output: noChanges('workloads/poc/scaleway/bucket/scratch'), destroys, stage: stage.slice(0, 1), settledFooter: 'Nothing left to apply: merging.' });
+  assert.equal(s.settled, true);
+
+  // Without a stage, a destroy with no result is still reported.
+  const u = plan({ output: fixture('plan-stage-after-destroy.txt'), destroys });
+  assert.match(u.summary, /\| `workloads\/poc\/scaleway\/bucket\/old-a` \| destroy \(removed from its unit file\) no result found \|/);
+  assert.match(u.summary, /2 failed to plan/);
+});
+
 test('nothing is truncated: a large plan is packed and split, within budget', () => {
   const lines = [];
   for (let u = 0; u < 30; u++) {
