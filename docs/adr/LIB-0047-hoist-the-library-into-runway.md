@@ -2,7 +2,7 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-28.
-- **Status**: Proposed. Moves `noisypigeon/library` into
+- **Status**: Proposed; amended 2026-10-28 (see `## Amendments`). Moves `noisypigeon/library` into
   `noisypigeon/runway`, with its history and every tag. Amends:
   - LIB-0001: §2's role table, §4's "a spoke never writes a tag", and
     invariant 2's fetch, which now clones runway;
@@ -334,3 +334,56 @@ pinned consumer fetches until that consumer's own PR repoints it.
 7. **The library is closed.** It has no open issues, it's archived, and a
    `git::https://github.com/noisypigeon/library.git//...?ref=<tag>` source
    still resolves.
+
+## Amendments
+
+### 2026-10-28: the cutover, as it will run
+
+Everything above is left as filed. Checking §9 and §10 against the live
+trees, before anything moved, found three places where they can't work as
+written. Where this entry and the text above disagree, this entry is what
+runs.
+
+1. **The hoist merge would release every unit (§9 steps 3 and 4).**
+   `template-release.yml` runs on `pull_request: closed`, from the merge
+   commit. On the hoist PR every path under `lib/` is new, so every predicate
+   matches. It would cut a release for every module, the theme, each
+   dashboard set and the plugin.
+   - **So the hoist PR lands four workflows set to `workflow_dispatch`
+     only:** `template-release.yml`, the library's root-changelog twin (renamed
+     `lib-root-changelog.yml` in the rewrite, to stay clear of runway's own),
+     `module-docs.yml` and `scripts-test.yml`. That PR is a pure move. Its
+     merge tags nothing.
+   - **The first post-hoist releases come from two rewiring PRs, not from
+     step 3's merge.** The first changes every script path, workflow path and
+     default under `lib/scripts/` and `.github/workflows/`, and re-enables the
+     four workflows. Its merge runs the new `template-release.yml` and cuts a
+     `workflows` minor. The second changes the template, the theme's
+     `homepage` and the plugin, and cuts a patch of each. This is DEV-0110's
+     "pure rename first, rewiring second", which §9 had collapsed.
+   - **Only then does a third runway PR bump the pins** (§9 step 4's second
+     half). It must still plan `No changes.`
+2. **The plugin takes a patch (§10).** pigeon-cli pins the marketplace at a
+   `claude-plugins/pigeon-cli/vX.Y.Z` tag. At every recreated pre-hoist tag,
+   `marketplace.json` still names `./claude-plugins/pigeon-cli`, which is now
+   under `lib/`. So no recreated plugin tag loads from runway. The plugin
+   needs a post-hoist tag that carries the corrected `marketplace.json`, and
+   the plugin's own `repository` URL is the change that releases it. Old
+   plugin tags join §3's caveat beside `workflows/` and
+   `terragrunt/root-hcl/`. Old module and dashboard tags still resolve: a
+   dashboard's raw URL just gains `lib/` at the same tag.
+3. **The pins are newer than §9 says.** runway pins `workflows/v9.2.0`, not
+   `v6.0.0`. Both shims pin `v6.1.0`, and pigeon-cli pins `v3.4.0`. So §9
+   step 5 is a jump of several majors for the shims and pigeon-cli. Each one
+   checks its caller's inputs against the new version before repointing, and
+   a caller that needs more than a `uses:` change gets its own PR.
+
+Two smaller things the check settled:
+
+- **Tag pushes fire nothing.** Across the library's history, only two
+  workflows ever had a `push` trigger: `module-docs.yml` and the early
+  `pigeon-dev-pages.yml`. Both filter to `branches: [main]`. Pushing
+  197 tags to runway runs no workflow. Recreating Releases doesn't either:
+  runway has no `release` trigger.
+- **The hoist PR needs merge commits for one PR.** The owner turns them on for
+  that PR and off again after it merges, as RUN-0000 §4 did.
