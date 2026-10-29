@@ -4,6 +4,19 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [9.0.1] - 2026-10-28
+
+### Honour apexRedirect include_www: false in the resolver's clash check
+
+`resolve-workloads.sh` now honours `cloudflare.apexRedirect.<key>.include_www: false` in its record clash check (LIB-0030 §6). Before, the check read the flag with jq's `// true`, which turns `false` into `true`. As a result, a zone that turned the `www` placeholder off and declared its own `www` record was refused, with "the apexRedirect … already holds a placeholder CNAME record at www". That happened even though no such placeholder is generated, and root.hcl would have planned the zone fine. The list of an apexRedirect's own implied records got the same fix, so `<key>-www` only counts as the redirect's own when `include_www` isn't `false`.
+
+The stubs themselves were already right: with `include_www: false` there is still no `<key>-www` leaf. When the flag is `true` or unset, a `www` record beside the redirect is still refused.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#228](https://github.com/noisypigeon/library/pull/228)
+
 ## [9.0.0] - 2026-10-28
 
 ### Scaleway compute kinds in resolve-workloads.sh, and workload schema v5
