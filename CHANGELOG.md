@@ -46,6 +46,7 @@ ADR-0154 and ADR-0084 each made before it.
 
 ## 2026-10-28
 
+- [adr] docs: LIB-0044 amendment, results of the custodial split and the rename ([#227](https://github.com/noisypigeon/library/pull/227))
 - [terragrunt/root-hcl] Scaleway compute kinds, their guards and the deployer's grants ([#226](https://github.com/noisypigeon/library/pull/226))
 - [workflows] Scaleway compute kinds in resolve-workloads.sh, and workload schema v5 ([#225](https://github.com/noisypigeon/library/pull/225))
 - [adr] LIB-0044: the custodial bucket gets its own workload, and cold-storage becomes personal-cold-storage ([#224](https://github.com/noisypigeon/library/pull/224))
