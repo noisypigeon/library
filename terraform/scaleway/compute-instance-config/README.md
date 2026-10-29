@@ -1,3 +1,9 @@
+# compute-instance-config
+
+Renders a `pigeon-cli` cloud-init document for `compute-instance`'s `cloud_init` input: the keyring, Cockpit/Alloy, a post-provision systemd unit, an optional self-delete trap and an optional static ffmpeg. It creates no resources.
+
+Since v1.1.0 (LIB-0043 §4), a keyring entry's fields may also arrive through `keyring_wiring` (a bucket's name and an API key's credentials, from other modules' outputs) and `keyring_secrets` (secret string fields), each merged over the entry of the same alias. The required-field checks run on the merged entries.
+
 <!-- BEGIN_TF_DOCS -->
 ## Inputs
 
