@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Grant guard for cross-workload Backblaze keys (LIB-0045)
 
-root.hcl now reads the Backblaze grants that workloads/v8.4.0's `resolve-workloads.sh` understands, so they also hold at plan time, leaf by leaf.
+root.hcl now reads the Backblaze grants that workflows/v9.2.0's `resolve-workloads.sh` understands, so they also hold at plan time, leaf by leaf.
 
 - **A bucket's `grants` stays out of its module block.** It says which other workloads may key the bucket, and isn't an input of `backblaze/bucket`.
 - **A key may name another workload's bucket as `<parent>/<workload>/<bucket>`.** Its leaf reads that workload's `workload.yaml` and refuses the plan:

@@ -139,7 +139,7 @@
 # provider's entry may set workloads_only = true: no hand-written leaf turns it
 # on, and the spoke keeps no credentials of its own for it.
 #
-# Since v8.3.0 (LIB-0045 §§6-7) a Backblaze bucket may grant other workloads,
+# Since v9.1.0 (LIB-0045 §§6-7) a Backblaze bucket may grant other workloads,
 # each up to a list of capabilities, under `grants`, which isn't a module
 # input. A key may name a bucket another workload grants it as
 # <parent>/<workload>/<bucket>; its leaf reads that workload's file and refuses
