@@ -718,6 +718,71 @@ workload, or a zoned one that sets its own project, gets
 policy are renamed in place, but a state bucket that already exists would be
 replaced, so pin its name in `scaleway.state` before taking the bump.
 
+Since v9.0.0 (LIB-0043), with `workflows/v9.0.0` or later, a workload can
+describe Scaleway compute, each resource in its own leaf:
+
+```yaml
+# workloads/private/jobs/workload.yaml
+# yaml-language-server: $schema=https://noisypigeon.garden/schemas/workload/v5.json
+workload:
+  deployments:
+    scaleway:
+      project: { prefix: pigeon, suffix: jobs }
+  scaleway:
+    iam:
+      application: {}
+      policy:
+        object-storage: { project_permission_sets: [ObjectStorageFullAccess] }
+      apiKey:
+        jobs: { rotation_days: 30 }
+    bucket:
+      reports: {}
+    blockVolume:
+      scratch: { size: 50 }
+    cockpit: {}
+    privateNetwork: {}
+    publicGateway: {}            # enabled: false removes it; then every instance sets publicIpv4: true
+    instance:
+      copy-job:
+        type: COMPUTE3-X8C-16G
+        network: { sshViaGateway: 2222 }   # privateNetwork defaults on; publicIpv4 off
+        volumes: [scratch]
+        selfDelete: true
+        commands: ["pigeon job run --report-bucket ${keyring.reports.alias}"]
+        keyring:
+          reports: { kind: bucket, bucket: reports, apiKey: jobs }
+```
+
+- **`scaleway.iam.apiKey` is a mapping of keys**, each its own
+  `iam-api-key/<key>` leaf, and `scaleway.iam.policy` is new. Both hang off
+  the one `iam.application`, so every key carries every policy's grants. A
+  single key's inputs written directly under `iam.apiKey` are refused: move
+  them under a name. Naming it `main` keeps its leaf, `iam-api-key/main`,
+  and so its state.
+- **An instance is two leaves,** `compute-instance/<key>` and the
+  `compute-instance-config/<key>` that renders its cloud-init. Its `network`,
+  `volumes`, `cockpit`, `transcoding`, `selfDelete`, `commands` and
+  `keyring`, with `scaleway.sharedKeyring` underneath, become those leaves'
+  inputs. A command's `${keyring.<alias>.alias}` is written as the alias.
+  `selfDelete` implies `iam-application`, `iam-policy` (`InstancesFullAccess`)
+  and `iam-api-key` at `self-delete-<key>`, and `sshViaGateway` a
+  `gateway-pat-rule/<key>`.
+- **Keyring credentials never reach a generated file.** A bucket naming a
+  `scaleway.bucket` key, or an `apiKey`, is wired by the stub as
+  `keyring_wiring`. A `secretRef` reaches the config leaf as `keyring_secrets`,
+  one sensitive variable. The config's wiring and the instance's `cloud_init`
+  are sensitive variables too.
+- **The deployer's policy grows with the kinds** the file declares:
+  `BlockStorageFullAccess`, `InstancesFullAccess`,
+  `PrivateNetworksFullAccess`, `VPCGatewayFullAccess` and
+  `ObservabilityFullAccess`, beside `ObjectStorageFullAccess`. A workload
+  with none of them plans `No changes.` on the bump.
+- **Refused before planning,** with the same messages as
+  `resolve-workloads.sh`: LIB-0043 §5's gateway rules E1 to E6, above all a
+  gateway that's off while an instance doesn't set `network.publicIpv4: true`
+  itself, and §6's rules on IAM, volumes, keyrings, Cockpit, transcoding and
+  instance names.
+
 A workload may also have a `workloads/<workload>/secrets.yaml` (v4.5.0,
 LIB-0025), encrypted with sops as YAML. Its rule in the spoke's `.sops.yaml` is
 `^workloads/[^/]+/secrets\.yaml$`. It holds secret inputs under the same kind
