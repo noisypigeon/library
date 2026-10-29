@@ -2,9 +2,9 @@
 
 - **Author**: Willow Graysen ([@noisypigeon](https://github.com/noisypigeon)).
 - **Date**: 2026-10-28.
-- **Status**: Proposed. Applies LIB-0037 to runway, with LIB-0040 §4's and
-  LIB-0044 §3's state move. Progress on
-  [#98](https://github.com/noisypigeon/library/issues/98).
+- **Status**: Proposed; amended 2026-10-28 (see `## Amendments`). Applies
+  LIB-0037 to runway, with LIB-0040 §4's and LIB-0044 §3's state move.
+  Progress on [#98](https://github.com/noisypigeon/library/issues/98).
 
 ## Context
 
@@ -177,3 +177,40 @@ and LIB-0044's projects were. It moves in the bootstrap instead:
    four under the names and IDs in the backup.
 4. **It converges.** After the second PR's apply, a re-plan of every runway
    leaf, the hand-written Scaleway ones included, shows `No changes.`
+
+## Amendments
+
+### 2026-10-28: results
+
+noisypigeon/runway#98 and noisypigeon/runway#99 each applied and merged. All
+four Verification items hold:
+
+1. **The project, the secret and the buckets agreed before anything moved.**
+   The project leaf's ID was `SCALEWAY_PROVIDER_PROJECT_ID`, and so was each
+   bucket's `project_id`.
+2. **The first PR renamed and created, and destroyed nothing.** Its three
+   stages applied the project's rename in place, the deployer's three leaves
+   and the state bucket. Nothing else changed.
+3. **The buckets moved, not recreated.** Each new bucket leaf planned
+   `No changes.` locally after its push, before its old leaf was emptied.
+   runway#99's plan and apply both found no changes in any of its 13 leaves.
+4. **It converges.** From `main` after runway#99, all 22 leaves under
+   `terraform/scaleway/` and `workloads/private/data-ops/` plan
+   `No changes.` with refresh. The project, its SSH key and the four buckets
+   keep the IDs in their backups, and the project is `wg-data-ops`.
+
+Two things went differently from §§2, 4 and 5:
+
+1. **The lookup leaf read the project's old name.** runway#98's first stage
+   applied `terraform/scaleway/project/runway` beside the project's rename,
+   not after it, so its `name` output kept `runway`. runway#99 didn't touch
+   the leaf, so CI never applied it again. A local apply of a saved plan,
+   which changed only that output, settled it. A later lookup of something a
+   PR renames should depend on the leaf that owns it, so it applies after.
+2. **A pulled state's `check_results` keeps the old module's addresses.** The
+   module's variable validations are recorded as `module.bucket.var.*`, so
+   §4's rename left them behind. They were dropped from each copy rather than
+   renamed: Terraform rewrites them on every plan and apply.
+
+§4's prediction held: each bucket's state already held
+`random_string.suffix[0]`, so no `moved` block ran.
