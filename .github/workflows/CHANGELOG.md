@@ -4,6 +4,59 @@ All notable changes to the reusable CI are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [9.0.0] - 2026-10-28
+
+### Scaleway compute kinds in resolve-workloads.sh, and workload schema v5
+
+`resolve-workloads.sh` now generates the stubs for LIB-0043's Scaleway compute kinds, and checks the rules that keep them consistent before anything plans. A workload can describe instances, their network, volumes, Cockpit and credentials in its `workload.yaml`, with each Scaleway resource in a leaf and a state of its own.
+
+**Breaking:** `scaleway.iam.apiKey` is now a mapping of key names, like `backblaze.apiKey`, and each key is its own leaf at `scaleway/iam-api-key/<key>`. A file that still declares one key's inputs directly under `scaleway.iam.apiKey` is refused, with a message telling you to move them under a name, for example `scaleway.iam.apiKey.main`. Pin `terragrunt/root-hcl` v9.0.0 alongside this release, because its `workload_kinds` is this script's twin.
+
+New kinds, each one leaf per entry:
+
+- `scaleway.iam.policy.<key>`: a policy on the workload's one application. `application_id` and `project_ids` are wired from the workload.
+- `scaleway.blockVolume.<key>`, `scaleway.cockpit` and `scaleway.privateNetwork`: the project is wired.
+- `scaleway.publicGateway`: the gateway, attached to the private network.
+- `scaleway.instance.<key>`: a `compute-instance` and the `compute-instance-config` that renders its cloud-init. It takes:
+  - `network.privateNetwork`, `network.publicIpv4` and `network.sshViaGateway`;
+  - `volumes`, `cockpit`, `transcoding` and `selfDelete`;
+  - `commands` and `keyring`, plus `scaleway.sharedKeyring` merged underneath.
+  - `selfDelete: true` implies the instance's own IAM application, policy (`InstancesFullAccess`) and key, at `self-delete-<key>`, so the workload's own keys never carry that grant.
+  - `sshViaGateway` implies a `gateway-pat-rule`.
+  - A keyring bucket entry that names a `scaleway.bucket` key, or an `apiKey`, gets its name and credentials wired from those leaves through `keyring_wiring`.
+
+`privateNetwork` and `publicGateway` each take `enabled: false`. That removes the leaf and keeps the settings in the file. With the gateway off or absent, every instance must say `network.publicIpv4: true` itself. A default doesn't count, so turning the gateway off fails until each instance is edited on purpose (E2).
+
+The script refuses LIB-0043's rules, each with a message citing its section:
+
+- E1: an instance with no way out.
+- E3: a gateway without the private network.
+- E5: `sshViaGateway` off the network, or a port two instances share.
+- E6: an instance on a network that's off.
+- I1: a policy or key with no `iam.application`.
+- I2: a reserved or wired name.
+- S1: more than one volume on an instance, a volume shared by two instances, or an unknown volume key.
+- Keyring entries missing their fields or credentials, or whose `secretRef` isn't in `secrets.workload.yaml`.
+- M1: `transcoding` on an arm64 type.
+- M2: `cockpit` without `scaleway.cockpit`.
+- M3: an instance name that isn't kebab-case or runs past 40 characters.
+- A `${keyring.<alias>.alias}` in `commands` naming an alias the instance doesn't have.
+
+A policy granting `InstancesFullAccess` is a warning, not an error (I5).
+
+`generate-module-redirects.sh` publishes inputs schemas for the seven new kinds' modules and `schemas/workload/v5.json`. That schema adds:
+
+- the new kinds, with `iam.policy` and `iam.apiKey` as mappings;
+- a keyring entry schema;
+- E2 and E3 as `if`/`then`, so an editor flags them.
+
+It also accepts `deployments.scaleway.project`'s `prefix` and `suffix` (LIB-0037 §2), which v2 to v4 wrongly refuse. v1 to v4 are published unchanged.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+
+[#225](https://github.com/noisypigeon/library/pull/225)
+
 ## [8.2.0] - 2026-10-28
 
 ### Plan workload leaves in waves, and replan only the stage left
