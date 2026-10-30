@@ -44,6 +44,10 @@ ADR-0154 and ADR-0084 each made before it.
 
 <!-- entries below; newest first -->
 
+## 2026-10-30
+
+- [repo] Point to the library's new home in runway (LIB-0047) ([#241](https://github.com/noisypigeon/library/pull/241))
+
 ## 2026-10-28
 
 - [adr] docs(adr): LIB-0047 cutover amendment ([#240](https://github.com/noisypigeon/library/pull/240))
